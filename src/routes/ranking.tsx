@@ -157,3 +157,66 @@ function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
     </div>
   );
 }
+
+function Podium({ ranking, onSelect }: { ranking: ParticipantStats[]; onSelect: (id: string) => void }) {
+  if (ranking.length < 3) return null;
+  const [first, second, third] = ranking;
+  // ordem visual: 2º · 1º · 3º
+  const slots: Array<{ row: ParticipantStats; pos: 1 | 2 | 3 }> = [
+    { row: second, pos: 2 },
+    { row: first, pos: 1 },
+    { row: third, pos: 3 },
+  ];
+  const heights: Record<1 | 2 | 3, string> = {
+    1: "h-32 sm:h-40",
+    2: "h-24 sm:h-28",
+    3: "h-20 sm:h-24",
+  };
+  const labels: Record<1 | 2 | 3, string> = { 1: "1º", 2: "2º", 3: "3º" };
+  return (
+    <div className="mb-8 rounded-2xl border border-border bg-card/60 p-4 sm:p-6">
+      <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        <Trophy className="h-3.5 w-3.5 text-primary" /> Pódio
+      </div>
+      <div className="grid grid-cols-3 items-end gap-3 sm:gap-6">
+        {slots.map(({ row, pos }) => (
+          <button
+            key={row.participant.id}
+            onClick={() => onSelect(row.participant.id)}
+            className="group flex flex-col items-center text-center"
+          >
+            <div className="mb-2 flex flex-col items-center">
+              <div
+                className={cn(
+                  "grid place-items-center rounded-full font-display font-black ring-2 transition-transform group-hover:scale-105",
+                  pos === 1 ? "h-16 w-16 text-xl ring-primary sm:h-20 sm:w-20 sm:text-2xl" : "h-12 w-12 text-base ring-border sm:h-14 sm:w-14 sm:text-lg",
+                  row.participant.color,
+                )}
+              >
+                {row.participant.initials}
+              </div>
+              <span className="mt-2 max-w-[120px] truncate text-xs font-semibold sm:text-sm">
+                {row.participant.name}
+              </span>
+              <span className="num text-[11px] text-muted-foreground sm:text-xs">
+                {row.total} pts
+              </span>
+            </div>
+            <div
+              className={cn(
+                "flex w-full flex-col items-center justify-start rounded-t-xl border border-b-0 pt-2 font-display font-black",
+                heights[pos],
+                pos === 1
+                  ? "bg-primary/20 border-primary/60 text-primary text-3xl sm:text-4xl"
+                  : "bg-card border-border text-muted-foreground text-xl sm:text-2xl",
+              )}
+            >
+              {labels[pos]}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+}
