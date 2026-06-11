@@ -11,10 +11,10 @@ type Props = {
 };
 
 const SIZE_CLASS: Record<NonNullable<Props["size"]>, string> = {
-  sm: "h-5 w-5",
-  md: "h-6 w-6",
-  lg: "h-9 w-9",
-  xl: "h-14 w-14",
+  sm: "h-4 w-6",
+  md: "h-5 w-8",
+  lg: "h-7 w-11",
+  xl: "h-11 w-16",
 };
 
 const PX_FOR_SIZE: Record<NonNullable<Props["size"]>, 40 | 80 | 160> = {
