@@ -9,6 +9,7 @@ import { TEAM_BY_CODE } from "@/data/teams";
 import { compareGuess } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 import { Trophy, Medal, Award } from "lucide-react";
+import { Flag } from "@/components/common/Flag";
 
 export const Route = createFileRoute("/ranking")({
   head: () => ({
@@ -130,12 +131,12 @@ function ParticipantDetail({ row, results }: { row: ParticipantStats; results: R
                 <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold", badge.cls)}>{badge.label}</span>
               </div>
               <div className="mt-2 grid grid-cols-3 items-center gap-2 text-sm">
-                <span className="flex items-center gap-1.5 truncate"><span className="text-lg">{home?.flag}</span> <span className="truncate">{home?.name}</span></span>
+                <span className="flex items-center gap-1.5 truncate"><Flag code={home?.code} name={home?.name} size="md" /> <span className="truncate">{home?.name}</span></span>
                 <span className="text-center text-xs text-muted-foreground">
                   <div className="num">palpite <b className="text-foreground">{guess?.home}-{guess?.away}</b></div>
                   <div className="num">real <b className="text-foreground">{real ? `${real.home}-${real.away}` : "—"}</b></div>
                 </span>
-                <span className="flex items-center justify-end gap-1.5 truncate"><span className="truncate text-right">{away?.name}</span> <span className="text-lg">{away?.flag}</span></span>
+                <span className="flex items-center justify-end gap-1.5 truncate"><span className="truncate text-right">{away?.name}</span> <Flag code={away?.code} name={away?.name} size="md" /></span>
               </div>
             </div>
           );
