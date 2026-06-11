@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { ScoreEditor } from "@/components/common/ScoreEditor";
 import { cn } from "@/lib/utils";
 import { computeBracket } from "@/lib/bracket";
+import { Flag } from "@/components/common/Flag";
 
 export const Route = createFileRoute("/calendario")({
   head: () => ({
@@ -166,10 +167,10 @@ function MatchCard({ fixture, resolvedHome, resolvedAway }: { fixture: Fixture; 
   );
 }
 
-function TeamSide({ name, flag, align }: { name: string; flag: string; align: "left" | "right" }) {
+function TeamSide({ name, code, align }: { name: string; code?: string; align: "left" | "right" }) {
   return (
     <div className={cn("flex min-w-0 items-center gap-2", align === "right" && "flex-row-reverse text-right")}>
-      <span className="text-3xl">{flag}</span>
+      <Flag code={code} name={name} size="lg" />
       <span className="truncate text-sm font-bold">{name}</span>
     </div>
   );
