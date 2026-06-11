@@ -119,36 +119,40 @@
     0 8px 30px -10px color-mix(in oklab, var(--primary) 35%, transparent);
 }
 
-/* Bandeira tremulando — apenas CSS */
+/* Bandeira tremulando — quadrada, sem rotação, apenas onda + brilho */
 @keyframes flag-wave {
-  0%   { transform: perspective(160px) rotateY(0deg)   skewX(0deg)   translateY(0); }
-  25%  { transform: perspective(160px) rotateY(-8deg)  skewX(-3deg)  translateY(-1px); }
-  50%  { transform: perspective(160px) rotateY(0deg)   skewX(0deg)   translateY(0); }
-  75%  { transform: perspective(160px) rotateY(8deg)   skewX(3deg)   translateY(1px); }
-  100% { transform: perspective(160px) rotateY(0deg)   skewX(0deg)   translateY(0); }
+  0%   { transform: translateX(0) scaleX(1); }
+  25%  { transform: translateX(-1px) scaleX(0.97); }
+  50%  { transform: translateX(0) scaleX(1); }
+  75%  { transform: translateX(1px) scaleX(0.97); }
+  100% { transform: translateX(0) scaleX(1); }
 }
-.flag-wrap { perspective: 200px; }
+@keyframes flag-wave-shine {
+  0%   { transform: translateX(-120%) skewX(-20deg); opacity: 0; }
+  40%  { opacity: 0.35; }
+  100% { transform: translateX(220%) skewX(-20deg); opacity: 0; }
+}
+.flag-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  animation: flag-wave-shine 3.6s ease-in-out infinite;
+}
 .flag-wave {
-  display: inline-block;
-  transform-origin: left center;
-  animation: flag-wave 3.2s ease-in-out infinite;
+  transform-origin: center;
+  animation: flag-wave 2.4s ease-in-out infinite;
   will-change: transform;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35));
 }
-.flag-wrap:nth-of-type(2n) .flag-wave { animation-delay: -0.8s; }
-.flag-wrap:nth-of-type(3n) .flag-wave { animation-delay: -1.6s; }
-.flag-wrap:nth-of-type(5n) .flag-wave { animation-delay: -2.4s; }
-
-/* Bola girando da logo */
-@keyframes ball-spin {
-  to { transform: rotate(360deg); }
-}
-.ball-spin {
-  display: inline-block;
-  animation: ball-spin 4s linear infinite;
-  transform-origin: 50% 50%;
-}
+.flag-wrap:nth-of-type(2n) .flag-wave { animation-delay: -0.6s; }
+.flag-wrap:nth-of-type(3n) .flag-wave { animation-delay: -1.2s; }
+.flag-wrap:nth-of-type(5n) .flag-wave { animation-delay: -1.8s; }
+.flag-wrap:nth-of-type(2n)::after { animation-delay: -1s; }
+.flag-wrap:nth-of-type(3n)::after { animation-delay: -2s; }
 
 @media (prefers-reduced-motion: reduce) {
-  .flag-wave, .ball-spin { animation: none !important; }
+  .flag-wave { animation: none !important; }
+  .flag-wrap::after { animation: none !important; }
 }

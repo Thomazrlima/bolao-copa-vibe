@@ -11,10 +11,10 @@ type Props = {
 };
 
 const SIZE_CLASS: Record<NonNullable<Props["size"]>, string> = {
-  sm: "h-3.5 w-5",
-  md: "h-4 w-6",
-  lg: "h-6 w-9",
-  xl: "h-10 w-14",
+  sm: "h-5 w-5",
+  md: "h-6 w-6",
+  lg: "h-9 w-9",
+  xl: "h-14 w-14",
 };
 
 const PX_FOR_SIZE: Record<NonNullable<Props["size"]>, 40 | 80 | 160> = {
@@ -28,20 +28,27 @@ export function Flag({ code, name, size = "md", className, static: isStatic }: P
   const url = flagUrl(code, PX_FOR_SIZE[size]);
   if (!url) {
     return (
-      <span className={cn("inline-block rounded-sm bg-muted text-center text-[10px] text-muted-foreground", SIZE_CLASS[size], className)}>
+      <span className={cn("inline-block rounded-md bg-muted text-center text-[10px] text-muted-foreground", SIZE_CLASS[size], className)}>
         ?
       </span>
     );
   }
   return (
-    <span className={cn("flag-wrap inline-block shrink-0", SIZE_CLASS[size], className)} aria-label={name ?? code}>
+    <span
+      className={cn(
+        "flag-wrap relative inline-block shrink-0 overflow-hidden rounded-md ring-1 ring-black/40",
+        SIZE_CLASS[size],
+        className,
+      )}
+      aria-label={name ?? code}
+    >
       <img
         src={url}
         alt={name ? `Bandeira de ${name}` : `Bandeira ${code}`}
         loading="lazy"
         decoding="async"
         className={cn(
-          "h-full w-full rounded-sm object-cover shadow-[0_1px_3px_rgba(0,0,0,0.45)]",
+          "h-full w-full object-cover",
           !isStatic && "flag-wave",
         )}
       />
