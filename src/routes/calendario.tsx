@@ -145,7 +145,7 @@ function MatchCard({ fixture, resolvedHome, resolvedAway }: { fixture: Fixture; 
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <TeamSide name={home?.name ?? "—"} flag={home?.flag ?? "❓"} align="left" />
+        <TeamSide name={home?.name ?? "—"} code={home?.code} align="left" />
         <div className="flex flex-col items-center gap-1">
           {result ? (
             <div className="num font-display text-3xl font-black">
@@ -155,7 +155,7 @@ function MatchCard({ fixture, resolvedHome, resolvedAway }: { fixture: Fixture; 
             <div className="num font-display text-xl font-black text-muted-foreground">– vs –</div>
           )}
         </div>
-        <TeamSide name={away?.name ?? "—"} flag={away?.flag ?? "❓"} align="right" />
+        <TeamSide name={away?.name ?? "—"} code={away?.code} align="right" />
       </div>
 
       <div className="mt-3 flex items-center justify-between border-t border-border pt-3">

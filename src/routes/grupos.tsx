@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useBolaoStore } from "@/lib/store";
 import { allGroupStandings, bestThirds, type Standing } from "@/lib/standings";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/common/Flag";
 
 export const Route = createFileRoute("/grupos")({
   head: () => ({
