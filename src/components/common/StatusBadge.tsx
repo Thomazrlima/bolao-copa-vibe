@@ -24,13 +24,23 @@ export function StatusBadge({ status, className }: Props) {
   }
   if (status === "finished") {
     return (
-      <span className={cn("rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", className)}>
+      <span
+        className={cn(
+          "rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+          className,
+        )}
+      >
         Encerrado
       </span>
     );
   }
   return (
-    <span className={cn("rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground", className)}>
+    <span
+      className={cn(
+        "rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+        className,
+      )}
+    >
       Não iniciado
     </span>
   );

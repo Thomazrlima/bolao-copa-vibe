@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+"use client";
+
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { ALL_FIXTURES, GROUP_FIXTURES, stageLabel, type Fixture } from "@/data/fixtures";
+import { ALL_FIXTURES, stageLabel, type Fixture } from "@/data/fixtures";
 import { useBolaoStore } from "@/lib/store";
 import { TEAM_BY_CODE, GROUPS } from "@/data/teams";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -9,34 +10,16 @@ import { ScoreEditor } from "@/components/common/ScoreEditor";
 import { cn } from "@/lib/utils";
 import { computeBracket } from "@/lib/bracket";
 import { Flag } from "@/components/common/Flag";
-
-export const Route = createFileRoute("/calendario")({
-  head: () => ({
-    meta: [
-      { title: "Calendário · Bolão dos v(devers)" },
-      {
-        name: "description",
-        content:
-          "Todos os jogos da Copa de 48 seleções com horários, estádios, placares e edição rápida de resultados.",
-      },
-      { property: "og:title", content: "Calendário · Bolão dos v(devers)" },
-      {
-        property: "og:description",
-        content: "Cronograma completo da Copa com filtros por fase, grupo e jogos de hoje.",
-      },
-    ],
-  }),
-  component: CalendarioPage,
-});
+import { useMounted } from "@/hooks/use-mounted";
 
 type FaseFilter = "all" | "group" | "ko" | "today";
 
-function CalendarioPage() {
+export default function CalendarioPage() {
+  const mounted = useMounted();
   const results = useBolaoStore((s) => s.results);
   const [fase, setFase] = useState<FaseFilter>("all");
   const [group, setGroup] = useState<string>("all");
 
-  // resolve KO teams dynamically
   const bracket = useMemo(() => computeBracket(results), [results]);
   const koResolved = useMemo(() => {
     const map = new Map<string, { home?: string; away?: string }>();
@@ -73,6 +56,24 @@ function CalendarioPage() {
     });
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [fixtures]);
+
+  if (!mounted) {
+    return (
+      <AppShell>
+        <div className="mb-4 flex flex-col gap-1">
+          <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">
+            Calendário
+          </h2>
+          <p className="text-sm text-muted-foreground">Carregando jogos...</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="h-40 rounded-2xl border border-border bg-card/60" />
+          ))}
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -236,10 +237,19 @@ function TeamSide({ name, code, align }: { name: string; code?: string; align: "
 
 function formatTime(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Recife",
+  });
 }
 
 function formatDate(yyyymmdd: string) {
   const d = new Date(yyyymmdd + "T12:00:00Z");
-  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  return d.toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    timeZone: "America/Recife",
+  });
 }

@@ -28,7 +28,13 @@ export function Flag({ code, name, size = "md", className, static: isStatic }: P
   const url = flagUrl(code, PX_FOR_SIZE[size]);
   if (!url) {
     return (
-      <span className={cn("inline-block rounded-md bg-muted text-center text-[10px] text-muted-foreground", SIZE_CLASS[size], className)}>
+      <span
+        className={cn(
+          "inline-block rounded-md bg-muted text-center text-[10px] text-muted-foreground",
+          SIZE_CLASS[size],
+          className,
+        )}
+      >
         ?
       </span>
     );
@@ -47,10 +53,7 @@ export function Flag({ code, name, size = "md", className, static: isStatic }: P
         alt={name ? `Bandeira de ${name}` : `Bandeira ${code}`}
         loading="lazy"
         decoding="async"
-        className={cn(
-          "h-full w-full object-cover",
-          !isStatic && "flag-wave",
-        )}
+        className={cn("h-full w-full object-cover", !isStatic && "flag-wave")}
       />
     </span>
   );

@@ -1,5 +1,5 @@
-@import "tailwindcss" source(none);
-@source "../src";
+@import "tailwindcss";
+@source "./";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -115,7 +115,8 @@
 }
 
 @utility ring-yellow {
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 60%, transparent),
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 60%, transparent),
     0 8px 30px -10px color-mix(in oklab, var(--primary) 35%, transparent);
 }
 
@@ -126,23 +127,48 @@
   transform-origin: left center;
 }
 @keyframes flag-wind {
-  0%   { transform: perspective(220px) rotateY(0deg)   rotateX(0deg)  skewY(0deg)  translateY(0); }
-  20%  { transform: perspective(220px) rotateY(-14deg) rotateX(2deg)  skewY(-2deg) translateY(-0.5px); }
-  40%  { transform: perspective(220px) rotateY(6deg)   rotateX(-1deg) skewY(1.5deg) translateY(0.5px); }
-  60%  { transform: perspective(220px) rotateY(-8deg)  rotateX(2deg)  skewY(-1deg) translateY(-0.5px); }
-  80%  { transform: perspective(220px) rotateY(12deg)  rotateX(-2deg) skewY(2deg)  translateY(0.5px); }
-  100% { transform: perspective(220px) rotateY(0deg)   rotateX(0deg)  skewY(0deg)  translateY(0); }
+  0% {
+    transform: perspective(220px) rotateY(0deg) rotateX(0deg) skewY(0deg) translateY(0);
+  }
+  20% {
+    transform: perspective(220px) rotateY(-14deg) rotateX(2deg) skewY(-2deg) translateY(-0.5px);
+  }
+  40% {
+    transform: perspective(220px) rotateY(6deg) rotateX(-1deg) skewY(1.5deg) translateY(0.5px);
+  }
+  60% {
+    transform: perspective(220px) rotateY(-8deg) rotateX(2deg) skewY(-1deg) translateY(-0.5px);
+  }
+  80% {
+    transform: perspective(220px) rotateY(12deg) rotateX(-2deg) skewY(2deg) translateY(0.5px);
+  }
+  100% {
+    transform: perspective(220px) rotateY(0deg) rotateX(0deg) skewY(0deg) translateY(0);
+  }
 }
 @keyframes flag-shine {
-  0%   { transform: translateX(-120%) skewX(-20deg); opacity: 0; }
-  40%  { opacity: 0.4; }
-  100% { transform: translateX(220%) skewX(-20deg); opacity: 0; }
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateX(220%) skewX(-20deg);
+    opacity: 0;
+  }
 }
 .flag-wrap::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
   mix-blend-mode: overlay;
   pointer-events: none;
   animation: flag-shine 3.6s ease-in-out infinite;
@@ -151,15 +177,29 @@
   transform-origin: left center;
   animation: flag-wind 2.6s ease-in-out infinite;
   will-change: transform;
-  filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.45));
+  filter: drop-shadow(1px 1px 1px rgba(0, 0, 0, 0.45));
 }
-.flag-wrap:nth-of-type(2n) .flag-wave { animation-delay: -0.6s; }
-.flag-wrap:nth-of-type(3n) .flag-wave { animation-delay: -1.2s; }
-.flag-wrap:nth-of-type(5n) .flag-wave { animation-delay: -1.8s; }
-.flag-wrap:nth-of-type(2n)::after { animation-delay: -1s; }
-.flag-wrap:nth-of-type(3n)::after { animation-delay: -2s; }
+.flag-wrap:nth-of-type(2n) .flag-wave {
+  animation-delay: -0.6s;
+}
+.flag-wrap:nth-of-type(3n) .flag-wave {
+  animation-delay: -1.2s;
+}
+.flag-wrap:nth-of-type(5n) .flag-wave {
+  animation-delay: -1.8s;
+}
+.flag-wrap:nth-of-type(2n)::after {
+  animation-delay: -1s;
+}
+.flag-wrap:nth-of-type(3n)::after {
+  animation-delay: -2s;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .flag-wave { animation: none !important; }
-  .flag-wrap::after { animation: none !important; }
+  .flag-wave {
+    animation: none !important;
+  }
+  .flag-wrap::after {
+    animation: none !important;
+  }
 }

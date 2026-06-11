@@ -71,9 +71,7 @@ export const TEAMS: Team[] = [
   { code: "SAU", name: "Arábia Saudita", flag: "🇸🇦", group: "L", rank: 43 },
 ];
 
-export const TEAM_BY_CODE: Record<string, Team> = Object.fromEntries(
-  TEAMS.map((t) => [t.code, t]),
-);
+export const TEAM_BY_CODE: Record<string, Team> = Object.fromEntries(TEAMS.map((t) => [t.code, t]));
 
 export const GROUPS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"] as const;
 export type GroupKey = (typeof GROUPS)[number];

@@ -1,34 +1,26 @@
-import { createFileRoute } from "@tanstack/react-router";
+"use client";
+
 import { useMemo } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useBolaoStore } from "@/lib/store";
 import { allGroupStandings, bestThirds, type Standing } from "@/lib/standings";
 import { cn } from "@/lib/utils";
 import { Flag } from "@/components/common/Flag";
+import { useMounted } from "@/hooks/use-mounted";
 
-export const Route = createFileRoute("/grupos")({
-  head: () => ({
-    meta: [
-      { title: "Grupos · Bolão dos v(devers)" },
-      {
-        name: "description",
-        content:
-          "12 grupos da Copa de 48 seleções com classificação em tempo real e ranking dos 3º colocados.",
-      },
-      { property: "og:title", content: "Grupos · Bolão dos v(devers)" },
-      {
-        property: "og:description",
-        content: "Classificação ao vivo dos grupos A a L e melhores terceiros colocados.",
-      },
-    ],
-  }),
-  component: GruposPage,
-});
-
-function GruposPage() {
+export default function GruposPage() {
+  const mounted = useMounted();
   const results = useBolaoStore((s) => s.results);
   const groups = useMemo(() => allGroupStandings(results), [results]);
   const thirds = useMemo(() => bestThirds(results), [results]);
+
+  if (!mounted) {
+    return (
+      <AppShell>
+        <PageSkeleton title="Grupos & Classificação" />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -116,6 +108,22 @@ function GruposPage() {
         </div>
       </section>
     </AppShell>
+  );
+}
+
+function PageSkeleton({ title }: { title: string }) {
+  return (
+    <>
+      <div className="mb-6">
+        <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">{title}</h2>
+        <p className="text-sm text-muted-foreground">Carregando dados...</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="h-48 rounded-2xl border border-border bg-card/60" />
+        ))}
+      </div>
+    </>
   );
 }
 

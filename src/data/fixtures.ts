@@ -2,14 +2,7 @@ import { GROUPS, TEAMS, teamsByGroup, type GroupKey } from "./teams";
 import { STADIUMS } from "./stadiums";
 
 export type Score = { home: number; away: number };
-export type MatchStage =
-  | "group"
-  | "r32"
-  | "r16"
-  | "qf"
-  | "sf"
-  | "third"
-  | "final";
+export type MatchStage = "group" | "r32" | "r16" | "qf" | "sf" | "third" | "final";
 
 export type Fixture = {
   id: string;
@@ -63,7 +56,7 @@ function buildGroupFixtures(): Fixture[] {
     RR_PAIRS.forEach((pair, i) => {
       const matchIndexGlobal = gi * 6 + i;
       const dayOffset = Math.floor(matchIndexGlobal / 4); // ~4 jogos por dia
-      const hour = 14 + ((matchIndexGlobal % 4) * 3); // 14,17,20,23 UTC
+      const hour = 14 + (matchIndexGlobal % 4) * 3; // 14,17,20,23 UTC
       const stadium = STADIUMS[matchIndexGlobal % STADIUMS.length];
       // Mock: jogos antes de hoje (offset < 12) já têm resultado; offset 12 ao vivo; resto não iniciado
       let result: Score | null | undefined = null;

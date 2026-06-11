@@ -3,7 +3,13 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useBolaoStore } from "@/lib/store";
 import { rankParticipants, type ParticipantStats } from "@/lib/ranking";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { GROUP_FIXTURES, type Score } from "@/data/fixtures";
 import { TEAM_BY_CODE } from "@/data/teams";
 import { compareGuess } from "@/lib/scoring";
@@ -15,9 +21,16 @@ export const Route = createFileRoute("/ranking")({
   head: () => ({
     meta: [
       { title: "Ranking · Bolão dos v(devers)" },
-      { name: "description", content: "Ranking geral do bolão da Copa de 48 seleções: acertos cheios, parciais e pontuação total." },
+      {
+        name: "description",
+        content:
+          "Ranking geral do bolão da Copa de 48 seleções: acertos cheios, parciais e pontuação total.",
+      },
       { property: "og:title", content: "Ranking · Bolão dos v(devers)" },
-      { property: "og:description", content: "Pontuação acumulada dos participantes do bolão da Copa de 48 seleções." },
+      {
+        property: "og:description",
+        content: "Pontuação acumulada dos participantes do bolão da Copa de 48 seleções.",
+      },
     ],
   }),
   component: RankingPage,
@@ -37,7 +50,6 @@ function RankingPage() {
       />
 
       <Podium ranking={ranking} onSelect={setOpenId} />
-
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="grid grid-cols-[48px_minmax(0,1fr)_60px_60px] items-center gap-2 border-b border-border bg-background/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[64px_minmax(0,1fr)_80px_80px] sm:px-5 sm:py-3 sm:text-xs">
@@ -67,7 +79,15 @@ function RankingPage() {
   );
 }
 
-function RankingRow({ row, pos, onClick }: { row: ParticipantStats; pos: number; onClick: () => void }) {
+function RankingRow({
+  row,
+  pos,
+  onClick,
+}: {
+  row: ParticipantStats;
+  pos: number;
+  onClick: () => void;
+}) {
   const Icon = pos === 1 ? Trophy : pos === 2 ? Medal : pos === 3 ? Award : null;
   return (
     <li>
@@ -76,11 +96,23 @@ function RankingRow({ row, pos, onClick }: { row: ParticipantStats; pos: number;
         className="grid w-full grid-cols-[48px_minmax(0,1fr)_60px_60px] items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-background/60 sm:grid-cols-[64px_minmax(0,1fr)_80px_80px] sm:px-5 sm:py-4"
       >
         <span className="flex items-center gap-1">
-          <span className={cn("font-display text-lg font-black num", pos <= 3 ? "text-primary" : "text-muted-foreground")}>{pos}</span>
+          <span
+            className={cn(
+              "font-display text-lg font-black num",
+              pos <= 3 ? "text-primary" : "text-muted-foreground",
+            )}
+          >
+            {pos}
+          </span>
           {Icon && <Icon className="h-3.5 w-3.5 text-primary" />}
         </span>
         <span className="flex min-w-0 items-center gap-3">
-          <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold", row.participant.color)}>
+          <span
+            className={cn(
+              "grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold",
+              row.participant.color,
+            )}
+          >
             {row.participant.initials}
           </span>
           <span className="truncate font-semibold">{row.participant.name}</span>
@@ -92,25 +124,39 @@ function RankingRow({ row, pos, onClick }: { row: ParticipantStats; pos: number;
   );
 }
 
-function ParticipantDetail({ row, results }: { row: ParticipantStats; results: Record<string, Score | null> }) {
+function ParticipantDetail({
+  row,
+  results,
+}: {
+  row: ParticipantStats;
+  results: Record<string, Score | null>;
+}) {
   return (
     <>
       <SheetHeader className="pb-4">
         <div className="flex items-center gap-3">
-          <div className={cn("grid h-14 w-14 place-items-center rounded-2xl text-lg font-black", row.participant.color)}>
+          <div
+            className={cn(
+              "grid h-14 w-14 place-items-center rounded-2xl text-lg font-black",
+              row.participant.color,
+            )}
+          >
             {row.participant.initials}
           </div>
           <div className="min-w-0">
             <SheetTitle className="font-display text-xl">{row.participant.name}</SheetTitle>
             <SheetDescription className="num">
-              <span className="text-primary font-bold">{row.total} pts</span> · {row.exact} cheios · {row.partial} parciais · {row.miss} erros
+              <span className="text-primary font-bold">{row.total} pts</span> · {row.exact} cheios ·{" "}
+              {row.partial} parciais · {row.miss} erros
             </SheetDescription>
           </div>
         </div>
       </SheetHeader>
 
       <div className="space-y-2 px-4 pb-6">
-        <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Palpites por jogo</h3>
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Palpites por jogo
+        </h3>
         {GROUP_FIXTURES.map((f) => {
           const real = results[f.id];
           const guess = row.participant.guesses[f.id];
@@ -129,15 +175,31 @@ function ParticipantDetail({ row, results }: { row: ParticipantStats; results: R
             <div key={f.id} className="rounded-lg border border-border bg-card/60 p-3">
               <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
                 <span>Grupo {f.group}</span>
-                <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold", badge.cls)}>{badge.label}</span>
+                <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold", badge.cls)}>
+                  {badge.label}
+                </span>
               </div>
               <div className="mt-2 grid grid-cols-3 items-center gap-2 text-sm">
-                <span className="flex items-center gap-1.5 truncate"><Flag code={home?.code} name={home?.name} size="md" /> <span className="truncate">{home?.name}</span></span>
-                <span className="text-center text-xs text-muted-foreground">
-                  <div className="num">palpite <b className="text-foreground">{guess?.home}-{guess?.away}</b></div>
-                  <div className="num">real <b className="text-foreground">{real ? `${real.home}-${real.away}` : "—"}</b></div>
+                <span className="flex items-center gap-1.5 truncate">
+                  <Flag code={home?.code} name={home?.name} size="md" />{" "}
+                  <span className="truncate">{home?.name}</span>
                 </span>
-                <span className="flex items-center justify-end gap-1.5 truncate"><span className="truncate text-right">{away?.name}</span> <Flag code={away?.code} name={away?.name} size="md" /></span>
+                <span className="text-center text-xs text-muted-foreground">
+                  <div className="num">
+                    palpite{" "}
+                    <b className="text-foreground">
+                      {guess?.home}-{guess?.away}
+                    </b>
+                  </div>
+                  <div className="num">
+                    real{" "}
+                    <b className="text-foreground">{real ? `${real.home}-${real.away}` : "—"}</b>
+                  </div>
+                </span>
+                <span className="flex items-center justify-end gap-1.5 truncate">
+                  <span className="truncate text-right">{away?.name}</span>{" "}
+                  <Flag code={away?.code} name={away?.name} size="md" />
+                </span>
               </div>
             </div>
           );
@@ -156,7 +218,13 @@ function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   );
 }
 
-function Podium({ ranking, onSelect }: { ranking: ParticipantStats[]; onSelect: (id: string) => void }) {
+function Podium({
+  ranking,
+  onSelect,
+}: {
+  ranking: ParticipantStats[];
+  onSelect: (id: string) => void;
+}) {
   if (ranking.length < 3) return null;
   const [first, second, third] = ranking;
   // ordem visual: 2º · 1º · 3º
@@ -187,7 +255,9 @@ function Podium({ ranking, onSelect }: { ranking: ParticipantStats[]; onSelect: 
               <div
                 className={cn(
                   "grid place-items-center rounded-full font-display font-black ring-2 transition-transform group-hover:scale-105",
-                  pos === 1 ? "h-16 w-16 text-xl ring-primary sm:h-20 sm:w-20 sm:text-2xl" : "h-12 w-12 text-base ring-border sm:h-14 sm:w-14 sm:text-lg",
+                  pos === 1
+                    ? "h-16 w-16 text-xl ring-primary sm:h-20 sm:w-20 sm:text-2xl"
+                    : "h-12 w-12 text-base ring-border sm:h-14 sm:w-14 sm:text-lg",
                   row.participant.color,
                 )}
               >
@@ -209,10 +279,14 @@ function Podium({ ranking, onSelect }: { ranking: ParticipantStats[]; onSelect: 
               <span className={cn(pos === 1 ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl")}>
                 {labels[pos]}
               </span>
-              <span className={cn(
-                "num leading-none",
-                pos === 1 ? "text-4xl text-primary sm:text-6xl" : "text-2xl text-foreground sm:text-4xl",
-              )}>
+              <span
+                className={cn(
+                  "num leading-none",
+                  pos === 1
+                    ? "text-4xl text-primary sm:text-6xl"
+                    : "text-2xl text-foreground sm:text-4xl",
+                )}
+              >
                 {row.total}
               </span>
               <span className="text-[9px] font-bold uppercase tracking-widest opacity-70 sm:text-[10px]">

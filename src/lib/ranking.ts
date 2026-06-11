@@ -11,18 +11,18 @@ export type ParticipantStats = {
   total: number;
 };
 
-export function statsFor(
-  p: Participant,
-  results: Record<string, Score | null>,
-): ParticipantStats {
-  let exact = 0, partial = 0, miss = 0, total = 0;
+export function statsFor(p: Participant, results: Record<string, Score | null>): ParticipantStats {
+  let exact = 0,
+    partial = 0,
+    miss = 0,
+    total = 0;
   GROUP_FIXTURES.forEach((f) => {
     const real = results[f.id];
     const guess = p.guesses[f.id];
     if (!real || !guess) return;
     const o = compareGuess(guess, real);
-    if (o === "exact") exact++;
-    else if (o === "partial") partial++;
+    if (o === "chinelada") exact++;
+    else if (o === "strong" || o === "result" || o === "goals") partial++;
     else miss++;
     total += pointsFor(o);
   });

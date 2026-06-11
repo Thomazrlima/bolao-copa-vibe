@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+"use client";
+
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppShell } from "@/components/layout/AppShell";
@@ -8,29 +9,24 @@ import { ScoreEditor } from "@/components/common/ScoreEditor";
 import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Flag } from "@/components/common/Flag";
+import { useMounted } from "@/hooks/use-mounted";
 
-export const Route = createFileRoute("/mata-mata")({
-  head: () => ({
-    meta: [
-      { title: "Mata-Mata · Bolão dos v(devers)" },
-      {
-        name: "description",
-        content:
-          "Simulador do mata-mata da Copa de 48 seleções: edite placares e veja o bracket se atualizar em tempo real.",
-      },
-      { property: "og:title", content: "Mata-Mata · Bolão dos v(devers)" },
-      {
-        property: "og:description",
-        content: "Se a Copa terminasse agora — bracket dinâmico do Round of 32 à Final.",
-      },
-    ],
-  }),
-  component: MataMataPage,
-});
-
-function MataMataPage() {
+export default function MataMataPage() {
+  const mounted = useMounted();
   const results = useBolaoStore((s) => s.results);
   const bracket = useMemo(() => computeBracket(results), [results]);
+
+  if (!mounted) {
+    return (
+      <AppShell>
+        <div className="mb-6 flex flex-col gap-1">
+          <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">Mata-Mata</h2>
+          <p className="text-sm text-muted-foreground">Carregando simulador...</p>
+        </div>
+        <div className="h-28 rounded-2xl border border-primary/40 bg-card/60" />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

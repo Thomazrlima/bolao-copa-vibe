@@ -19,8 +19,7 @@ export const useBolaoStore = create<State>()(
   persist(
     (set) => ({
       results: initialResults,
-      setResult: (id, score) =>
-        set((s) => ({ results: { ...s.results, [id]: score } })),
+      setResult: (id, score) => set((s) => ({ results: { ...s.results, [id]: score } })),
       reset: () => set({ results: initialResults }),
     }),
     {

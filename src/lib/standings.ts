@@ -40,12 +40,26 @@ export function computeGroupStandings(
     if (!r || !f.homeCode || !f.awayCode) return;
     const h = map.get(f.homeCode)!;
     const a = map.get(f.awayCode)!;
-    h.played++; a.played++;
-    h.gf += r.home; h.ga += r.away;
-    a.gf += r.away; a.ga += r.home;
-    if (r.home > r.away) { h.wins++; h.points += 3; a.losses++; }
-    else if (r.home < r.away) { a.wins++; a.points += 3; h.losses++; }
-    else { h.draws++; a.draws++; h.points++; a.points++; }
+    h.played++;
+    a.played++;
+    h.gf += r.home;
+    h.ga += r.away;
+    a.gf += r.away;
+    a.ga += r.home;
+    if (r.home > r.away) {
+      h.wins++;
+      h.points += 3;
+      a.losses++;
+    } else if (r.home < r.away) {
+      a.wins++;
+      a.points += 3;
+      h.losses++;
+    } else {
+      h.draws++;
+      a.draws++;
+      h.points++;
+      a.points++;
+    }
   });
   map.forEach((s) => (s.gd = s.gf - s.ga));
   return [...map.values()].sort(sortStandings);
