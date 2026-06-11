@@ -47,11 +47,11 @@ function RankingPage() {
           <span className="text-right">Parciais</span>
         </div>
         <ul className="divide-y divide-border">
-          {ranking.map((r, i) => (
+          {ranking.slice(3).map((r, i) => (
             <RankingRow
               key={r.participant.id}
               row={r}
-              pos={i + 1}
+              pos={i + 4}
               onClick={() => setOpenId(r.participant.id)}
             />
           ))}

@@ -119,17 +119,23 @@
     0 8px 30px -10px color-mix(in oklab, var(--primary) 35%, transparent);
 }
 
-/* Bandeira tremulando — quadrada, sem rotação, apenas onda + brilho */
-@keyframes flag-wave {
-  0%   { transform: translateX(0) scaleX(1); }
-  25%  { transform: translateX(-1px) scaleX(0.97); }
-  50%  { transform: translateX(0) scaleX(1); }
-  75%  { transform: translateX(1px) scaleX(0.97); }
-  100% { transform: translateX(0) scaleX(1); }
+/* Bandeira retangular, inclinada, tremulando ao vento via CSS keyframes */
+.flag-wrap {
+  perspective: 220px;
+  transform: rotate(-6deg);
+  transform-origin: left center;
 }
-@keyframes flag-wave-shine {
+@keyframes flag-wind {
+  0%   { transform: perspective(220px) rotateY(0deg)   rotateX(0deg)  skewY(0deg)  translateY(0); }
+  20%  { transform: perspective(220px) rotateY(-14deg) rotateX(2deg)  skewY(-2deg) translateY(-0.5px); }
+  40%  { transform: perspective(220px) rotateY(6deg)   rotateX(-1deg) skewY(1.5deg) translateY(0.5px); }
+  60%  { transform: perspective(220px) rotateY(-8deg)  rotateX(2deg)  skewY(-1deg) translateY(-0.5px); }
+  80%  { transform: perspective(220px) rotateY(12deg)  rotateX(-2deg) skewY(2deg)  translateY(0.5px); }
+  100% { transform: perspective(220px) rotateY(0deg)   rotateX(0deg)  skewY(0deg)  translateY(0); }
+}
+@keyframes flag-shine {
   0%   { transform: translateX(-120%) skewX(-20deg); opacity: 0; }
-  40%  { opacity: 0.35; }
+  40%  { opacity: 0.4; }
   100% { transform: translateX(220%) skewX(-20deg); opacity: 0; }
 }
 .flag-wrap::after {
@@ -139,12 +145,13 @@
   background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
   mix-blend-mode: overlay;
   pointer-events: none;
-  animation: flag-wave-shine 3.6s ease-in-out infinite;
+  animation: flag-shine 3.6s ease-in-out infinite;
 }
 .flag-wave {
-  transform-origin: center;
-  animation: flag-wave 2.4s ease-in-out infinite;
+  transform-origin: left center;
+  animation: flag-wind 2.6s ease-in-out infinite;
   will-change: transform;
+  filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.45));
 }
 .flag-wrap:nth-of-type(2n) .flag-wave { animation-delay: -0.6s; }
 .flag-wrap:nth-of-type(3n) .flag-wave { animation-delay: -1.2s; }
