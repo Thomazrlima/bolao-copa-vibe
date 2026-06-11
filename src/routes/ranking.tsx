@@ -219,4 +219,3 @@ function Podium({ ranking, onSelect }: { ranking: ParticipantStats[]; onSelect: 
     </div>
   );
 }
-}
