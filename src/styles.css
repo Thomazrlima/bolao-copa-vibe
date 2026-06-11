@@ -118,3 +118,37 @@
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 60%, transparent),
     0 8px 30px -10px color-mix(in oklab, var(--primary) 35%, transparent);
 }
+
+/* Bandeira tremulando — apenas CSS */
+@keyframes flag-wave {
+  0%   { transform: perspective(160px) rotateY(0deg)   skewX(0deg)   translateY(0); }
+  25%  { transform: perspective(160px) rotateY(-8deg)  skewX(-3deg)  translateY(-1px); }
+  50%  { transform: perspective(160px) rotateY(0deg)   skewX(0deg)   translateY(0); }
+  75%  { transform: perspective(160px) rotateY(8deg)   skewX(3deg)   translateY(1px); }
+  100% { transform: perspective(160px) rotateY(0deg)   skewX(0deg)   translateY(0); }
+}
+.flag-wrap { perspective: 200px; }
+.flag-wave {
+  display: inline-block;
+  transform-origin: left center;
+  animation: flag-wave 3.2s ease-in-out infinite;
+  will-change: transform;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35));
+}
+.flag-wrap:nth-of-type(2n) .flag-wave { animation-delay: -0.8s; }
+.flag-wrap:nth-of-type(3n) .flag-wave { animation-delay: -1.6s; }
+.flag-wrap:nth-of-type(5n) .flag-wave { animation-delay: -2.4s; }
+
+/* Bola girando da logo */
+@keyframes ball-spin {
+  to { transform: rotate(360deg); }
+}
+.ball-spin {
+  display: inline-block;
+  animation: ball-spin 4s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flag-wave, .ball-spin { animation: none !important; }
+}

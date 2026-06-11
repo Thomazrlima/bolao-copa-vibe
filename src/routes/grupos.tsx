@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useBolaoStore } from "@/lib/store";
 import { allGroupStandings, bestThirds, type Standing } from "@/lib/standings";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/common/Flag";
 
 export const Route = createFileRoute("/grupos")({
   head: () => ({
@@ -60,7 +61,7 @@ function GruposPage() {
                 >
                   <span className={cn("font-display font-black num", classified ? "text-primary" : "text-muted-foreground")}>{i + 1}</span>
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="text-lg">{s.team.flag}</span>
+                    <Flag code={s.team.code} name={s.team.name} size="lg" />
                     <span className="truncate font-semibold">{s.team.name}</span>
                     <span className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground sm:inline">G{s.group}</span>
                   </span>
@@ -109,7 +110,7 @@ function GroupCard({ group, standings }: { group: string; standings: Standing[] 
             >
               <span className={cn("font-display font-black num", top2 ? "text-primary" : "text-muted-foreground")}>{i + 1}</span>
               <span className="flex min-w-0 items-center gap-2">
-                <span className="text-base">{s.team.flag}</span>
+                <Flag code={s.team.code} name={s.team.name} size="md" />
                 <span className="truncate text-[13px] font-medium">{s.team.name}</span>
               </span>
               <span className="num text-right font-bold">{s.points}</span>
