@@ -20,12 +20,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link to="/ranking" className="flex items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground font-display text-lg font-black">
-              v
-            </div>
+            <span
+              className="ball-spin grid h-10 w-10 shrink-0 place-items-center text-3xl leading-none"
+              aria-hidden="true"
+            >
+              ⚽
+            </span>
             <div className="min-w-0">
               <h1 className="font-display text-lg font-black leading-none tracking-tight sm:text-xl">
-                Bolão dos <span className="text-primary">v(devers)</span>
+                Bolão dos <span className="text-foreground">v</span><span className="text-primary">(</span><span className="text-foreground">devers</span><span className="text-primary">)</span>
               </h1>
               <p className="hidden text-[11px] uppercase tracking-[0.18em] text-muted-foreground sm:block">
                 Copa do Mundo · 48 seleções
