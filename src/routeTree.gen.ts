@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as MataMataRouteImport } from './routes/mata-mata'
 import { Route as GruposRouteImport } from './routes/grupos'
 import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as IndexRouteImport } from './routes/index'
@@ -17,6 +18,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const RankingRoute = RankingRouteImport.update({
   id: '/ranking',
   path: '/ranking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MataMataRoute = MataMataRouteImport.update({
+  id: '/mata-mata',
+  path: '/mata-mata',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GruposRoute = GruposRouteImport.update({
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calendario': typeof CalendarioRoute
   '/grupos': typeof GruposRoute
+  '/mata-mata': typeof MataMataRoute
   '/ranking': typeof RankingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calendario': typeof CalendarioRoute
   '/grupos': typeof GruposRoute
+  '/mata-mata': typeof MataMataRoute
   '/ranking': typeof RankingRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/calendario': typeof CalendarioRoute
   '/grupos': typeof GruposRoute
+  '/mata-mata': typeof MataMataRoute
   '/ranking': typeof RankingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/calendario' | '/grupos' | '/ranking'
+  fullPaths: '/' | '/calendario' | '/grupos' | '/mata-mata' | '/ranking'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/calendario' | '/grupos' | '/ranking'
-  id: '__root__' | '/' | '/calendario' | '/grupos' | '/ranking'
+  to: '/' | '/calendario' | '/grupos' | '/mata-mata' | '/ranking'
+  id: '__root__' | '/' | '/calendario' | '/grupos' | '/mata-mata' | '/ranking'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CalendarioRoute: typeof CalendarioRoute
   GruposRoute: typeof GruposRoute
+  MataMataRoute: typeof MataMataRoute
   RankingRoute: typeof RankingRoute
 }
 
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/ranking'
       fullPath: '/ranking'
       preLoaderRoute: typeof RankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mata-mata': {
+      id: '/mata-mata'
+      path: '/mata-mata'
+      fullPath: '/mata-mata'
+      preLoaderRoute: typeof MataMataRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/grupos': {
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CalendarioRoute: CalendarioRoute,
   GruposRoute: GruposRoute,
+  MataMataRoute: MataMataRoute,
   RankingRoute: RankingRoute,
 }
 export const routeTree = rootRouteImport
