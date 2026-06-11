@@ -40,12 +40,11 @@ function RankingPage() {
 
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="grid grid-cols-[48px_minmax(0,1fr)_60px_60px_80px] items-center gap-2 border-b border-border bg-background/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[64px_minmax(0,1fr)_80px_80px_100px] sm:px-5 sm:py-3 sm:text-xs">
+        <div className="grid grid-cols-[48px_minmax(0,1fr)_60px_60px] items-center gap-2 border-b border-border bg-background/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[64px_minmax(0,1fr)_80px_80px] sm:px-5 sm:py-3 sm:text-xs">
           <span>#</span>
           <span>Participante</span>
           <span className="text-right">Cheios</span>
           <span className="text-right">Parciais</span>
-          <span className="text-right">Total</span>
         </div>
         <ul className="divide-y divide-border">
           {ranking.map((r, i) => (
@@ -74,7 +73,7 @@ function RankingRow({ row, pos, onClick }: { row: ParticipantStats; pos: number;
     <li>
       <button
         onClick={onClick}
-        className="grid w-full grid-cols-[48px_minmax(0,1fr)_60px_60px_80px] items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-background/60 sm:grid-cols-[64px_minmax(0,1fr)_80px_80px_100px] sm:px-5 sm:py-4"
+        className="grid w-full grid-cols-[48px_minmax(0,1fr)_60px_60px] items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-background/60 sm:grid-cols-[64px_minmax(0,1fr)_80px_80px] sm:px-5 sm:py-4"
       >
         <span className="flex items-center gap-1">
           <span className={cn("font-display text-lg font-black num", pos <= 3 ? "text-primary" : "text-muted-foreground")}>{pos}</span>
@@ -88,7 +87,6 @@ function RankingRow({ row, pos, onClick }: { row: ParticipantStats; pos: number;
         </span>
         <span className="num text-right font-bold text-primary">{row.exact}</span>
         <span className="num text-right text-muted-foreground">{row.partial}</span>
-        <span className="num text-right font-display text-xl font-black">{row.total}</span>
       </button>
     </li>
   );
@@ -168,9 +166,9 @@ function Podium({ ranking, onSelect }: { ranking: ParticipantStats[]; onSelect: 
     { row: third, pos: 3 },
   ];
   const heights: Record<1 | 2 | 3, string> = {
-    1: "h-32 sm:h-40",
-    2: "h-24 sm:h-28",
-    3: "h-20 sm:h-24",
+    1: "h-40 sm:h-52",
+    2: "h-28 sm:h-36",
+    3: "h-20 sm:h-28",
   };
   const labels: Record<1 | 2 | 3, string> = { 1: "1º", 2: "2º", 3: "3º" };
   return (
@@ -198,20 +196,28 @@ function Podium({ ranking, onSelect }: { ranking: ParticipantStats[]; onSelect: 
               <span className="mt-2 max-w-[120px] truncate text-xs font-semibold sm:text-sm">
                 {row.participant.name}
               </span>
-              <span className="num text-[11px] text-muted-foreground sm:text-xs">
-                {row.total} pts
-              </span>
             </div>
             <div
               className={cn(
-                "flex w-full flex-col items-center justify-start rounded-t-xl border border-b-0 pt-2 font-display font-black",
+                "flex w-full flex-col items-center justify-between gap-1 rounded-t-xl border border-b-0 px-2 py-3 font-display font-black",
                 heights[pos],
                 pos === 1
-                  ? "bg-primary/20 border-primary/60 text-primary text-3xl sm:text-4xl"
-                  : "bg-card border-border text-muted-foreground text-xl sm:text-2xl",
+                  ? "bg-primary/20 border-primary/60 text-primary"
+                  : "bg-card border-border text-muted-foreground",
               )}
             >
-              {labels[pos]}
+              <span className={cn(pos === 1 ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl")}>
+                {labels[pos]}
+              </span>
+              <span className={cn(
+                "num leading-none",
+                pos === 1 ? "text-4xl text-primary sm:text-6xl" : "text-2xl text-foreground sm:text-4xl",
+              )}>
+                {row.total}
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-widest opacity-70 sm:text-[10px]">
+                pts
+              </span>
             </div>
           </button>
         ))}
