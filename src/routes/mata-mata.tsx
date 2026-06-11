@@ -7,6 +7,7 @@ import { computeBracket, type BracketSlot } from "@/lib/bracket";
 import { ScoreEditor } from "@/components/common/ScoreEditor";
 import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Flag } from "@/components/common/Flag";
 
 export const Route = createFileRoute("/mata-mata")({
   head: () => ({
@@ -48,7 +49,7 @@ function MataMataPage() {
               >
                 {bracket.champion ? (
                   <span className="flex items-center gap-3">
-                    <span className="text-3xl sm:text-4xl">{bracket.champion.flag}</span>
+                    <Flag code={bracket.champion.code} name={bracket.champion.name} size="xl" />
                     {bracket.champion.name}
                   </span>
                 ) : (
@@ -110,13 +111,13 @@ function MatchPill({ match }: { match: BracketSlot }) {
         <span>{match.id}</span>
       </div>
       <Side
-        flag={match.home?.team.flag}
+        code={match.home?.team.code}
         name={match.home?.team.name ?? match.homeLabel}
         unknown={!match.home}
       />
       <div className="my-1 border-t border-dashed border-border" />
       <Side
-        flag={match.away?.team.flag}
+        code={match.away?.team.code}
         name={match.away?.team.name ?? match.awayLabel}
         unknown={!match.away}
       />
@@ -127,10 +128,10 @@ function MatchPill({ match }: { match: BracketSlot }) {
   );
 }
 
-function Side({ flag, name, unknown }: { flag?: string; name: string; unknown: boolean }) {
+function Side({ code, name, unknown }: { code?: string; name: string; unknown: boolean }) {
   return (
     <div className={cn("flex items-center gap-2 text-sm", unknown && "text-muted-foreground")}>
-      <span className="w-5 text-base">{flag ?? "•"}</span>
+      {code ? <Flag code={code} name={name} size="md" /> : <span className="w-6 text-center text-base">•</span>}
       <span className={cn("truncate", !unknown && "font-semibold")}>{name}</span>
     </div>
   );
