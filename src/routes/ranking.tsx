@@ -36,6 +36,9 @@ function RankingPage() {
         subtitle="Pontos pelos jogos da fase de grupos · atualiza em tempo real"
       />
 
+      <Podium ranking={ranking} onSelect={setOpenId} />
+
+
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="grid grid-cols-[48px_minmax(0,1fr)_60px_60px_80px] items-center gap-2 border-b border-border bg-background/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[64px_minmax(0,1fr)_80px_80px_100px] sm:px-5 sm:py-3 sm:text-xs">
           <span>#</span>
