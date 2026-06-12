@@ -1,15 +1,14 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, Eye, EyeOff, LogOut, Save, ShieldCheck } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Check, Eye, EyeOff, LogOut, Save, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarUpload } from "@/components/profile/AvatarUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getInitials } from "@/lib/display-name";
 import {
   getCurrentUsuario,
   updateCurrentUserPassword,
@@ -21,11 +20,9 @@ import { createClient } from "@/lib/supabase/client";
 export default function ConfiguracoesPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [name, setName] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -55,7 +52,6 @@ export default function ConfiguracoesPage() {
         setUsuario(loadedUsuario);
         setName(loadedUsuario.nome_completo);
         setTelefone(loadedUsuario.telefone);
-        setPhoto(loadedUsuario.avatar_url);
       } catch (error) {
         if (!active) return;
         setProfileError(
@@ -71,24 +67,6 @@ export default function ConfiguracoesPage() {
     };
   }, [router]);
 
-  function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/") || file.size > 3 * 1024 * 1024) {
-      event.target.value = "";
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const nextPhoto = typeof reader.result === "string" ? reader.result : null;
-      setPhoto(nextPhoto);
-      setProfileSaved(false);
-    };
-    reader.readAsDataURL(file);
-  }
-
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setProfileSaving(true);
@@ -99,13 +77,11 @@ export default function ConfiguracoesPage() {
       const updatedUsuario = await updateCurrentUsuario({
         nome_completo: name.trim(),
         telefone: telefone.trim(),
-        avatar_url: photo,
       });
 
       setUsuario(updatedUsuario);
       setName(updatedUsuario.nome_completo);
       setTelefone(updatedUsuario.telefone);
-      setPhoto(updatedUsuario.avatar_url);
       setProfileSaved(true);
       router.refresh();
     } catch (error) {
@@ -163,6 +139,16 @@ export default function ConfiguracoesPage() {
     return <SpinningBallLoader label="Carregando configurações" />;
   }
 
+  if (!usuario) {
+    return (
+      <div className="mx-auto max-w-4xl rounded-xl border border-destructive/40 bg-destructive/10 p-6">
+        <p className="text-sm text-destructive" role="alert">
+          {profileError ?? "Não foi possível carregar seu perfil."}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6 sm:mb-8">
@@ -180,47 +166,15 @@ export default function ConfiguracoesPage() {
           onSubmit={handleProfileSubmit}
           className="rounded-xl border border-border bg-card p-4 sm:p-6"
         >
-          <div className="mb-6 flex flex-col items-center gap-4 border-b border-border/70 pb-6 sm:flex-row sm:items-center">
-            <div className="relative">
-              <Avatar className="h-28 w-28 border-2 border-primary/50 bg-primary/10 shadow-lg">
-                {photo && <AvatarImage src={photo} alt={name} className="object-cover" />}
-                <AvatarFallback className="bg-primary/15 font-display text-3xl font-black text-primary">
-                  {getInitials(name)}
-                </AvatarFallback>
-              </Avatar>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-card bg-primary text-primary-foreground shadow transition-transform hover:scale-105"
-                aria-label="Enviar nova foto"
-              >
-                <Camera className="h-4 w-4" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoChange}
-                className="sr-only"
-              />
-            </div>
-
-            <div className="text-center sm:text-left">
-              <h3 className="font-display text-xl font-black">{name}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">JPG, PNG ou WebP de até 3 MB.</p>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={profileSaving}
-                className="mt-3"
-              >
-                <Camera className="h-4 w-4" />
-                Trocar foto
-              </Button>
-            </div>
-          </div>
+          <AvatarUpload
+            supabase={supabase}
+            usuario={usuario}
+            displayName={name || usuario.nome_completo}
+            onUsuarioChange={(updatedUsuario) => {
+              setUsuario(updatedUsuario);
+              router.refresh();
+            }}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="name">Nome</Label>
@@ -249,7 +203,11 @@ export default function ConfiguracoesPage() {
             />
           </div>
 
-          {profileError && <p className="mt-4 text-sm text-destructive">{profileError}</p>}
+          {profileError && (
+            <p className="mt-4 text-sm text-destructive" role="alert">
+              {profileError}
+            </p>
+          )}
 
           {profileSaved && (
             <p className="mt-4 flex items-center gap-2 text-sm font-medium text-success">

@@ -15,7 +15,7 @@ import {
   Trophy,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Flag } from "@/components/common/Flag";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
@@ -27,7 +27,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { teamCodeFromName } from "@/data/iso2";
-import { getInitials } from "@/lib/display-name";
 import { getPerfil, type PerfilPalpite, type PerfilUsuario } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import type { GuessOutcome } from "@/lib/scoring";
@@ -202,18 +201,12 @@ export default function PerfilPage() {
           </Button>
         )}
         <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-          <Avatar className="h-28 w-28 border-2 border-primary/60 bg-primary/10 shadow-[0_0_35px_color-mix(in_oklab,var(--primary)_20%,transparent)] sm:h-36 sm:w-36">
-            {profile.avatar_url && (
-              <AvatarImage
-                src={profile.avatar_url}
-                alt={profile.nome_completo}
-                className="object-cover"
-              />
-            )}
-            <AvatarFallback className="bg-primary/15 font-display text-3xl font-black text-primary sm:text-4xl">
-              {getInitials(profile.nome_completo)}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            name={profile.nome_completo}
+            avatarPath={profile.avatar_url}
+            className="h-28 w-28 border-2 border-primary/60 bg-primary/10 shadow-[0_0_35px_color-mix(in_oklab,var(--primary)_20%,transparent)] sm:h-36 sm:w-36"
+            fallbackClassName="bg-primary/15 font-display text-3xl font-black text-primary sm:text-4xl"
+          />
 
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">

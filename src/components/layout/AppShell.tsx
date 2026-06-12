@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Trophy, LayoutGrid, CalendarDays, LogIn, ScrollText, Goal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getDisplayName, getInitials } from "@/lib/display-name";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { getDisplayName } from "@/lib/display-name";
+import { USER_PROFILE_UPDATED_EVENT } from "@/lib/avatar-storage";
 import { createClient } from "@/lib/supabase/client";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -221,10 +222,12 @@ function HeaderAuth() {
     } = supabase.auth.onAuthStateChange(() => {
       loadUsuario();
     });
+    window.addEventListener(USER_PROFILE_UPDATED_EVENT, loadUsuario);
 
     return () => {
       active = false;
       subscription.unsubscribe();
+      window.removeEventListener(USER_PROFILE_UPDATED_EVENT, loadUsuario);
     };
   }, [supabase.auth]);
 
@@ -260,12 +263,12 @@ function HeaderAuth() {
       <span className="hidden max-w-[120px] truncate text-sm font-semibold group-hover:text-primary min-[400px]:block sm:max-w-[160px]">
         {navigationName}
       </span>
-      <Avatar className="h-8 w-8 border border-primary/40 bg-primary/10">
-        {usuario.avatar_url && <AvatarImage src={usuario.avatar_url} alt={displayName} />}
-        <AvatarFallback className="bg-primary/15 text-xs font-black text-primary">
-          {getInitials(displayName)}
-        </AvatarFallback>
-      </Avatar>
+      <UserAvatar
+        name={displayName}
+        avatarPath={usuario.avatar_url}
+        className="h-8 w-8 border border-primary/40 bg-primary/10"
+        fallbackClassName="bg-primary/15 text-xs font-black text-primary"
+      />
     </Link>
   );
 }

@@ -6,16 +6,10 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Trophy } from "lucide-react";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
-import { getDisplayName, getInitials } from "@/lib/display-name";
-import { getRanking } from "@/lib/queries";
+import { UserAvatar } from "@/components/common/UserAvatar";
+import { getDisplayName } from "@/lib/display-name";
+import { getRanking, type RankingUsuario } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-
-type RankingUsuario = {
-  id: string;
-  nome_completo: string;
-  pontos: number;
-  chineladas: number;
-};
 
 type ParticipantTitle = {
   emoji?: string;
@@ -195,6 +189,7 @@ function RankingRow({
       >
         <AvatarName
           name={row.nome_completo}
+          avatarPath={row.avatar_url}
           className={relegated ? "bg-card text-destructive ring-destructive/60" : undefined}
         />
         <InlineParticipantName
@@ -408,6 +403,7 @@ function Podium({
                 )}
                 <AvatarName
                   name={row.nome_completo}
+                  avatarPath={row.avatar_url}
                   large={pos === 1}
                   className={avatarStyles[pos]}
                 />
@@ -479,22 +475,29 @@ function profileHref(row: RankingUsuario) {
 
 function AvatarName({
   name,
+  avatarPath,
   large,
   className,
 }: {
   name: string;
+  avatarPath: string | null;
   large?: boolean;
   className?: string;
 }) {
   return (
-    <span
+    <UserAvatar
+      name={name}
+      avatarPath={avatarPath}
       className={cn(
-        "grid shrink-0 place-items-center rounded-full bg-primary/20 font-display font-black text-primary ring-2 ring-primary/50",
-        large ? "h-16 w-16 text-xl sm:h-20 sm:w-20 sm:text-2xl" : "h-9 w-9 text-xs",
+        "shrink-0 bg-primary/20 ring-2 ring-primary/50",
+        large ? "h-16 w-16 sm:h-20 sm:w-20" : "h-9 w-9",
         className,
       )}
-    >
-      {getInitials(name)}
-    </span>
+      fallbackClassName={cn(
+        "bg-primary/20 font-display font-black text-primary",
+        large ? "text-xl sm:text-2xl" : "text-xs",
+        className,
+      )}
+    />
   );
 }

@@ -8,7 +8,7 @@ const updateUsuarioSchema = z
   .object({
     nome_completo: z.string().trim().min(1).max(160).optional(),
     telefone: z.string().trim().max(40).optional(),
-    avatar_url: z.string().trim().max(5_000_000).nullable().optional(),
+    avatar_url: z.string().trim().max(255).nullable().optional(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
     message: "Informe ao menos um campo para atualizar.",
@@ -49,6 +49,16 @@ export async function PATCH(request: Request) {
       { error: "Payload inválido.", issues: payload.error.flatten() },
       { status: 400 },
     );
+  }
+
+  if (
+    payload.data.avatar_url != null &&
+    !new RegExp(
+      `^${auth.user.id}/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(?:jpg|png|webp)$`,
+      "i",
+    ).test(payload.data.avatar_url)
+  ) {
+    return NextResponse.json({ error: "Caminho de avatar inválido." }, { status: 400 });
   }
 
   try {

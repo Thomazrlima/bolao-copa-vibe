@@ -28,6 +28,7 @@ import {
 
 import { Flag } from "@/components/common/Flag";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
@@ -37,7 +38,6 @@ import {
 } from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
-import { getInitials } from "@/lib/display-name";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -289,9 +289,12 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3"
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-black text-primary">
-                    {getInitials(row.nome_completo)}
-                  </span>
+                  <UserAvatar
+                    name={row.nome_completo}
+                    avatarPath={row.avatar_url}
+                    className="h-8 w-8 bg-primary/15"
+                    fallbackClassName="bg-primary/15 text-xs font-black text-primary"
+                  />
                   <span className="truncate text-sm font-semibold">{row.nome_completo}</span>
                 </span>
                 <span className="num font-display text-lg font-black">

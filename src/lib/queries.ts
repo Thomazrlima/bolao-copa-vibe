@@ -1,11 +1,13 @@
 import type { GuessOutcome } from "@/lib/scoring";
 
+export type AvatarPath = string;
+
 export type Usuario = {
   id: string;
   email: string;
   nome_completo: string;
   telefone: string;
-  avatar_url: string | null;
+  avatar_url: AvatarPath | null;
   pontos: number;
   chineladas: number;
   created_at: string;
@@ -15,6 +17,7 @@ export type Usuario = {
 export type RankingUsuario = {
   id: string;
   nome_completo: string;
+  avatar_url: AvatarPath | null;
   pontos: number;
   chineladas: number;
 };
@@ -34,7 +37,7 @@ export type PerfilPalpite = {
 };
 
 export type PerfilUsuario = RankingUsuario & {
-  avatar_url: string | null;
+  avatar_url: AvatarPath | null;
   is_current_user: boolean;
   badges: Array<"mae-dina" | "no-cangote" | "podio-e-podio" | "lanterna" | "chinelada">;
   estatisticas: Record<GuessOutcome, number>;
@@ -44,7 +47,7 @@ export type PerfilUsuario = RankingUsuario & {
 export type JogoPalpite = {
   user_id: string;
   nome_completo: string;
-  avatar_url: string | null;
+  avatar_url: AvatarPath | null;
   palpite: { gols1: number; gols2: number };
   pontos: number | null;
   outcome: GuessOutcome | null;

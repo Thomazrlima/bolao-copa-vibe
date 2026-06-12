@@ -64,6 +64,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import {
   CAMPEAO_BOLAO_QUESTION_ID,
   ESPECIAIS,
@@ -804,8 +805,18 @@ function ParticipantCombobox({
           disabled={disabled || participants.length === 0}
           className="h-12 w-full justify-between rounded-xl border-primary/35 bg-background/75 px-3 text-left font-bold"
         >
-          <span className="min-w-0 truncate">
-            {selected?.nome_completo ?? "Selecione um usuário"}
+          <span className="flex min-w-0 items-center gap-2">
+            {selected && (
+              <UserAvatar
+                name={selected.nome_completo}
+                avatarPath={selected.avatar_url}
+                className="h-7 w-7"
+                fallbackClassName="bg-primary/15 text-[10px] font-black text-primary"
+              />
+            )}
+            <span className="min-w-0 truncate">
+              {selected?.nome_completo ?? "Selecione um usuário"}
+            </span>
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
         </Button>
@@ -830,6 +841,12 @@ function ParticipantCombobox({
                       "h-4 w-4",
                       participant.id === value ? "opacity-100" : "opacity-0",
                     )}
+                  />
+                  <UserAvatar
+                    name={participant.nome_completo}
+                    avatarPath={participant.avatar_url}
+                    className="h-7 w-7"
+                    fallbackClassName="bg-primary/15 text-[10px] font-black text-primary"
                   />
                   <span className="min-w-0 truncate">{participant.nome_completo}</span>
                 </CommandItem>

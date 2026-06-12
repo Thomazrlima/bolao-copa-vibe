@@ -93,10 +93,6 @@ function nowAsStoredBrasiliaMs() {
   );
 }
 
-function isMissingAvatarUrlColumn(error: { message: string } | null | undefined) {
-  return Boolean(error?.message.includes("avatar_url"));
-}
-
 export async function getRankingUsuarios(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("ranking_usuarios")
@@ -107,7 +103,16 @@ export async function getRankingUsuarios(supabase: SupabaseClient) {
 
   assertNoError(error);
 
-  return data ?? [];
+  const ranking = (data ?? []) as RankingUsuarioRow[];
+  const avatarPaths = await getUsuarioAvatarPaths(
+    supabase,
+    ranking.map((usuario) => usuario.id),
+  );
+
+  return ranking.map((usuario) => ({
+    ...usuario,
+    avatar_url: avatarPaths.get(usuario.id) ?? null,
+  }));
 }
 
 export async function recalcularRankingCompleto(supabase: SupabaseClient) {
@@ -150,26 +155,21 @@ export async function recalcularRankingCompleto(supabase: SupabaseClient) {
 }
 
 export async function getUsuarioMe(supabase: SupabaseClient, userId: string) {
-  const result = await supabase
-    .from("usuarios")
-    .select("id,email,nome_completo,telefone,avatar_url,pontos,chineladas,created_at,updated_at")
-    .eq("id", userId)
-    .single();
-
-  if (!isMissingAvatarUrlColumn(result.error)) {
-    assertNoError(result.error);
-    return result.data as UsuarioRow;
-  }
-
-  const { data, error } = await supabase
-    .from("usuarios")
-    .select("id,email,nome_completo,telefone,pontos,chineladas,created_at,updated_at")
-    .eq("id", userId)
-    .single();
+  const [{ data, error }, avatarPaths] = await Promise.all([
+    supabase
+      .from("usuarios")
+      .select("id,email,nome_completo,telefone,pontos,chineladas,created_at,updated_at")
+      .eq("id", userId)
+      .single(),
+    getUsuarioAvatarPaths(supabase, [userId]),
+  ]);
 
   assertNoError(error);
 
-  return { ...(data as Omit<UsuarioRow, "avatar_url">), avatar_url: null };
+  return {
+    ...(data as Omit<UsuarioRow, "avatar_url">),
+    avatar_url: avatarPaths.get(userId) ?? null,
+  };
 }
 
 export async function updateUsuarioMe(
@@ -177,29 +177,93 @@ export async function updateUsuarioMe(
   userId: string,
   payload: UsuarioUpdateInput,
 ) {
-  const result = await supabase
-    .from("usuarios")
-    .update(payload)
-    .eq("id", userId)
-    .select("id,email,nome_completo,telefone,avatar_url,pontos,chineladas,created_at,updated_at")
-    .single();
+  const { avatar_url: avatarPath, ...usuarioPayload } = payload;
 
-  if (!isMissingAvatarUrlColumn(result.error)) {
-    assertNoError(result.error);
-    return result.data as UsuarioRow;
+  if (Object.keys(usuarioPayload).length > 0) {
+    const { error, count } = await supabase
+      .from("usuarios")
+      .update(usuarioPayload, { count: "exact" })
+      .eq("id", userId);
+
+    assertNoError(error);
+
+    if (count === 0) {
+      throw new ServiceError(
+        "Seu perfil não pôde ser atualizado. Verifique as políticas de acesso da tabela usuarios.",
+        403,
+      );
+    }
   }
 
-  const { avatar_url: _avatarUrl, ...payloadWithoutAvatar } = payload;
-  const { data, error } = await supabase
-    .from("usuarios")
-    .update(payloadWithoutAvatar)
+  if (avatarPath !== undefined) {
+    await updateUsuarioAvatarPath(supabase, userId, avatarPath);
+  }
+
+  return getUsuarioMe(supabase, userId);
+}
+
+async function updateUsuarioAvatarPath(
+  supabase: SupabaseClient,
+  userId: string,
+  avatarPath: string | null,
+) {
+  const { data: existingProfile, error: selectError } = await supabase
+    .from("profiles")
+    .select("id")
     .eq("id", userId)
-    .select("id,email,nome_completo,telefone,pontos,chineladas,created_at,updated_at")
-    .single();
+    .maybeSingle();
 
-  assertNoError(error);
+  if (selectError) {
+    console.error("Falha ao consultar o perfil antes de salvar o avatar:", selectError);
+    throw new ServiceError(
+      "Não foi possível acessar seu perfil para salvar a foto. Verifique as políticas da tabela profiles.",
+      403,
+    );
+  }
 
-  return { ...(data as Omit<UsuarioRow, "avatar_url">), avatar_url: null };
+  if (existingProfile) {
+    const { error, count } = await supabase
+      .from("profiles")
+      .update(
+        {
+          avatar_path: avatarPath,
+          updated_at: new Date().toISOString(),
+        },
+        { count: "exact" },
+      )
+      .eq("id", userId);
+
+    if (error) {
+      console.error("Falha ao atualizar o caminho do avatar:", error);
+      throw new ServiceError(
+        "Não foi possível atualizar a foto no perfil. Verifique a política de UPDATE da tabela profiles.",
+        403,
+      );
+    }
+
+    if (count === 0) {
+      throw new ServiceError(
+        "A atualização da foto foi bloqueada pela política de acesso da tabela profiles.",
+        403,
+      );
+    }
+
+    return;
+  }
+
+  const { error } = await supabase.from("profiles").insert({
+    id: userId,
+    avatar_path: avatarPath,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.error("Falha ao criar o perfil com o caminho do avatar:", error);
+    throw new ServiceError(
+      "Não foi possível criar o perfil para salvar a foto. Verifique a política de INSERT da tabela profiles.",
+      403,
+    );
+  }
 }
 
 export async function updateAuthenticatedUserPassword(
@@ -261,6 +325,7 @@ export async function getPerfilUsuario(
 
   const profileRow = profile as RankingUsuarioRow;
   const ranking = (rankingRows ?? []) as RankingUsuarioRow[];
+  const avatarPaths = await getUsuarioAvatarPaths(supabase, [id]);
   const badges = getProfileBadges(profileRow.id, ranking);
   const guesses = await getPalpitesPerfil(supabase, id, {
     expectRows: profileRow.pontos > 0 || profileRow.chineladas > 0,
@@ -328,7 +393,7 @@ export async function getPerfilUsuario(
 
   return {
     ...profileRow,
-    avatar_url: null,
+    avatar_url: avatarPaths.get(id) ?? null,
     is_current_user: authUser?.id === id,
     badges,
     estatisticas: stats,
@@ -494,14 +559,36 @@ async function getJogosPorIds(supabase: SupabaseClient, ids: string[]) {
 async function getRankingUsuariosPorIds(supabase: SupabaseClient, ids: string[]) {
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
-    .from("ranking_usuarios")
-    .select("id,nome_completo,pontos,chineladas")
-    .in("id", ids);
+  const [{ data, error }, avatarPaths] = await Promise.all([
+    supabase.from("ranking_usuarios").select("id,nome_completo,pontos,chineladas").in("id", ids),
+    getUsuarioAvatarPaths(supabase, ids),
+  ]);
 
   assertNoError(error);
 
-  return (data ?? []) as RankingUsuarioRow[];
+  return ((data ?? []) as RankingUsuarioRow[]).map((usuario) => ({
+    ...usuario,
+    avatar_url: avatarPaths.get(usuario.id) ?? null,
+  }));
+}
+
+async function getUsuarioAvatarPaths(supabase: SupabaseClient, ids: string[]) {
+  const avatarPaths = new Map<string, string | null>();
+
+  if (ids.length === 0) return avatarPaths;
+
+  const { data, error } = await supabase.from("profiles").select("id,avatar_path").in("id", ids);
+
+  if (error) {
+    console.error("Não foi possível carregar os avatares dos usuários:", error);
+    return avatarPaths;
+  }
+
+  for (const usuario of data ?? []) {
+    avatarPaths.set(usuario.id, usuario.avatar_path);
+  }
+
+  return avatarPaths;
 }
 
 function emptyStats(): Record<GuessOutcome, number> {
