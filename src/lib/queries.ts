@@ -35,6 +35,7 @@ export type PerfilPalpite = {
 export type PerfilUsuario = RankingUsuario & {
   avatar_url: string | null;
   is_current_user: boolean;
+  badges: Array<"mae-dina" | "no-cangote" | "podio-e-podio" | "lanterna" | "chinelada">;
   estatisticas: Record<GuessOutcome, number>;
   palpites: PerfilPalpite[];
 };

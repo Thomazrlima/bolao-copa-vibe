@@ -17,6 +17,8 @@ type UsuarioRow = RankingUsuarioRow & {
   updated_at: string;
 };
 
+type ProfileBadgeKey = "mae-dina" | "no-cangote" | "podio-e-podio" | "lanterna" | "chinelada";
+
 type PalpiteRow = {
   user_id?: string;
   jogo_id: string;
@@ -206,23 +208,36 @@ export async function getPerfilUsuario(
     throw new ServiceError("Não autenticado.", 401);
   }
 
-  const [{ data: profile, error: profileError }, phasesResult] = await Promise.all([
+  const [
+    { data: profile, error: profileError },
+    phasesResult,
+    { data: rankingRows, error: rankingError },
+  ] = await Promise.all([
     supabase
       .from("ranking_usuarios")
       .select("id,nome_completo,pontos,chineladas")
       .eq("id", id)
       .maybeSingle(),
     supabase.from("fases").select("id,nome"),
+    supabase
+      .from("ranking_usuarios")
+      .select("id,nome_completo,pontos,chineladas")
+      .order("pontos", { ascending: false })
+      .order("chineladas", { ascending: false })
+      .order("nome_completo", { ascending: true }),
   ]);
 
   assertNoError(profileError);
   assertNoError(phasesResult.error);
+  assertNoError(rankingError);
 
   if (!profile) {
     throw new ServiceError("Participante não encontrado.", 404);
   }
 
   const profileRow = profile as RankingUsuarioRow;
+  const ranking = (rankingRows ?? []) as RankingUsuarioRow[];
+  const badges = getProfileBadges(profileRow.id, ranking);
   const guesses = await getPalpitesPerfil(supabase, id, {
     expectRows: profileRow.pontos > 0 || profileRow.chineladas > 0,
   });
@@ -286,6 +301,7 @@ export async function getPerfilUsuario(
     ...profileRow,
     avatar_url: null,
     is_current_user: authUser?.id === id,
+    badges,
     estatisticas: stats,
     palpites,
   };
@@ -298,8 +314,7 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
       .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado")
       .eq("id", jogoId)
       .maybeSingle(),
-    supabase
-      .rpc("listar_palpites_jogo", { p_jogo_id: jogoId }),
+    supabase.rpc("listar_palpites_jogo", { p_jogo_id: jogoId }),
   ]);
 
   assertNoError(jogoError);
@@ -309,7 +324,9 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
   if (guessesError) {
     const fallback = await supabase
       .from("palpites")
-      .select("user_id,jogo_id,fase_id,time1,time2,gols1,gols2,pontos,chinelada,calculado_em,criado_em")
+      .select(
+        "user_id,jogo_id,fase_id,time1,time2,gols1,gols2,pontos,chinelada,calculado_em,criado_em",
+      )
       .eq("jogo_id", jogoId)
       .order("criado_em", { ascending: false });
 
@@ -412,6 +429,24 @@ function getGuessPoints(guess: PalpiteRow, calculatedPoints: number | null | und
   if (!hasStoredScore(guess)) return null;
 
   return guess.pontos ?? 0;
+}
+
+function getProfileBadges(userId: string, ranking: RankingUsuarioRow[]): ProfileBadgeKey[] {
+  const badges: ProfileBadgeKey[] = [];
+  const position = ranking.findIndex((row) => row.id === userId) + 1;
+
+  if (position === 1) badges.push("mae-dina");
+  if (position === 2) badges.push("no-cangote");
+  if (position === 3) badges.push("podio-e-podio");
+  if (ranking.length > 0 && position === ranking.length) badges.push("lanterna");
+
+  const highestChineladas = Math.max(...ranking.map((row) => row.chineladas));
+  const chineladaLeaders = ranking.filter((row) => row.chineladas === highestChineladas);
+  if (highestChineladas > 0 && chineladaLeaders.length === 1 && chineladaLeaders[0].id === userId) {
+    badges.push("chinelada");
+  }
+
+  return badges;
 }
 
 async function getJogosPorIds(supabase: SupabaseClient, ids: string[]) {
