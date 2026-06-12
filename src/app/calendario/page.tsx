@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
@@ -24,8 +25,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { teamCodeFromName } from "@/data/iso2";
-import { getInitials } from "@/lib/display-name";
-import { getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
 
@@ -102,6 +101,25 @@ export default function CalendarioPage() {
     }
   }, []);
 
+  const syncLiveGames = useCallback(async () => {
+    try {
+      const response = await fetch("/api/jogos/sync", { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível sincronizar os placares.");
+      }
+
+      await loadData();
+    } catch (syncError) {
+      setError(
+        syncError instanceof Error
+          ? syncError.message
+          : "Não foi possível sincronizar os placares.",
+      );
+    }
+  }, [loadData]);
+
   useEffect(() => {
     let active = true;
 
@@ -119,7 +137,7 @@ export default function CalendarioPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    const interval = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    const interval = window.setInterval(() => setNowTick(Date.now()), 30_000);
     return () => window.clearInterval(interval);
   }, [mounted]);
 
@@ -130,9 +148,10 @@ export default function CalendarioPage() {
 
   useEffect(() => {
     if (!hasLiveGame) return;
-    const interval = window.setInterval(loadData, 120_000);
+    syncLiveGames();
+    const interval = window.setInterval(syncLiveGames, 30_000);
     return () => window.clearInterval(interval);
-  }, [hasLiveGame, loadData]);
+  }, [hasLiveGame, syncLiveGames]);
 
   const groupByTeam = useMemo(() => new Map(grupos.map((row) => [row.time, row.grupo])), [grupos]);
   const todayKey = brasiliaTodayKey();
@@ -436,35 +455,10 @@ function DateSection({
 }
 
 function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string, string> }) {
-  const [palpitesOpen, setPalpitesOpen] = useState(false);
-  const [palpites, setPalpites] = useState<JogoPalpitesResponse | null>(null);
-  const [palpitesLoading, setPalpitesLoading] = useState(false);
-  const [palpitesError, setPalpitesError] = useState<string | null>(null);
   const state = matchState(jogo);
   const status: "live" | "finished" | "scheduled" =
     state === "live" ? "live" : state === "finished" ? "finished" : "scheduled";
   const group = jogo.fase_id === 1 ? groupByTeam.get(jogo.time1) : null;
-
-  async function togglePalpites() {
-    if (palpitesOpen) {
-      setPalpitesOpen(false);
-      return;
-    }
-    setPalpitesOpen(true);
-    if (palpites || palpitesLoading) return;
-
-    setPalpitesLoading(true);
-    setPalpitesError(null);
-    try {
-      setPalpites(await getPalpitesDoJogo(jogo.id));
-    } catch (loadError) {
-      setPalpitesError(
-        loadError instanceof Error ? loadError.message : "Não foi possível carregar os palpites.",
-      );
-    } finally {
-      setPalpitesLoading(false);
-    }
-  }
 
   return (
     <article
@@ -544,46 +538,10 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
           <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             {stateLabel(state, jogo.data)}
           </span>
-          <Button type="button" variant="secondary" size="sm" onClick={togglePalpites}>
-            {palpitesOpen ? "Ocultar palpites" : "Ver palpites"}
+          <Button asChild variant="secondary" size="sm">
+            <Link href={`/calendario/${jogo.id}`}>Ver detalhes</Link>
           </Button>
         </div>
-
-        {palpitesOpen && (
-          <div className="mt-3 rounded-lg border border-border bg-background/45 p-3">
-            {palpitesLoading ? (
-              <SpinningBallLoader label="Carregando palpites" size="sm" className="min-h-[96px]" />
-            ) : palpitesError ? (
-              <p className="text-xs text-destructive">{palpitesError}</p>
-            ) : palpites?.palpites.length ? (
-              <ul className="space-y-2">
-                {palpites.palpites.map((palpite) => (
-                  <li
-                    key={palpite.user_id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-xs"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/15 text-[10px] font-black text-primary">
-                        {getInitials(palpite.nome_completo)}
-                      </span>
-                      <span className="truncate font-semibold">{palpite.nome_completo}</span>
-                    </span>
-                    <span className="num font-display text-sm font-black">
-                      {palpite.palpite.gols1} x {palpite.palpite.gols2}
-                    </span>
-                    <span className="num text-right text-muted-foreground">
-                      {palpite.pontos == null ? "-" : `+${palpite.pontos}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Nenhum palpite registrado para este jogo.
-              </p>
-            )}
-          </div>
-        )}
       </div>
     </article>
   );

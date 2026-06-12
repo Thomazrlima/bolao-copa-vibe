@@ -60,6 +60,7 @@ export type JogoPalpitesResponse = {
     gols1: number | null;
     gols2: number | null;
     encerrado: boolean;
+    transmissao_url: string | null;
   };
   palpites: JogoPalpite[];
 };

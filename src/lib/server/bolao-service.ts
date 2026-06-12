@@ -40,6 +40,7 @@ type JogoRow = {
   gols1: number | null;
   gols2: number | null;
   encerrado: boolean;
+  transmissao_url?: string | null;
 };
 
 type FaseRow = {
@@ -295,11 +296,10 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
   const [{ data: jogo, error: jogoError }, guessesResult] = await Promise.all([
     supabase
       .from("jogos")
-      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado")
+      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,transmissao_url")
       .eq("id", jogoId)
       .maybeSingle(),
-    supabase
-      .rpc("listar_palpites_jogo", { p_jogo_id: jogoId }),
+    supabase.rpc("listar_palpites_jogo", { p_jogo_id: jogoId }),
   ]);
 
   assertNoError(jogoError);
@@ -309,7 +309,9 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
   if (guessesError) {
     const fallback = await supabase
       .from("palpites")
-      .select("user_id,jogo_id,fase_id,time1,time2,gols1,gols2,pontos,chinelada,calculado_em,criado_em")
+      .select(
+        "user_id,jogo_id,fase_id,time1,time2,gols1,gols2,pontos,chinelada,calculado_em,criado_em",
+      )
       .eq("jogo_id", jogoId)
       .order("criado_em", { ascending: false });
 
