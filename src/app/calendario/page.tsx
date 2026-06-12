@@ -5,6 +5,8 @@ import { RefreshCw } from "lucide-react";
 
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { getInitials } from "@/lib/display-name";
+import { getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
 
@@ -265,12 +267,40 @@ function FilterChip({
 }
 
 function MatchCard({ jogo }: { jogo: Jogo }) {
+  const [palpitesOpen, setPalpitesOpen] = useState(false);
+  const [palpites, setPalpites] = useState<JogoPalpitesResponse | null>(null);
+  const [palpitesLoading, setPalpitesLoading] = useState(false);
+  const [palpitesError, setPalpitesError] = useState<string | null>(null);
   const started = new Date(jogo.data).getTime() <= nowAsStoredBrasiliaMs();
   const status: "live" | "finished" | "scheduled" = jogo.encerrado
     ? "finished"
     : started
       ? "live"
       : "scheduled";
+
+  async function togglePalpites() {
+    if (palpitesOpen) {
+      setPalpitesOpen(false);
+      return;
+    }
+
+    setPalpitesOpen(true);
+
+    if (palpites || palpitesLoading) return;
+
+    setPalpitesLoading(true);
+    setPalpitesError(null);
+
+    try {
+      setPalpites(await getPalpitesDoJogo(jogo.id));
+    } catch (error) {
+      setPalpitesError(
+        error instanceof Error ? error.message : "Não foi possível carregar os palpites.",
+      );
+    } finally {
+      setPalpitesLoading(false);
+    }
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/40 sm:p-4">
@@ -303,16 +333,55 @@ function MatchCard({ jogo }: { jogo: Jogo }) {
         <TeamSide name={jogo.time2} align="right" />
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
         <span className="text-[11px] text-muted-foreground">
           TheSportsDB #{jogo.sportsdb_event_id}
         </span>
-        {jogo.sincronizado_em && (
-          <span className="text-[11px] text-muted-foreground">
-            sync {formatTime(jogo.sincronizado_em)}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {jogo.sincronizado_em && (
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">
+              sync {formatTime(jogo.sincronizado_em)}
+            </span>
+          )}
+          <Button type="button" variant="secondary" size="sm" onClick={togglePalpites}>
+            {palpitesOpen ? "Ocultar palpites" : "Ver palpites"}
+          </Button>
+        </div>
       </div>
+
+      {palpitesOpen && (
+        <div className="mt-3 rounded-lg border border-border bg-background/45 p-3">
+          {palpitesLoading ? (
+            <p className="text-xs text-muted-foreground">Carregando palpites...</p>
+          ) : palpitesError ? (
+            <p className="text-xs text-destructive">{palpitesError}</p>
+          ) : palpites?.palpites.length ? (
+            <ul className="space-y-2">
+              {palpites.palpites.map((palpite) => (
+                <li
+                  key={palpite.user_id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 text-xs"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/15 text-[10px] font-black text-primary">
+                      {getInitials(palpite.nome_completo)}
+                    </span>
+                    <span className="truncate font-semibold">{palpite.nome_completo}</span>
+                  </span>
+                  <span className="num font-display text-sm font-black">
+                    {palpite.palpite.gols1} x {palpite.palpite.gols2}
+                  </span>
+                  <span className="num text-right text-muted-foreground">
+                    {palpite.pontos == null ? "-" : `+${palpite.pontos}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">Nenhum palpite registrado para este jogo.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

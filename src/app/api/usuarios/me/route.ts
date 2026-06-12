@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getUsuarioMe, ServiceError, updateUsuarioMe } from "@/lib/server/bolao-service";
 import { createClient } from "@/lib/supabase/server";
 
 const updateUsuarioSchema = z
   .object({
     nome_completo: z.string().trim().min(1).max(160).optional(),
-    telefone: z.string().trim().min(1).max(40).optional(),
+    telefone: z.string().trim().max(40).optional(),
+    avatar_url: z.string().trim().max(5_000_000).nullable().optional(),
   })
-  .refine((data) => data.nome_completo !== undefined || data.telefone !== undefined, {
-    message: "Informe nome_completo ou telefone para atualizar.",
+  .refine((data) => Object.values(data).some((value) => value !== undefined), {
+    message: "Informe ao menos um campo para atualizar.",
   });
 
 export async function GET() {
@@ -20,17 +22,16 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
-  const { data, error } = await supabase
-    .from("usuarios")
-    .select("id,email,nome_completo,telefone,pontos,chineladas,created_at,updated_at")
-    .eq("id", auth.user.id)
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    const usuario = await getUsuarioMe(supabase, auth.user.id);
+    return NextResponse.json({ usuario });
+  } catch (error) {
+    const serviceError = error instanceof ServiceError ? error : null;
+    return NextResponse.json(
+      { error: serviceError?.message ?? "Não foi possível carregar seu perfil." },
+      { status: serviceError?.status ?? 500 },
+    );
   }
-
-  return NextResponse.json({ usuario: data });
 }
 
 export async function PATCH(request: Request) {
@@ -50,16 +51,14 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { data, error } = await supabase
-    .from("usuarios")
-    .update(payload.data)
-    .eq("id", auth.user.id)
-    .select("id,email,nome_completo,telefone,pontos,chineladas,created_at,updated_at")
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    const usuario = await updateUsuarioMe(supabase, auth.user.id, payload.data);
+    return NextResponse.json({ usuario });
+  } catch (error) {
+    const serviceError = error instanceof ServiceError ? error : null;
+    return NextResponse.json(
+      { error: serviceError?.message ?? "Não foi possível atualizar seu perfil." },
+      { status: serviceError?.status ?? 500 },
+    );
   }
-
-  return NextResponse.json({ usuario: data });
 }

@@ -20,15 +20,10 @@ const TABS = [
 ];
 
 type Usuario = {
+  id: string;
   nome_completo: string;
+  avatar_url: string | null;
 };
-
-type MockProfile = {
-  nome: string;
-  foto: string | null;
-};
-
-const MOCK_PROFILE_EVENT = "mock-profile-updated";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -196,7 +191,6 @@ function NavigationItems({
 function HeaderAuth() {
   const supabase = useMemo(() => createClient(), []);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
-  const [mockProfile, setMockProfile] = useState<MockProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function loadUsuario() {
@@ -213,18 +207,6 @@ function HeaderAuth() {
 
   useEffect(() => {
     let active = true;
-
-    const storedName = window.localStorage.getItem("mock-profile-name");
-    const storedPhoto = window.localStorage.getItem("mock-profile-photo");
-    if (storedName || storedPhoto) {
-      setMockProfile({ nome: storedName ?? "", foto: storedPhoto });
-    }
-
-    function handleProfileUpdate(event: Event) {
-      setMockProfile((event as CustomEvent<MockProfile>).detail);
-    }
-
-    window.addEventListener(MOCK_PROFILE_EVENT, handleProfileUpdate);
 
     async function loadSession() {
       setLoading(true);
@@ -243,7 +225,6 @@ function HeaderAuth() {
     return () => {
       active = false;
       subscription.unsubscribe();
-      window.removeEventListener(MOCK_PROFILE_EVENT, handleProfileUpdate);
     };
   }, [supabase.auth]);
 
@@ -267,12 +248,12 @@ function HeaderAuth() {
     );
   }
 
-  const displayName = mockProfile?.nome || usuario.nome_completo;
+  const displayName = usuario.nome_completo;
   const navigationName = getDisplayName(displayName);
 
   return (
     <Link
-      href={`/perfil/me?nome=${encodeURIComponent(displayName)}`}
+      href={`/perfil/${encodeURIComponent(usuario.id)}`}
       className="group flex min-w-0 shrink-0 items-center justify-end gap-2 rounded-full p-1 pr-1 transition-colors hover:bg-card sm:rounded-md sm:pr-2"
       aria-label={`Abrir perfil de ${displayName}`}
     >
@@ -280,7 +261,7 @@ function HeaderAuth() {
         {navigationName}
       </span>
       <Avatar className="h-8 w-8 border border-primary/40 bg-primary/10">
-        {mockProfile?.foto && <AvatarImage src={mockProfile.foto} alt={displayName} />}
+        {usuario.avatar_url && <AvatarImage src={usuario.avatar_url} alt={displayName} />}
         <AvatarFallback className="bg-primary/15 text-xs font-black text-primary">
           {getInitials(displayName)}
         </AvatarFallback>

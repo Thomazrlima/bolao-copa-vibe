@@ -9,19 +9,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getInitials } from "@/lib/display-name";
+import {
+  getCurrentUsuario,
+  updateCurrentUserPassword,
+  updateCurrentUsuario,
+  type Usuario,
+} from "@/lib/queries";
 import { createClient } from "@/lib/supabase/client";
-
-const DEFAULT_NAME = "Paulo Rosado";
-const MOCK_PROFILE_EVENT = "mock-profile-updated";
 
 export default function ConfiguracoesPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [name, setName] = useState(DEFAULT_NAME);
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [name, setName] = useState("");
+  const [telefone, setTelefone] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -30,17 +38,37 @@ export default function ConfiguracoesPage() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    setName(window.localStorage.getItem("mock-profile-name") || DEFAULT_NAME);
-    setPhoto(window.localStorage.getItem("mock-profile-photo"));
-  }, []);
+    let active = true;
 
-  function notifyProfile(nextName: string, nextPhoto: string | null) {
-    window.dispatchEvent(
-      new CustomEvent(MOCK_PROFILE_EVENT, {
-        detail: { nome: nextName, foto: nextPhoto },
-      }),
-    );
-  }
+    async function loadProfile() {
+      try {
+        const loadedUsuario = await getCurrentUsuario();
+
+        if (!active) return;
+
+        if (!loadedUsuario) {
+          router.push("/login");
+          return;
+        }
+
+        setUsuario(loadedUsuario);
+        setName(loadedUsuario.nome_completo);
+        setTelefone(loadedUsuario.telefone);
+        setPhoto(loadedUsuario.avatar_url);
+      } catch (error) {
+        if (!active) return;
+        setProfileError(
+          error instanceof Error ? error.message : "Não foi possível carregar seu perfil.",
+        );
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -56,46 +84,69 @@ export default function ConfiguracoesPage() {
       const nextPhoto = typeof reader.result === "string" ? reader.result : null;
       setPhoto(nextPhoto);
       setProfileSaved(false);
-      notifyProfile(name, nextPhoto);
     };
     reader.readAsDataURL(file);
   }
 
-  function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextName = name.trim() || DEFAULT_NAME;
-    setName(nextName);
-    window.localStorage.setItem("mock-profile-name", nextName);
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSaved(false);
 
-    if (photo) {
-      window.localStorage.setItem("mock-profile-photo", photo);
-    } else {
-      window.localStorage.removeItem("mock-profile-photo");
+    try {
+      const updatedUsuario = await updateCurrentUsuario({
+        nome_completo: name.trim(),
+        telefone: telefone.trim(),
+        avatar_url: photo,
+      });
+
+      setUsuario(updatedUsuario);
+      setName(updatedUsuario.nome_completo);
+      setTelefone(updatedUsuario.telefone);
+      setPhoto(updatedUsuario.avatar_url);
+      setProfileSaved(true);
+      router.refresh();
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Não foi possível salvar o perfil.");
+    } finally {
+      setProfileSaving(false);
     }
-
-    notifyProfile(nextName, photo);
-    setProfileSaved(true);
   }
 
-  function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPasswordError(null);
     setPasswordSaved(false);
+    setPasswordSaving(true);
 
     if (newPassword.length < 8) {
       setPasswordError("A nova senha deve ter pelo menos 8 caracteres.");
+      setPasswordSaving(false);
       return;
     }
 
     if (newPassword !== confirmPassword) {
       setPasswordError("A confirmação da senha não confere.");
+      setPasswordSaving(false);
       return;
     }
 
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setPasswordSaved(true);
+    try {
+      await updateCurrentUserPassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSaved(true);
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : "Não foi possível alterar a senha.");
+    } finally {
+      setPasswordSaving(false);
+    }
   }
 
   async function handleLogout() {
@@ -103,6 +154,14 @@ export default function ConfiguracoesPage() {
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
+  }
+
+  if (!usuario && !profileError) {
+    return (
+      <div className="mx-auto max-w-4xl rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+        Carregando configurações...
+      </div>
+    );
   }
 
   return (
@@ -155,6 +214,7 @@ export default function ConfiguracoesPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={profileSaving}
                 className="mt-3"
               >
                 <Camera className="h-4 w-4" />
@@ -177,16 +237,31 @@ export default function ConfiguracoesPage() {
             />
           </div>
 
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="telefone">Telefone</Label>
+            <Input
+              id="telefone"
+              value={telefone}
+              onChange={(event) => {
+                setTelefone(event.target.value);
+                setProfileSaved(false);
+              }}
+              autoComplete="tel"
+            />
+          </div>
+
+          {profileError && <p className="mt-4 text-sm text-destructive">{profileError}</p>}
+
           {profileSaved && (
             <p className="mt-4 flex items-center gap-2 text-sm font-medium text-success">
               <Check className="h-4 w-4" />
-              Perfil atualizado neste mock.
+              Perfil atualizado.
             </p>
           )}
 
-          <Button type="submit" className="mt-5 w-full sm:w-auto">
+          <Button type="submit" disabled={profileSaving} className="mt-5 w-full sm:w-auto">
             <Save className="h-4 w-4" />
-            Salvar perfil
+            {profileSaving ? "Salvando..." : "Salvar perfil"}
           </Button>
         </form>
 
@@ -254,12 +329,12 @@ export default function ConfiguracoesPage() {
             {passwordSaved && (
               <p className="mt-4 flex items-center gap-2 text-sm font-medium text-success">
                 <Check className="h-4 w-4" />
-                Senha alterada neste mock.
+                Senha alterada.
               </p>
             )}
 
-            <Button type="submit" variant="secondary" className="mt-5 w-full">
-              Alterar senha
+            <Button type="submit" variant="secondary" disabled={passwordSaving} className="mt-5 w-full">
+              {passwordSaving ? "Alterando..." : "Alterar senha"}
             </Button>
           </form>
 

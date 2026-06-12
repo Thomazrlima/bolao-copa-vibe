@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   Check,
@@ -17,9 +17,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Flag } from "@/components/common/Flag";
-import { buildMockProfile, getFixtureTeams, type MockProfileGuess } from "@/data/mock-profiles";
-import { TEAM_BY_CODE } from "@/data/teams";
 import { getInitials } from "@/lib/display-name";
+import { getPerfil, type PerfilPalpite, type PerfilUsuario } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import type { GuessOutcome } from "@/lib/scoring";
 
@@ -112,42 +111,55 @@ export default function PerfilPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const id = params.id;
-  const requestedName = searchParams.get("nome");
-  const requestedPoints = Number(searchParams.get("pontos"));
   const badges =
     searchParams
       .get("badges")
       ?.split(",")
       .filter((badge): badge is ProfileBadgeKey => badge in PROFILE_BADGES) ?? [];
-  const profile = useMemo(
-    () =>
-      buildMockProfile(
-        id,
-        requestedName,
-        Number.isFinite(requestedPoints) && searchParams.has("pontos") ? requestedPoints : null,
-      ),
-    [id, requestedName, requestedPoints, searchParams],
-  );
-  const isCurrentUser = id === "me";
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [currentName, setCurrentName] = useState(profile.name);
+  const [profile, setProfile] = useState<PerfilUsuario | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isCurrentUser) {
-      setPhoto(null);
-      setCurrentName(profile.name);
-      return;
+    let active = true;
+
+    async function loadProfile() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const loadedProfile = await getPerfil(id);
+        if (!active) return;
+        setProfile(loadedProfile);
+      } catch (loadError) {
+        if (!active) return;
+        setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar o perfil.");
+        setProfile(null);
+      }
+
+      if (active) setLoading(false);
     }
 
-    setPhoto(window.localStorage.getItem("mock-profile-photo"));
-    setCurrentName(window.localStorage.getItem("mock-profile-name") || profile.name);
-  }, [isCurrentUser, profile.name]);
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  if (loading) {
+    return <ProfileState message="Carregando perfil..." />;
+  }
+
+  if (error || !profile) {
+    return <ProfileState message={error ?? "Perfil não encontrado."} destructive />;
+  }
 
   return (
     <div className="mx-auto max-w-5xl">
       <section className="relative overflow-hidden rounded-2xl border border-primary/25 bg-card/90 p-5 sm:p-8">
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/15 to-transparent" />
-        {isCurrentUser && (
+        {profile.is_current_user && (
           <Button
             asChild
             variant="ghost"
@@ -162,9 +174,11 @@ export default function PerfilPage() {
         )}
         <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
           <Avatar className="h-28 w-28 border-2 border-primary/60 bg-primary/10 shadow-[0_0_35px_color-mix(in_oklab,var(--primary)_20%,transparent)] sm:h-36 sm:w-36">
-            {photo && <AvatarImage src={photo} alt={currentName} className="object-cover" />}
+            {profile.avatar_url && (
+              <AvatarImage src={profile.avatar_url} alt={profile.nome_completo} className="object-cover" />
+            )}
             <AvatarFallback className="bg-primary/15 font-display text-3xl font-black text-primary sm:text-4xl">
-              {getInitials(currentName)}
+              {getInitials(profile.nome_completo)}
             </AvatarFallback>
           </Avatar>
 
@@ -173,7 +187,7 @@ export default function PerfilPage() {
               Perfil do participante
             </p>
             <h1 className="mt-2 font-display text-3xl font-black tracking-tight sm:text-4xl">
-              {currentName}
+              {profile.nome_completo}
             </h1>
             {badges.length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
@@ -200,7 +214,7 @@ export default function PerfilPage() {
             )}
             <div className="mt-4 flex items-end justify-center gap-2 sm:justify-start">
               <span className="font-display text-5xl font-black text-primary num">
-                {profile.points}
+                {profile.pontos}
               </span>
               <span className="pb-1 text-xs font-black uppercase tracking-wider text-muted-foreground">
                 pontos
@@ -222,7 +236,7 @@ export default function PerfilPage() {
                 </span>
               </div>
               <div className="mt-4 font-display text-3xl font-black num">
-                {profile.stats[outcome]}
+                {profile.estatisticas[outcome]}
               </div>
               <div className="mt-0.5 text-[10px] font-black uppercase tracking-wide">{label}</div>
             </div>
@@ -239,22 +253,40 @@ export default function PerfilPage() {
             </p>
           </div>
           <span className="shrink-0 text-xs font-bold text-muted-foreground">
-            {profile.guesses.length} jogos
+            {profile.palpites.length} jogos
           </span>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-2">
-          {profile.guesses.map((guess) => (
-            <GuessCard key={guess.fixture.id} guess={guess} />
-          ))}
+          {profile.palpites.length > 0 ? (
+            profile.palpites.map((guess) => <GuessCard key={guess.jogo_id} guess={guess} />)
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground lg:col-span-2">
+              Nenhum palpite registrado para este participante.
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function GuessCard({ guess }: { guess: MockProfileGuess }) {
-  const teams = getFixtureTeams(guess.fixture);
+function ProfileState({ message, destructive = false }: { message: string; destructive?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "mx-auto max-w-2xl rounded-2xl border p-8 text-center text-sm",
+        destructive
+          ? "border-destructive/40 bg-destructive/10 text-destructive"
+          : "border-border bg-card text-muted-foreground",
+      )}
+    >
+      {message}
+    </div>
+  );
+}
+
+function GuessCard({ guess }: { guess: PerfilPalpite }) {
   const outcome = guess.outcome ? STAT_CARDS.find((item) => item.outcome === guess.outcome) : null;
   const OutcomeIcon = outcome?.icon;
 
@@ -263,7 +295,7 @@ function GuessCard({ guess }: { guess: MockProfileGuess }) {
       <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <CalendarDays className="h-3.5 w-3.5" />
-          {formatDate(guess.fixture.kickoff)}
+          {formatDate(guess.data)}
         </span>
         {outcome ? (
           <span className={cn("flex items-center gap-1", outcome.className.split(" ").at(-1))}>
@@ -279,24 +311,25 @@ function GuessCard({ guess }: { guess: MockProfileGuess }) {
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 p-3 sm:p-4">
-        <Team code={guess.fixture.homeCode} name={teams.home} />
+        <Team name={guess.time1} />
         <div className="text-center">
           <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
             Palpite
           </p>
           <p className="mt-1 whitespace-nowrap font-display text-2xl font-black num">
-            {guess.guess.home} <span className="text-muted-foreground">x</span> {guess.guess.away}
+            {guess.palpite.gols1} <span className="text-muted-foreground">x</span>{" "}
+            {guess.palpite.gols2}
           </p>
         </div>
-        <Team code={guess.fixture.awayCode} name={teams.away} right />
+        <Team name={guess.time2} right />
       </div>
 
       <div className="flex items-center justify-between gap-3 bg-background/45 px-3 py-2.5 text-xs sm:px-4">
-        {guess.result ? (
+        {guess.resultado ? (
           <span className="text-muted-foreground">
             Resultado:{" "}
             <strong className="text-foreground num">
-              {guess.result.home} x {guess.result.away}
+              {guess.resultado.gols1} x {guess.resultado.gols2}
             </strong>
           </span>
         ) : (
@@ -305,24 +338,24 @@ function GuessCard({ guess }: { guess: MockProfileGuess }) {
         <span
           className={cn(
             "font-display text-base font-black num",
-            guess.points == null
+            guess.pontos == null
               ? "text-muted-foreground"
               : (outcome?.pointsClassName ?? "text-foreground"),
           )}
         >
-          {guess.points == null ? "—" : `+${guess.points} pts`}
+          {guess.pontos == null ? "—" : `+${guess.pontos} pts`}
         </span>
       </div>
     </article>
   );
 }
 
-function Team({ code, name, right = false }: { code?: string; name: string; right?: boolean }) {
+function Team({ name, right = false }: { name: string; right?: boolean }) {
   return (
     <div className={cn("flex min-w-0 items-center gap-2", right && "flex-row-reverse text-right")}>
-      <Flag code={code} name={name} static />
+      <Flag name={name} static />
       <span className="min-w-0 truncate text-xs font-bold sm:text-sm">
-        {code ? (TEAM_BY_CODE[code]?.name ?? name) : name}
+        {name}
       </span>
     </div>
   );

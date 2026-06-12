@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Trophy } from "lucide-react";
 
 import { getDisplayName, getInitials } from "@/lib/display-name";
+import { getRanking } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 type RankingUsuario = {
@@ -69,35 +70,15 @@ export default function RankingPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch("/api/ranking", { cache: "no-store" });
-      const body = await response.json();
-
-      if (!active) return;
-
-      if (!response.ok) {
-        setError(body.error ?? "Não foi possível carregar o ranking.");
-        setLoading(false);
-        return;
+      try {
+        const loadedRanking = await getRanking();
+        if (!active) return;
+        setRanking(loadedRanking);
+      } catch (error) {
+        if (!active) return;
+        setError(error instanceof Error ? error.message : "Não foi possível carregar o ranking.");
       }
 
-      const loadedRanking = (body.ranking ?? []) as RankingUsuario[];
-
-      if (loadedRanking.length > 0) {
-        const highestOtherCount = Math.max(
-          0,
-          ...loadedRanking.slice(1).map((participant) => participant.chineladas),
-        );
-
-        setRanking([
-          {
-            ...loadedRanking[0],
-            chineladas: Math.max(loadedRanking[0].chineladas, highestOtherCount + 1),
-          },
-          ...loadedRanking.slice(1),
-        ]);
-      } else {
-        setRanking([]);
-      }
       setLoading(false);
     }
 
@@ -563,15 +544,15 @@ function profileHref(
   participantBadges: string[],
 ) {
   const params = new URLSearchParams({
-    nome: row.nome_completo,
-    pontos: String(row.pontos),
   });
   const badges = [...participantBadges];
 
   if (row.id === chineladaLeaderId) badges.push("chinelada");
   if (badges.length > 0) params.set("badges", badges.join(","));
 
-  return `/perfil/${encodeURIComponent(row.id)}?${params.toString()}`;
+  const queryString = params.toString();
+
+  return `/perfil/${encodeURIComponent(row.id)}${queryString ? `?${queryString}` : ""}`;
 }
 
 function AvatarName({
