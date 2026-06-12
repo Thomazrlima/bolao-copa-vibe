@@ -582,7 +582,7 @@ function Round({
     <section className="flex w-[calc(100vw-2.5rem)] max-w-[286px] shrink-0 snap-start flex-col sm:w-[272px]">
       <div
         className={cn(
-          "sticky top-[142px] z-20 mb-3 flex items-center rounded-xl border px-3 py-2.5 backdrop-blur",
+          "relative mb-3 flex items-center rounded-xl border px-3 py-2.5",
           highlight
             ? "border-primary bg-primary text-primary-foreground"
             : "border-border bg-card/95",

@@ -17,6 +17,14 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Flag } from "@/components/common/Flag";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { teamCodeFromName } from "@/data/iso2";
 import { getInitials } from "@/lib/display-name";
 import { getPerfil, type PerfilPalpite, type PerfilUsuario } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -106,6 +114,8 @@ const PROFILE_BADGES = {
 } as const;
 
 type ProfileBadgeKey = keyof typeof PROFILE_BADGES;
+type GuessStatusFilter = "all" | "finished" | "pending";
+type GuessOutcomeFilter = "all" | GuessOutcome;
 
 export default function PerfilPage() {
   const params = useParams<{ id: string }>();
@@ -119,6 +129,9 @@ export default function PerfilPage() {
   const [profile, setProfile] = useState<PerfilUsuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<GuessStatusFilter>("all");
+  const [outcomeFilter, setOutcomeFilter] = useState<GuessOutcomeFilter>("all");
+  const [phaseFilter, setPhaseFilter] = useState("all");
 
   useEffect(() => {
     let active = true;
@@ -133,7 +146,9 @@ export default function PerfilPage() {
         setProfile(loadedProfile);
       } catch (loadError) {
         if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar o perfil.");
+        setError(
+          loadError instanceof Error ? loadError.message : "Não foi possível carregar o perfil.",
+        );
         setProfile(null);
       }
 
@@ -155,6 +170,17 @@ export default function PerfilPage() {
     return <ProfileState message={error ?? "Perfil não encontrado."} destructive />;
   }
 
+  const phases = [...new Set(profile.palpites.map((guess) => guess.fase))].sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
+  const filteredGuesses = profile.palpites.filter((guess) => {
+    if (statusFilter === "finished" && !guess.encerrado) return false;
+    if (statusFilter === "pending" && guess.encerrado) return false;
+    if (outcomeFilter !== "all" && guess.outcome !== outcomeFilter) return false;
+    if (phaseFilter !== "all" && guess.fase !== phaseFilter) return false;
+    return true;
+  });
+
   return (
     <div className="mx-auto max-w-5xl">
       <section className="relative overflow-hidden rounded-2xl border border-primary/25 bg-card/90 p-5 sm:p-8">
@@ -175,7 +201,11 @@ export default function PerfilPage() {
         <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
           <Avatar className="h-28 w-28 border-2 border-primary/60 bg-primary/10 shadow-[0_0_35px_color-mix(in_oklab,var(--primary)_20%,transparent)] sm:h-36 sm:w-36">
             {profile.avatar_url && (
-              <AvatarImage src={profile.avatar_url} alt={profile.nome_completo} className="object-cover" />
+              <AvatarImage
+                src={profile.avatar_url}
+                alt={profile.nome_completo}
+                className="object-cover"
+              />
             )}
             <AvatarFallback className="bg-primary/15 font-display text-3xl font-black text-primary sm:text-4xl">
               {getInitials(profile.nome_completo)}
@@ -245,7 +275,7 @@ export default function PerfilPage() {
       </section>
 
       <section className="mt-7">
-        <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="font-display text-xl font-black">Todos os palpites</h2>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -253,16 +283,63 @@ export default function PerfilPage() {
             </p>
           </div>
           <span className="shrink-0 text-xs font-bold text-muted-foreground">
-            {profile.palpites.length} jogos
+            {filteredGuesses.length} de {profile.palpites.length} jogos
           </span>
         </div>
 
+        <div className="mb-4 grid gap-2 rounded-xl border border-border bg-card/80 p-2 sm:grid-cols-3">
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as GuessStatusFilter)}
+          >
+            <SelectTrigger className="h-10 rounded-lg bg-background/55 font-bold">
+              <SelectValue placeholder="Situação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as situações</SelectItem>
+              <SelectItem value="finished">Jogos encerrados</SelectItem>
+              <SelectItem value="pending">Aguardando jogo</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={outcomeFilter}
+            onValueChange={(value) => setOutcomeFilter(value as GuessOutcomeFilter)}
+          >
+            <SelectTrigger className="h-10 rounded-lg bg-background/55 font-bold">
+              <SelectValue placeholder="Pontuação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as pontuações</SelectItem>
+              {STAT_CARDS.map((item) => (
+                <SelectItem key={item.outcome} value={item.outcome}>
+                  {item.label} · {item.points} pts
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+            <SelectTrigger className="h-10 rounded-lg bg-background/55 font-bold">
+              <SelectValue placeholder="Fase" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as fases</SelectItem>
+              {phases.map((phase) => (
+                <SelectItem key={phase} value={phase}>
+                  {phase}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="grid gap-3 lg:grid-cols-2">
-          {profile.palpites.length > 0 ? (
-            profile.palpites.map((guess) => <GuessCard key={guess.jogo_id} guess={guess} />)
+          {filteredGuesses.length > 0 ? (
+            filteredGuesses.map((guess) => <GuessCard key={guess.jogo_id} guess={guess} />)
           ) : (
             <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground lg:col-span-2">
-              Nenhum palpite registrado para este participante.
+              Nenhum palpite encontrado com os filtros atuais.
             </div>
           )}
         </div>
@@ -271,7 +348,13 @@ export default function PerfilPage() {
   );
 }
 
-function ProfileState({ message, destructive = false }: { message: string; destructive?: boolean }) {
+function ProfileState({
+  message,
+  destructive = false,
+}: {
+  message: string;
+  destructive?: boolean;
+}) {
   return (
     <div
       className={cn(
@@ -353,10 +436,8 @@ function GuessCard({ guess }: { guess: PerfilPalpite }) {
 function Team({ name, right = false }: { name: string; right?: boolean }) {
   return (
     <div className={cn("flex min-w-0 items-center gap-2", right && "flex-row-reverse text-right")}>
-      <Flag name={name} static />
-      <span className="min-w-0 truncate text-xs font-bold sm:text-sm">
-        {name}
-      </span>
+      <Flag code={teamCodeFromName(name)} name={name} static />
+      <span className="min-w-0 truncate text-xs font-bold sm:text-sm">{name}</span>
     </div>
   );
 }
