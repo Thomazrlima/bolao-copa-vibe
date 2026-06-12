@@ -18,6 +18,7 @@ type Jogo = {
   gols1: number | null;
   gols2: number | null;
   encerrado: boolean;
+  rodada: number | null;
   sportsdb_status: string | null;
   sincronizado_em: string | null;
 };
@@ -26,10 +27,12 @@ type FaseFilter = "all" | "group" | "today";
 
 const FASE_LABEL: Record<number, string> = {
   1: "Grupos",
-  2: "Oitavas",
-  3: "Quartas",
-  4: "Semifinal",
-  5: "Final",
+  2: "16-avos",
+  3: "Oitavas",
+  4: "Quartas",
+  5: "Semifinal",
+  6: "Disputa de 3º",
+  7: "Final",
 };
 
 export default function CalendarioPage() {
@@ -115,15 +118,26 @@ export default function CalendarioPage() {
   }, [fase, jogos]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, Jogo[]>();
+    const roundMap = new Map<string, Map<string, Jogo[]>>();
 
     filtered.forEach((jogo) => {
-      const key = brasiliaDateKey(jogo.data);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(jogo);
+      const roundKey = jogo.rodada ? `Rodada ${jogo.rodada}` : "Sem rodada";
+      const dateKey = brasiliaDateKey(jogo.data);
+
+      if (!roundMap.has(roundKey)) roundMap.set(roundKey, new Map());
+
+      const dateMap = roundMap.get(roundKey)!;
+      if (!dateMap.has(dateKey)) dateMap.set(dateKey, []);
+      dateMap.get(dateKey)!.push(jogo);
     });
 
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+    return [...roundMap.entries()]
+      .sort(([a], [b]) => sortRoundLabel(a, b))
+      .map(([round, dates]) => ({
+        round,
+        total: [...dates.values()].reduce((sum, items) => sum + items.length, 0),
+        dates: [...dates.entries()].sort(([a], [b]) => a.localeCompare(b)),
+      }));
   }, [filtered]);
 
   if (!mounted) {
@@ -171,18 +185,30 @@ export default function CalendarioPage() {
       {loading ? (
         <CalendarSkeleton />
       ) : (
-        <div className="space-y-8">
-          {grouped.map(([date, items]) => (
-            <section key={date}>
-              <h3 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                {formatDate(date)} ·{" "}
-                <span className="text-foreground">
-                  {items.length} jogo{items.length > 1 ? "s" : ""}
+        <div className="space-y-10">
+          {grouped.map(({ round, total, dates }) => (
+            <section key={round}>
+              <div className="mb-4 flex items-end justify-between gap-3 border-b border-border pb-2">
+                <h3 className="font-display text-xl font-black tracking-tight">{round}</h3>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  {total} jogo{total > 1 ? "s" : ""}
                 </span>
-              </h3>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {items.map((jogo) => (
-                  <MatchCard key={jogo.id} jogo={jogo} />
+              </div>
+              <div className="space-y-6">
+                {dates.map(([date, items]) => (
+                  <section key={`${round}-${date}`}>
+                    <h4 className="mb-3 font-display text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                      {formatDate(date)} ·{" "}
+                      <span className="text-foreground">
+                        {items.length} jogo{items.length > 1 ? "s" : ""}
+                      </span>
+                    </h4>
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {items.map((jogo) => (
+                        <MatchCard key={jogo.id} jogo={jogo} />
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             </section>
@@ -321,6 +347,16 @@ function formatDate(yyyymmdd: string) {
     month: "long",
     timeZone: "UTC",
   });
+}
+
+function sortRoundLabel(a: string, b: string) {
+  const aNumber = Number.parseInt(a.replace(/\D/g, ""), 10);
+  const bNumber = Number.parseInt(b.replace(/\D/g, ""), 10);
+
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+  if (Number.isFinite(aNumber)) return -1;
+  if (Number.isFinite(bNumber)) return 1;
+  return a.localeCompare(b);
 }
 
 function nowAsStoredBrasiliaMs() {

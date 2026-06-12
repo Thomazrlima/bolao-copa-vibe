@@ -106,6 +106,11 @@ function score(value) {
   return Number.isFinite(parsed) ? String(parsed) : "null";
 }
 
+function round(value) {
+  const parsed = Number.parseInt(String(value).replace(/\D/g, ""), 10);
+  return Number.isFinite(parsed) ? String(parsed) : "null";
+}
+
 function translateTeam(team) {
   return TEAM_TRANSLATIONS[team] ?? team;
 }
@@ -132,6 +137,7 @@ const values = rows
   .map((row) => {
     const eventId = row[headerIndex.idEvent];
     const timestampUtc = row[headerIndex.strTimestamp];
+    const roundValue = row[headerIndex.Round];
     const homeScore = row[headerIndex["Home Score"]];
     const awayScore = row[headerIndex["Away Score"]];
     const hasScore = homeScore !== "" && awayScore !== "";
@@ -145,6 +151,7 @@ const values = rows
       score(homeScore),
       score(awayScore),
       hasScore ? "true" : "false",
+      round(roundValue),
     ].join(", ");
   });
 
@@ -157,7 +164,8 @@ insert into public.jogos (
   data,
   gols1,
   gols2,
-  encerrado
+  encerrado,
+  rodada
 )
 values
   (${values.join("),\n  (")})
@@ -169,7 +177,8 @@ set
   data = excluded.data,
   gols1 = coalesce(excluded.gols1, public.jogos.gols1),
   gols2 = coalesce(excluded.gols2, public.jogos.gols2),
-  encerrado = excluded.encerrado or public.jogos.encerrado;
+  encerrado = excluded.encerrado or public.jogos.encerrado,
+  rodada = excluded.rodada;
 
 select
   count(*) as jogos_importados,

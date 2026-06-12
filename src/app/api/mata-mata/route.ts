@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { buildKnockoutBracket, type GrupoRow, type JogoGrupo } from "@/lib/knockout";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -8,11 +9,8 @@ export async function GET() {
   const [gruposResult, jogosResult] = await Promise.all([
     supabase
       .from("grupos")
-      .select("grupo,time,pontuacao,saldo_gols,gols_pro,gols_contra,updated_at")
-      .order("grupo", { ascending: true })
-      .order("pontuacao", { ascending: false })
-      .order("saldo_gols", { ascending: false })
-      .order("gols_pro", { ascending: false }),
+      .select("grupo,time,pontuacao,saldo_gols,gols_pro,gols_contra")
+      .order("grupo", { ascending: true }),
     supabase
       .from("jogos")
       .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada")
@@ -29,7 +27,9 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    grupos: gruposResult.data ?? [],
-    jogos: jogosResult.data ?? [],
+    mataMata: buildKnockoutBracket(
+      (gruposResult.data ?? []) as GrupoRow[],
+      (jogosResult.data ?? []) as JogoGrupo[],
+    ),
   });
 }
