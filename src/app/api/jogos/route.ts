@@ -8,7 +8,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("jogos")
     .select(
-      "id,sportsdb_event_id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,sportsdb_status,sincronizado_em",
+      "id,sportsdb_event_id,worldcup2026_game_id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status,sportsdb_status,sincronizado_em",
     )
     .order("data", { ascending: true });
 

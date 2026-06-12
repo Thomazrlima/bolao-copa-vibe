@@ -31,6 +31,7 @@ import { useMounted } from "@/hooks/use-mounted";
 type Jogo = {
   id: string;
   sportsdb_event_id: string | null;
+  worldcup2026_game_id: string | null;
   fase_id: number;
   time1: string;
   time2: string;
@@ -39,6 +40,7 @@ type Jogo = {
   gols2: number | null;
   encerrado: boolean;
   rodada: number | null;
+  placar_status: "upcoming" | "live" | "finished" | null;
   sportsdb_status: string | null;
   sincronizado_em: string | null;
 };
@@ -566,6 +568,8 @@ function CalendarSkeleton({ compact }: { compact?: boolean }) {
 }
 
 function matchState(jogo: Jogo): MatchState {
+  if (jogo.placar_status === "finished") return "finished";
+  if (jogo.placar_status === "live") return "live";
   if (jogo.encerrado) return "finished";
   if (new Date(jogo.data).getTime() <= nowAsStoredBrasiliaMs()) return "live";
   if (brasiliaDateKey(jogo.data) === brasiliaTodayKey()) return "today";

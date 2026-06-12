@@ -134,7 +134,7 @@ const headerIndex = Object.fromEntries(headers.map((header, index) => [header, i
 
 const values = rows
   .filter((row) => row.length > 1)
-  .map((row) => {
+  .map((row, index) => {
     const eventId = row[headerIndex.idEvent];
     const timestampUtc = row[headerIndex.strTimestamp];
     const roundValue = row[headerIndex.Round];
@@ -144,6 +144,7 @@ const values = rows
 
     return [
       quote(eventId),
+      quote(String(index + 1)),
       "1",
       quote(translateTeam(row[headerIndex["Home Team"]])),
       quote(translateTeam(row[headerIndex["Away Team"]])),
@@ -151,6 +152,7 @@ const values = rows
       score(homeScore),
       score(awayScore),
       hasScore ? "true" : "false",
+      hasScore ? "'finished'::public.jogo_placar_status" : "'upcoming'::public.jogo_placar_status",
       round(roundValue),
     ].join(", ");
   });
@@ -158,6 +160,7 @@ const values = rows
 const sql = `
 insert into public.jogos (
   sportsdb_event_id,
+  worldcup2026_game_id,
   fase_id,
   time1,
   time2,
@@ -165,12 +168,14 @@ insert into public.jogos (
   gols1,
   gols2,
   encerrado,
+  placar_status,
   rodada
 )
 values
   (${values.join("),\n  (")})
 on conflict (sportsdb_event_id) do update
 set
+  worldcup2026_game_id = excluded.worldcup2026_game_id,
   fase_id = excluded.fase_id,
   time1 = excluded.time1,
   time2 = excluded.time2,
@@ -178,6 +183,10 @@ set
   gols1 = coalesce(excluded.gols1, public.jogos.gols1),
   gols2 = coalesce(excluded.gols2, public.jogos.gols2),
   encerrado = excluded.encerrado or public.jogos.encerrado,
+  placar_status = case
+    when excluded.encerrado or public.jogos.encerrado then 'finished'::public.jogo_placar_status
+    else public.jogos.placar_status
+  end,
   rodada = excluded.rodada;
 
 select

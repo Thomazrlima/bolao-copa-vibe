@@ -42,6 +42,7 @@ type JogoRow = {
   gols1: number | null;
   gols2: number | null;
   encerrado: boolean;
+  placar_status?: "upcoming" | "live" | "finished" | null;
   transmissao_url?: string | null;
 };
 
@@ -68,6 +69,28 @@ export class ServiceError extends Error {
 
 function assertNoError(error: { message: string } | null | undefined) {
   if (error) throw new ServiceError(error.message);
+}
+
+function nowAsStoredBrasiliaMs() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .formatToParts(new Date())
+    .reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+  return Date.parse(
+    `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`,
+  );
 }
 
 function isMissingAvatarUrlColumn(error: { message: string } | null | undefined) {
@@ -253,6 +276,10 @@ export async function getPerfilUsuario(
   const palpites = guesses
     .map((guess) => {
       const game = gameById.get(guess.jogo_id);
+      const gameStarted = game ? new Date(game.data).getTime() <= nowAsStoredBrasiliaMs() : false;
+      const gameIsLive = Boolean(
+        game && !game.encerrado && (game.placar_status === "live" || gameStarted),
+      );
       const scoring = game
         ? calcularPontuacaoJogo(
             {
@@ -285,8 +312,9 @@ export async function getPerfilUsuario(
         data: game?.data ?? guess.criado_em,
         palpite: { gols1: guess.gols1, gols2: guess.gols2 },
         encerrado: game?.encerrado ?? false,
+        iniciado: gameIsLive,
         resultado:
-          game?.encerrado && game.gols1 != null && game.gols2 != null
+          game && game.gols1 != null && game.gols2 != null
             ? { gols1: game.gols1, gols2: game.gols2 }
             : null,
         pontos,
@@ -312,7 +340,7 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
   const [{ data: jogo, error: jogoError }, guessesResult] = await Promise.all([
     supabase
       .from("jogos")
-      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,transmissao_url")
+      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status,transmissao_url")
       .eq("id", jogoId)
       .maybeSingle(),
     supabase.rpc("listar_palpites_jogo", { p_jogo_id: jogoId }),
@@ -455,7 +483,7 @@ async function getJogosPorIds(supabase: SupabaseClient, ids: string[]) {
 
   const { data, error } = await supabase
     .from("jogos")
-    .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado")
+    .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status")
     .in("id", ids);
 
   assertNoError(error);

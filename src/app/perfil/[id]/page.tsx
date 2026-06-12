@@ -10,6 +10,7 @@ import {
   Clock3,
   Flame,
   Goal,
+  Radio,
   Settings,
   Trophy,
 } from "lucide-react";
@@ -379,6 +380,7 @@ function ProfileState({
 function GuessCard({ guess }: { guess: PerfilPalpite }) {
   const outcome = guess.outcome ? STAT_CARDS.find((item) => item.outcome === guess.outcome) : null;
   const OutcomeIcon = outcome?.icon;
+  const isLive = guess.iniciado && !guess.encerrado;
 
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-card/90">
@@ -387,7 +389,12 @@ function GuessCard({ guess }: { guess: PerfilPalpite }) {
           <CalendarDays className="h-3.5 w-3.5" />
           {formatDate(guess.data)}
         </span>
-        {outcome ? (
+        {isLive ? (
+          <span className="flex items-center gap-1 rounded-full bg-live/15 px-2 py-1 text-live">
+            <Radio className="h-3.5 w-3.5" />
+            Ao vivo
+          </span>
+        ) : outcome ? (
           <span className={cn("flex items-center gap-1", outcome.className.split(" ").at(-1))}>
             {OutcomeIcon && <OutcomeIcon className="h-3.5 w-3.5" />}
             {outcome.label}
@@ -417,7 +424,7 @@ function GuessCard({ guess }: { guess: PerfilPalpite }) {
       <div className="flex items-center justify-between gap-3 bg-background/45 px-3 py-2.5 text-xs sm:px-4">
         {guess.resultado ? (
           <span className="text-muted-foreground">
-            Resultado:{" "}
+            {guess.encerrado ? "Resultado" : "Parcial"}:{" "}
             <strong className="text-foreground num">
               {guess.resultado.gols1} x {guess.resultado.gols2}
             </strong>

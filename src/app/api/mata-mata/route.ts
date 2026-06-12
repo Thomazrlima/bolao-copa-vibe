@@ -13,7 +13,7 @@ export async function GET() {
       .order("grupo", { ascending: true }),
     supabase
       .from("jogos")
-      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada")
+      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status")
       .eq("fase_id", 1)
       .order("data", { ascending: true }),
   ]);

@@ -13,6 +13,7 @@ type JogoRow = {
   gols2: number | null;
   encerrado: boolean;
   rodada: number | null;
+  placar_status: "upcoming" | "live" | "finished" | null;
   sportsdb_status: string | null;
 };
 
@@ -51,7 +52,9 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
     [
       supabase
         .from("jogos")
-        .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,sportsdb_status")
+        .select(
+          "id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status,sportsdb_status",
+        )
         .order("data", { ascending: true }),
       supabase
         .from("palpites")
@@ -102,6 +105,7 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
       gols2: game.gols2,
       encerrado: game.encerrado,
       iniciado: new Date(game.data).getTime() <= now,
+      placar_status: game.placar_status,
       sportsdb_status: game.sportsdb_status,
       palpite: guess ? { gols1: guess.gols1, gols2: guess.gols2 } : null,
       pontos: scoring?.pontos ?? (game.encerrado ? (guess?.pontos ?? null) : null),

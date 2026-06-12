@@ -17,6 +17,7 @@ export type JogoGrupo = {
   gols2: number | null;
   encerrado: boolean;
   rodada?: number | null;
+  placar_status?: "upcoming" | "live" | "finished" | null;
 };
 
 export type Standing = GrupoRow & {

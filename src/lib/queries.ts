@@ -27,6 +27,7 @@ export type PerfilPalpite = {
   data: string;
   palpite: { gols1: number; gols2: number };
   encerrado: boolean;
+  iniciado: boolean;
   resultado: { gols1: number; gols2: number } | null;
   pontos: number | null;
   outcome: GuessOutcome | null;
@@ -61,6 +62,7 @@ export type JogoPalpitesResponse = {
     gols1: number | null;
     gols2: number | null;
     encerrado: boolean;
+    placar_status: "upcoming" | "live" | "finished" | null;
     transmissao_url: string | null;
   };
   palpites: JogoPalpite[];
@@ -80,6 +82,7 @@ export type PalpitesDashboardResponse = {
     gols2: number | null;
     encerrado: boolean;
     iniciado: boolean;
+    placar_status: "upcoming" | "live" | "finished" | null;
     sportsdb_status: string | null;
     palpite: { gols1: number; gols2: number } | null;
     pontos: number | null;

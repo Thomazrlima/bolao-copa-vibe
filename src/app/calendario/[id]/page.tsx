@@ -12,7 +12,6 @@ import {
   Pie,
   PieChart,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
@@ -30,6 +29,12 @@ import {
 import { Flag } from "@/components/common/Flag";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { Button } from "@/components/ui/button";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
 import { getInitials } from "@/lib/display-name";
@@ -48,6 +53,10 @@ type ChatMessage = {
 };
 
 const COLORS = ["var(--primary)", "var(--success)", "var(--warning)", "var(--destructive)"];
+
+const resultChartConfig = {
+  count: { label: "Palpites" },
+} satisfies ChartConfig;
 
 export default function JogoDetalhePage() {
   const params = useParams<{ id: string }>();
@@ -110,7 +119,8 @@ export default function JogoDetalhePage() {
   const isLive = useMemo(() => {
     void nowTick;
     return data
-      ? !data.jogo.encerrado && new Date(data.jogo.data).getTime() <= nowAsStoredBrasiliaMs()
+      ? data.jogo.placar_status === "live" ||
+          (!data.jogo.encerrado && new Date(data.jogo.data).getTime() <= nowAsStoredBrasiliaMs())
       : false;
   }, [data, nowTick]);
 
@@ -214,7 +224,7 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="score" tickLine={false} axisLine={false} fontSize={11} />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
-              <Tooltip
+              <ChartTooltip
                 cursor={{ fill: "color-mix(in oklab, var(--primary) 12%, transparent)" }}
                 contentStyle={{
                   background: "var(--card)",
@@ -231,9 +241,10 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
 
       <section className="rounded-xl border border-border bg-card p-4">
         <h3 className="mb-4 font-display text-lg font-black">Resultado previsto</h3>
-        <div className="h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center lg:block">
+          <ChartContainer config={resultChartConfig} className="mx-auto h-[210px] max-w-[300px]">
             <PieChart>
+              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
               <Pie
                 data={data.resultPie}
                 dataKey="count"
@@ -246,30 +257,25 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
                   <Cell key={item.label} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: "var(--card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  color: "var(--foreground)",
-                }}
-              />
             </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {data.resultPie.map((item, index) => (
-            <div key={item.label} className="rounded-lg border border-border bg-background/45 p-2">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                />
-                {item.label}
+          </ChartContainer>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-1 lg:grid-cols-3">
+            {data.resultPie.map((item, index) => (
+              <div
+                key={item.label}
+                className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/45 p-2"
+              >
+                <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </div>
+                <p className="num font-display text-lg font-black">{item.count}</p>
               </div>
-              <p className="num mt-1 font-display text-xl font-black">{item.count}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
@@ -315,8 +321,8 @@ function TransmissaoTab({
   const thumbnailUrl = youtubeUrl ? getYoutubeThumbnailUrl(youtubeUrl) : null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
+    <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+      <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h3 className="font-display text-lg font-black">Transmissão</h3>
           <span
@@ -440,7 +446,7 @@ function ChatPanel({ jogoId, isActive }: { jogoId: string; isActive: boolean }) 
   }
 
   return (
-    <aside className="flex min-h-[420px] flex-col overflow-hidden rounded-xl border border-border bg-card">
+    <aside className="flex h-[420px] min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card lg:h-[clamp(420px,45vw,650px)] lg:self-stretch">
       <div className="border-b border-border px-4 py-3">
         <h3 className="font-display text-lg font-black">Chat interno</h3>
         <p className="text-xs text-muted-foreground">
@@ -448,7 +454,7 @@ function ChatPanel({ jogoId, isActive }: { jogoId: string; isActive: boolean }) 
         </p>
       </div>
 
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
         {messages.length ? (
           messages.map((item) => (
             <div key={item.id} className="rounded-lg border border-border bg-background/45 p-2">
