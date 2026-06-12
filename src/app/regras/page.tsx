@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Check, CircleHelp, Flame, Goal, Trophy } from "lucide-react";
+import { Check, CircleHelp, Crown, Flame, Goal, Sparkles, Trophy } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -94,6 +94,53 @@ export default function RegrasPage() {
           Do palpite perfeito ao completo desastre: veja quantos pontos cada resultado vale.
         </p>
       </header>
+
+      <section className="mb-7 overflow-hidden rounded-2xl border border-primary/40 bg-primary/10 sm:mb-9">
+        <div className="border-b border-primary/25 px-4 py-5 sm:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-primary">
+                Pontuação extra
+              </p>
+              <h3 className="font-display text-xl font-black uppercase tracking-tight sm:text-2xl">
+                Palpites Especiais
+              </h3>
+            </div>
+          </div>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-foreground/85 sm:text-base">
+            Além dos jogos, os acertos nos Palpites Especiais também valem pontos no ranking.
+          </p>
+        </div>
+
+        <div className="grid gap-px bg-primary/25 sm:grid-cols-2">
+          <div className="flex items-center gap-4 bg-background/80 p-4 sm:p-6">
+            <div className="text-center">
+              <div className="font-display text-3xl font-black text-primary num">15</div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                pontos
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-foreground/85 sm:text-base">
+              Por cada <strong>Palpite Especial</strong> acertado.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 bg-background/80 p-4 sm:p-6">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-warning text-primary-foreground">
+              <Crown className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <div className="font-display text-3xl font-black text-warning num">25 pontos</div>
+              <p className="mt-1 text-sm leading-relaxed text-foreground/85 sm:text-base">
+                Ao acertar o <strong>Bolão dos Bolões</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="space-y-4">
         {RULES.map((rule) => {
