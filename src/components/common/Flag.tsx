@@ -6,7 +6,7 @@ type Props = {
   name?: string;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
-  /** Desabilita a animação de tremulação (CSS). */
+  /** Mantido por compatibilidade; bandeiras não são mais animadas. */
   static?: boolean;
 };
 
@@ -24,7 +24,7 @@ const PX_FOR_SIZE: Record<NonNullable<Props["size"]>, 40 | 80 | 160> = {
   xl: 160,
 };
 
-export function Flag({ code, name, size = "md", className, static: isStatic }: Props) {
+export function Flag({ code, name, size = "md", className }: Props) {
   const url = flagUrl(code, PX_FOR_SIZE[size]);
   if (!url) {
     return (
@@ -53,7 +53,7 @@ export function Flag({ code, name, size = "md", className, static: isStatic }: P
         alt={name ? `Bandeira de ${name}` : `Bandeira ${code}`}
         loading="lazy"
         decoding="async"
-        className={cn("h-full w-full object-cover", !isStatic && "flag-wave")}
+        className="h-full w-full object-cover"
       />
     </span>
   );

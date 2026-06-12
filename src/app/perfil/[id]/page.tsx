@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
@@ -114,19 +114,12 @@ const PROFILE_BADGES = {
   },
 } as const;
 
-type ProfileBadgeKey = keyof typeof PROFILE_BADGES;
 type GuessStatusFilter = "all" | "finished" | "pending";
 type GuessOutcomeFilter = "all" | GuessOutcome;
 
 export default function PerfilPage() {
   const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
   const id = params.id;
-  const badges =
-    searchParams
-      .get("badges")
-      ?.split(",")
-      .filter((badge): badge is ProfileBadgeKey => badge in PROFILE_BADGES) ?? [];
   const [profile, setProfile] = useState<PerfilUsuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -228,9 +221,9 @@ export default function PerfilPage() {
             <h1 className="mt-2 font-display text-3xl font-black tracking-tight sm:text-4xl">
               {profile.nome_completo}
             </h1>
-            {badges.length > 0 && (
+            {profile.badges.length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
-                {badges.map((badgeKey) => {
+                {profile.badges.map((badgeKey) => {
                   const badge = PROFILE_BADGES[badgeKey];
 
                   return (

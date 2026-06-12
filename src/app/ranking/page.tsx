@@ -189,7 +189,7 @@ function RankingRow({
         </span>
       </span>
       <Link
-        href={profileHref(row, chineladaLeaderId, lastPlace ? ["lanterna"] : [])}
+        href={profileHref(row)}
         className="flex min-w-0 items-center gap-2 rounded-md outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-ring sm:gap-3"
         aria-label={`Abrir perfil de ${row.nome_completo}`}
       >
@@ -374,7 +374,7 @@ function Podium({
             className="group flex min-w-0 flex-col items-center text-center"
           >
             <Link
-              href={profileHref(row, chineladaLeaderId, [PODIUM_BADGE_KEYS[pos]])}
+              href={profileHref(row)}
               className="mb-2 flex min-h-28 w-full flex-col items-center justify-end gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-32"
               aria-label={`Abrir perfil de ${row.nome_completo}`}
             >
@@ -473,26 +473,8 @@ function Podium({
   );
 }
 
-const PODIUM_BADGE_KEYS: Record<1 | 2 | 3, string> = {
-  1: "mae-dina",
-  2: "no-cangote",
-  3: "podio-e-podio",
-};
-
-function profileHref(
-  row: RankingUsuario,
-  chineladaLeaderId: string | null,
-  participantBadges: string[],
-) {
-  const params = new URLSearchParams({});
-  const badges = [...participantBadges];
-
-  if (row.id === chineladaLeaderId) badges.push("chinelada");
-  if (badges.length > 0) params.set("badges", badges.join(","));
-
-  const queryString = params.toString();
-
-  return `/perfil/${encodeURIComponent(row.id)}${queryString ? `?${queryString}` : ""}`;
+function profileHref(row: RankingUsuario) {
+  return `/perfil/${encodeURIComponent(row.id)}`;
 }
 
 function AvatarName({
