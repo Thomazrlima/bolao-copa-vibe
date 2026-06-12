@@ -84,16 +84,44 @@
 @layer base {
   * {
     border-color: var(--color-border);
+    scrollbar-color: var(--primary) color-mix(in oklab, var(--background) 88%, var(--card));
+    scrollbar-width: thin;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: color-mix(in oklab, var(--background) 88%, var(--card));
+  }
+  *::-webkit-scrollbar-thumb {
+    min-height: 40px;
+    border-radius: 999px;
+    background-color: var(--primary) !important;
+  }
+  *::-webkit-scrollbar-thumb:hover,
+  *::-webkit-scrollbar-thumb:active,
+  *::-webkit-scrollbar-thumb:window-inactive {
+    background-color: var(--primary) !important;
+  }
+  *::-webkit-scrollbar-corner {
+    background: var(--background);
   }
   html {
     color-scheme: dark;
     background-color: var(--color-background);
+    overflow-x: hidden;
+    scroll-padding-top: 8rem;
+    scrollbar-gutter: stable;
   }
   body {
+    min-width: 320px;
+    overflow-x: hidden;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11";
+    -webkit-tap-highlight-color: transparent;
   }
   .font-display {
     font-family: var(--font-display);
@@ -102,6 +130,62 @@
   .num {
     font-variant-numeric: tabular-nums;
   }
+  button,
+  a,
+  input,
+  select {
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 639px) {
+  .flag-wrap {
+    transform: rotate(-3deg);
+  }
+}
+
+.app-shell {
+  position: relative;
+  background-image:
+    linear-gradient(
+      color-mix(in oklab, var(--background) 76%, transparent),
+      color-mix(in oklab, var(--background) 76%, transparent)
+    ),
+    url("./app/background.png");
+  background-position: center top;
+  background-repeat: repeat-y;
+  background-size: max(100vw, 900px) auto;
+  background-attachment: fixed;
+}
+
+.relegation-alert,
+.relegation-alert-strong {
+  position: relative;
+  isolation: isolate;
+}
+
+.relegation-alert::before,
+.relegation-alert-strong::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 8px,
+    var(--destructive) 8px,
+    var(--destructive) 16px
+  );
+}
+
+.relegation-alert::before {
+  opacity: 0.08;
+}
+
+.relegation-alert-strong::before {
+  opacity: 0.14;
 }
 
 @utility scanlines {

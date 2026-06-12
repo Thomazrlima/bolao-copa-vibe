@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { AppShell } from "@/components/layout/AppShell";
 import { useBolaoStore } from "@/lib/store";
 import { allGroupStandings, bestThirds, type Standing } from "@/lib/standings";
 import { cn } from "@/lib/utils";
@@ -15,15 +14,11 @@ export default function GruposPage() {
   const thirds = useMemo(() => bestThirds(results), [results]);
 
   if (!mounted) {
-    return (
-      <AppShell>
-        <PageSkeleton title="Grupos & Classificação" />
-      </AppShell>
-    );
+    return <PageSkeleton title="Grupos & Classificação" />;
   }
 
   return (
-    <AppShell>
+    <>
       <div className="mb-6">
         <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">
           Grupos & Classificação
@@ -51,13 +46,13 @@ export default function GruposPage() {
           </div>
           <span className="hidden text-xs text-muted-foreground sm:inline">P · SG · GP</span>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="grid grid-cols-[36px_minmax(0,1fr)_40px_40px_40px_90px] gap-2 border-b border-border bg-background/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[48px_minmax(0,1fr)_60px_60px_60px_120px] sm:px-5">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="grid grid-cols-[28px_minmax(0,1fr)_32px_36px_68px] gap-1.5 border-b border-border bg-background/40 px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[48px_minmax(0,1fr)_60px_60px_60px_120px] sm:gap-2 sm:px-5 sm:text-[10px]">
             <span>#</span>
             <span>Seleção</span>
             <span className="text-right">P</span>
             <span className="text-right">SG</span>
-            <span className="text-right">GP</span>
+            <span className="hidden text-right sm:block">GP</span>
             <span className="text-right">Status</span>
           </div>
           <ul className="divide-y divide-border">
@@ -67,7 +62,7 @@ export default function GruposPage() {
                 <li
                   key={s.team.code}
                   className={cn(
-                    "grid grid-cols-[36px_minmax(0,1fr)_40px_40px_40px_90px] items-center gap-2 px-3 py-2.5 text-sm sm:grid-cols-[48px_minmax(0,1fr)_60px_60px_60px_120px] sm:px-5",
+                    "grid grid-cols-[28px_minmax(0,1fr)_32px_36px_68px] items-center gap-1.5 px-2 py-2.5 text-xs sm:grid-cols-[48px_minmax(0,1fr)_60px_60px_60px_120px] sm:gap-2 sm:px-5 sm:text-sm",
                     classified ? "bg-primary/10" : "opacity-60",
                   )}
                 >
@@ -80,7 +75,12 @@ export default function GruposPage() {
                     {i + 1}
                   </span>
                   <span className="flex min-w-0 items-center gap-2">
-                    <Flag code={s.team.code} name={s.team.name} size="lg" />
+                    <Flag
+                      code={s.team.code}
+                      name={s.team.name}
+                      size="md"
+                      className="sm:h-7 sm:w-11"
+                    />
                     <span className="truncate font-semibold">{s.team.name}</span>
                     <span className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground sm:inline">
                       G{s.group}
@@ -88,17 +88,20 @@ export default function GruposPage() {
                   </span>
                   <span className="num text-right font-bold">{s.points}</span>
                   <span className="num text-right">{s.gd > 0 ? `+${s.gd}` : s.gd}</span>
-                  <span className="num text-right">{s.gf}</span>
+                  <span className="num hidden text-right sm:block">{s.gf}</span>
                   <span className="text-right">
                     <span
                       className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                        "inline-block max-w-full truncate rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase sm:px-2 sm:text-[10px] sm:tracking-wider",
                         classified
                           ? "bg-primary text-primary-foreground"
                           : "bg-destructive/20 text-destructive",
                       )}
                     >
-                      {classified ? "Classificado" : "Fora"}
+                      <span className="sm:hidden">{classified ? "Avança" : "Fora"}</span>
+                      <span className="hidden sm:inline">
+                        {classified ? "Classificado" : "Fora"}
+                      </span>
                     </span>
                   </span>
                 </li>
@@ -107,7 +110,7 @@ export default function GruposPage() {
           </ul>
         </div>
       </section>
-    </AppShell>
+    </>
   );
 }
 
@@ -129,7 +132,7 @@ function PageSkeleton({ title }: { title: string }) {
 
 function GroupCard({ group, standings }: { group: string; standings: Standing[] }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border bg-background/40 px-4 py-2.5">
         <h4 className="font-display text-lg font-black tracking-tight">
           Grupo <span className="text-primary">{group}</span>

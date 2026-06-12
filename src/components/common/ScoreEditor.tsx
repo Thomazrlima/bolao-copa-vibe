@@ -18,13 +18,15 @@ export function ScoreEditor({ fixtureId, compact }: Props) {
   };
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex shrink-0 items-center gap-1">
       <Input
         type="number"
         min={0}
         value={result?.home ?? ""}
         onChange={(e) => update("home", e.target.value)}
-        className={`num text-center font-display font-bold ${compact ? "h-8 w-10 px-1 text-sm" : "h-10 w-12"}`}
+        aria-label="Placar do time da casa"
+        inputMode="numeric"
+        className={`num text-center font-display font-bold ${compact ? "h-9 w-10 px-1 text-base" : "h-10 w-12"}`}
       />
       <span className="text-muted-foreground">×</span>
       <Input
@@ -32,7 +34,9 @@ export function ScoreEditor({ fixtureId, compact }: Props) {
         min={0}
         value={result?.away ?? ""}
         onChange={(e) => update("away", e.target.value)}
-        className={`num text-center font-display font-bold ${compact ? "h-8 w-10 px-1 text-sm" : "h-10 w-12"}`}
+        aria-label="Placar do time visitante"
+        inputMode="numeric"
+        className={`num text-center font-display font-bold ${compact ? "h-9 w-10 px-1 text-base" : "h-10 w-12"}`}
       />
     </div>
   );

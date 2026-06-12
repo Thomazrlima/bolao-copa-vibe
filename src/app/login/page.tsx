@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { LogIn, LogOut } from "lucide-react";
 
-import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,7 +89,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <div className="mx-auto max-w-md">
         <div className="mb-6">
           <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">Login</h2>
@@ -101,12 +100,12 @@ export default function LoginPage() {
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">
-              Entre com o email do bolão e a senha inicial antes do @.
+              Para fazer seus palpites, você precisa entrar na sua conta.
             </p>
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
           {loading ? (
             <p className="text-sm text-muted-foreground">Carregando sessão...</p>
           ) : usuario ? (
@@ -152,7 +151,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="parte antes do @"
+                  placeholder="nome.sobrenome"
                   required
                 />
               </div>
@@ -169,6 +168,6 @@ export default function LoginPage() {
           )}
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

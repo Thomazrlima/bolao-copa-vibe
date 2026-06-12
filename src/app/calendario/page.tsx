@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AppShell } from "@/components/layout/AppShell";
 import { ALL_FIXTURES, stageLabel, type Fixture } from "@/data/fixtures";
 import { useBolaoStore } from "@/lib/store";
 import { TEAM_BY_CODE, GROUPS } from "@/data/teams";
@@ -59,7 +58,7 @@ export default function CalendarioPage() {
 
   if (!mounted) {
     return (
-      <AppShell>
+      <>
         <div className="mb-4 flex flex-col gap-1">
           <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">
             Calendário
@@ -71,12 +70,12 @@ export default function CalendarioPage() {
             <div key={index} className="h-40 rounded-2xl border border-border bg-card/60" />
           ))}
         </div>
-      </AppShell>
+      </>
     );
   }
 
   return (
-    <AppShell>
+    <>
       <div className="mb-4 flex flex-col gap-1">
         <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">Calendário</h2>
         <p className="text-sm text-muted-foreground">
@@ -84,25 +83,27 @@ export default function CalendarioPage() {
         </p>
       </div>
 
-      <div className="sticky top-[112px] z-30 -mx-4 mb-6 flex flex-wrap items-center gap-2 border-y border-border bg-background/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <FilterChip active={fase === "all"} onClick={() => setFase("all")}>
-          Todos
-        </FilterChip>
-        <FilterChip active={fase === "group"} onClick={() => setFase("group")}>
-          Fase de Grupos
-        </FilterChip>
-        <FilterChip active={fase === "ko"} onClick={() => setFase("ko")}>
-          Mata-Mata
-        </FilterChip>
-        <FilterChip active={fase === "today"} onClick={() => setFase("today")}>
-          Hoje
-        </FilterChip>
-        <div className="ml-auto flex items-center gap-2">
+      <div className="sticky top-[57px] z-30 -mx-3 mb-6 border-y border-border bg-background/90 px-3 py-2.5 backdrop-blur sm:-mx-6 sm:flex sm:items-center sm:gap-3 sm:px-6 lg:top-[69px]">
+        <div className="flex gap-2 overflow-x-auto pb-2 sm:min-w-0 sm:flex-1 sm:pb-0">
+          <FilterChip active={fase === "all"} onClick={() => setFase("all")}>
+            Todos
+          </FilterChip>
+          <FilterChip active={fase === "group"} onClick={() => setFase("group")}>
+            Fase de Grupos
+          </FilterChip>
+          <FilterChip active={fase === "ko"} onClick={() => setFase("ko")}>
+            Mata-Mata
+          </FilterChip>
+          <FilterChip active={fase === "today"} onClick={() => setFase("today")}>
+            Hoje
+          </FilterChip>
+        </div>
+        <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
           <label className="text-xs text-muted-foreground">Grupo:</label>
           <select
             value={group}
             onChange={(e) => setGroup(e.target.value)}
-            className="rounded-md border border-border bg-card px-2 py-1 text-sm"
+            className="h-9 min-w-24 rounded-md border border-border bg-card px-3 text-base sm:text-sm"
           >
             <option value="all">Todos</option>
             {GROUPS.map((g) => (
@@ -141,7 +142,7 @@ export default function CalendarioPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }
 
@@ -158,7 +159,7 @@ function FilterChip({
     <button
       onClick={onClick}
       className={cn(
-        "rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors",
+        "min-h-9 shrink-0 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors",
         active
           ? "bg-primary text-primary-foreground"
           : "border border-border text-muted-foreground hover:text-foreground",
@@ -188,7 +189,7 @@ function MatchCard({
       : "scheduled";
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/40">
+    <div className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/40 sm:p-4">
       <div className="mb-3 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
         <span className="flex items-center gap-2">
           <span className="rounded bg-muted px-1.5 py-0.5 font-bold">
@@ -199,11 +200,11 @@ function MatchCard({
         <StatusBadge status={status} />
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
         <TeamSide name={home?.name ?? "—"} code={home?.code} align="left" />
         <div className="flex flex-col items-center gap-1">
           {result ? (
-            <div className="num font-display text-3xl font-black">
+            <div className="num whitespace-nowrap font-display text-2xl font-black sm:text-3xl">
               {result.home} <span className="text-muted-foreground">–</span> {result.away}
             </div>
           ) : (
@@ -213,8 +214,10 @@ function MatchCard({
         <TeamSide name={away?.name ?? "—"} code={away?.code} align="right" />
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-        <span className="truncate text-[11px] text-muted-foreground">📍 {fixture.stadium}</span>
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+        <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+          {fixture.stadium}
+        </span>
         <ScoreEditor fixtureId={fixture.id} compact />
       </div>
     </div>
@@ -225,12 +228,12 @@ function TeamSide({ name, code, align }: { name: string; code?: string; align: "
   return (
     <div
       className={cn(
-        "flex min-w-0 items-center gap-2",
-        align === "right" && "flex-row-reverse text-right",
+        "flex min-w-0 flex-col items-center gap-1 text-center sm:flex-row sm:gap-2 sm:text-left",
+        align === "right" && "sm:flex-row-reverse sm:text-right",
       )}
     >
-      <Flag code={code} name={name} size="lg" />
-      <span className="truncate text-sm font-bold">{name}</span>
+      <Flag code={code} name={name} size="md" className="sm:h-7 sm:w-11" />
+      <span className="w-full truncate text-xs font-bold sm:text-sm">{name}</span>
     </div>
   );
 }
