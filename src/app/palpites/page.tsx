@@ -29,6 +29,7 @@ import {
   TrendingUp,
   Trophy,
   Users,
+  WandSparkles,
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
@@ -42,9 +43,23 @@ import {
 } from "@/components/ui/chart";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
-import { getPalpitesDashboard, savePalpite, type PalpitesDashboardResponse } from "@/lib/queries";
+import { ESPECIAIS, ESPECIAIS_DEADLINE_ISO, especiaisAreOpen } from "@/lib/especiais";
+import {
+  getPalpitesDashboard,
+  getPalpitesEspeciais,
+  savePalpite,
+  savePalpiteEspecial,
+  type PalpitesDashboardResponse,
+} from "@/lib/queries";
 import type { GuessOutcome } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 
@@ -108,13 +123,20 @@ export default function PalpitesPage() {
   const [unauthenticated, setUnauthenticated] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [recentlySaved, setRecentlySaved] = useState<string | null>(null);
+  const [specialAnswers, setSpecialAnswers] = useState<Record<string, string>>({});
+  const [savedSpecialIds, setSavedSpecialIds] = useState<Set<string>>(new Set());
+  const [savingSpecialId, setSavingSpecialId] = useState<string | null>(null);
+  const [recentlySavedSpecialId, setRecentlySavedSpecialId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     setError(null);
 
     try {
-      const loaded = await getPalpitesDashboard();
+      const [loaded, specialResponses] = await Promise.all([
+        getPalpitesDashboard(),
+        getPalpitesEspeciais(),
+      ]);
       setData(loaded);
       setScores(
         Object.fromEntries(
@@ -126,6 +148,12 @@ export default function PalpitesPage() {
           ]),
         ),
       );
+      setSpecialAnswers(
+        Object.fromEntries(
+          specialResponses.map((response) => [response.pergunta_id, response.resposta]),
+        ),
+      );
+      setSavedSpecialIds(new Set(specialResponses.map((response) => response.pergunta_id)));
       setUnauthenticated(false);
     } catch (loadError) {
       const message =
@@ -201,6 +229,28 @@ export default function PalpitesPage() {
     }
   }
 
+  async function persistSpecial(questionId: string) {
+    const answer = specialAnswers[questionId];
+    if (!answer) return;
+
+    setSavingSpecialId(questionId);
+    setError(null);
+
+    try {
+      await savePalpiteEspecial(questionId, answer);
+      setSavedSpecialIds((current) => new Set([...current, questionId]));
+      setRecentlySavedSpecialId(questionId);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Não foi possível salvar o palpite especial.",
+      );
+    } finally {
+      setSavingSpecialId(null);
+    }
+  }
+
   if (loading) return <PageSkeleton />;
 
   if (unauthenticated) {
@@ -259,10 +309,14 @@ export default function PalpitesPage() {
       />
 
       <Tabs defaultValue="open" className="mt-6">
-        <TabsList className="grid h-auto w-full grid-cols-3 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[440px]">
+        <TabsList className="grid h-auto w-full grid-cols-4 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]">
           <TabsTrigger value="open" className="gap-1.5 py-2.5 text-xs sm:text-sm">
             <CalendarClock className="h-3.5 w-3.5" />
             Abertos
+          </TabsTrigger>
+          <TabsTrigger value="specials" className="gap-1.5 py-2.5 text-xs sm:text-sm">
+            <WandSparkles className="h-3.5 w-3.5" />
+            Especiais
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 py-2.5 text-xs sm:text-sm">
             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -298,6 +352,20 @@ export default function PalpitesPage() {
           )}
         </TabsContent>
 
+        <TabsContent value="specials" className="mt-6">
+          <SpecialsSection
+            answers={specialAnswers}
+            savedIds={savedSpecialIds}
+            savingId={savingSpecialId}
+            recentlySavedId={recentlySavedSpecialId}
+            onSelect={(questionId, answer) => {
+              setSpecialAnswers((current) => ({ ...current, [questionId]: answer }));
+              setRecentlySavedSpecialId(null);
+            }}
+            onSave={persistSpecial}
+          />
+        </TabsContent>
+
         <TabsContent value="history" className="mt-6">
           <SectionHeading
             title="Palpites anteriores"
@@ -319,6 +387,185 @@ export default function PalpitesPage() {
         </TabsContent>
       </Tabs>
     </>
+  );
+}
+
+function SpecialsSection({
+  answers,
+  savedIds,
+  savingId,
+  recentlySavedId,
+  onSelect,
+  onSave,
+}: {
+  answers: Record<string, string>;
+  savedIds: Set<string>;
+  savingId: string | null;
+  recentlySavedId: string | null;
+  onSelect: (questionId: string, answer: string) => void;
+  onSave: (questionId: string) => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const answered = ESPECIAIS.filter((question) => savedIds.has(question.id)).length;
+  const completion = Math.round((answered / ESPECIAIS.length) * 100);
+  const open = especiaisAreOpen(now);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <>
+      <div className="mb-5 overflow-hidden rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/14 via-card to-card p-4 ring-yellow sm:p-5">
+        <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_260px] sm:items-center">
+          <div className="flex items-start gap-3 sm:items-center sm:gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+              <WandSparkles className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+                Vale visão de futuro
+              </p>
+              <h3 className="mt-1 font-display text-xl font-black">Palpites especiais</h3>
+              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                {open
+                  ? "Escolhas disponíveis até 13/06/2026 às 16:00, horário de Brasília."
+                  : "O prazo para responder aos especiais foi encerrado."}
+              </p>
+            </div>
+          </div>
+          <div>
+            <SpecialsCountdown now={now} />
+            <div className="mb-2 flex items-center justify-between text-xs font-bold">
+              <span>{answered} respondidos</span>
+              <span className="num text-primary">{completion}%</span>
+            </div>
+            <Progress value={completion} className="h-3" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {ESPECIAIS.map((question, index) => {
+          const answer = answers[question.id];
+          const saved = savedIds.has(question.id);
+          const saving = savingId === question.id;
+          const recentlySaved = recentlySavedId === question.id;
+
+          return (
+            <article
+              key={question.id}
+              className={cn(
+                "overflow-hidden rounded-xl border bg-card transition-colors",
+                !open && "opacity-75",
+                saved ? "border-primary/35" : "border-border hover:border-primary/40",
+              )}
+            >
+              <div className="flex items-start gap-3 border-b border-border bg-background/35 px-4 py-3">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/12 font-display text-xs font-black text-primary">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-sm font-black leading-snug sm:text-base">
+                    {question.question}
+                  </p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {open ? "Escolha uma opção" : "Respostas encerradas"}
+                  </p>
+                </div>
+                {saved && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
+              </div>
+
+              <div className="p-4">
+                <Select
+                  value={answer ?? ""}
+                  onValueChange={(option) => onSelect(question.id, option)}
+                  disabled={!open}
+                >
+                  <SelectTrigger className="h-11 rounded-xl border-border bg-background/55 font-bold">
+                    <SelectValue placeholder="Selecione uma opção" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {question.options.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
+                  <span className="min-w-0 truncate text-xs text-muted-foreground">
+                    {answer ? `Sua escolha: ${answer}` : "Nenhuma opção selecionada"}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={saved ? "secondary" : "default"}
+                    disabled={!open || !answer || saving}
+                    onClick={() => onSave(question.id)}
+                    className="shrink-0 gap-1.5"
+                  >
+                    {!open ? (
+                      <>
+                        <LockKeyhole className="h-3.5 w-3.5" />
+                        Encerrado
+                      </>
+                    ) : recentlySaved ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Salvo
+                      </>
+                    ) : saved ? (
+                      <>
+                        <Pencil className="h-3.5 w-3.5" />
+                        {saving ? "Atualizando..." : "Atualizar"}
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-3.5 w-3.5" />
+                        {saving ? "Salvando..." : "Salvar"}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function SpecialsCountdown({ now }: { now: number }) {
+  const remaining = Math.max(0, new Date(ESPECIAIS_DEADLINE_ISO).getTime() - now);
+  const closed = remaining === 0;
+  const days = Math.floor(remaining / 86_400_000);
+  const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
+  const minutes = Math.floor((remaining % 3_600_000) / 60_000);
+  const seconds = Math.floor((remaining % 60_000) / 1000);
+
+  return (
+    <div
+      className={cn(
+        "mb-3 rounded-xl border px-3 py-2.5",
+        closed ? "border-destructive/40 bg-destructive/10" : "border-primary/35 bg-background/55",
+      )}
+    >
+      <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+        {closed ? <LockKeyhole className="h-3 w-3" /> : <Clock3 className="h-3 w-3 text-primary" />}
+        {closed ? "Prazo encerrado" : "Tempo restante"}
+      </div>
+      {!closed && (
+        <div className="num font-display text-xl font-black text-primary">
+          {days > 0 && `${days}d `}
+          {String(hours).padStart(2, "0")}:{String(minutes).padStart(2, "0")}:
+          {String(seconds).padStart(2, "0")}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -109,6 +109,12 @@ export type PalpitesDashboardResponse = {
   };
 };
 
+export type EspecialResposta = {
+  pergunta_id: string;
+  resposta: string;
+  atualizado_em: string;
+};
+
 type ApiErrorBody = {
   error?: string;
 };
@@ -194,4 +200,17 @@ export async function savePalpite(jogoId: string, palpite: { gols1: number; gols
     `/api/jogos/${encodeURIComponent(jogoId)}/palpites`,
     { method: "PUT", body: JSON.stringify(palpite) },
   );
+}
+
+export async function getPalpitesEspeciais() {
+  const body = await requestJson<{ respostas: EspecialResposta[] }>("/api/palpites/especiais");
+  return body.respostas;
+}
+
+export async function savePalpiteEspecial(perguntaId: string, resposta: string) {
+  const body = await requestJson<{ resposta: EspecialResposta }>("/api/palpites/especiais", {
+    method: "PUT",
+    body: JSON.stringify({ pergunta_id: perguntaId, resposta }),
+  });
+  return body.resposta;
 }
