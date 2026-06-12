@@ -19,9 +19,9 @@ import {
 import {
   ArrowLeft,
   BarChart3,
+  ExternalLink,
   MessageCircle,
   Play,
-  Radio,
   Target,
   Trophy,
   Users,
@@ -311,7 +311,8 @@ function TransmissaoTab({
   isActive: boolean;
   isLive: boolean;
 }) {
-  const embedUrl = toEmbedUrl(data.jogo.transmissao_url);
+  const youtubeUrl = normalizeYoutubeUrl(data.jogo.transmissao_url);
+  const thumbnailUrl = youtubeUrl ? getYoutubeThumbnailUrl(youtubeUrl) : null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
@@ -324,45 +325,59 @@ function TransmissaoTab({
               isLive ? "bg-live/15 text-live" : "bg-muted text-muted-foreground",
             )}
           >
-            <Radio className="h-3 w-3" />
             {isLive ? "ao vivo" : "fora do ar"}
           </span>
         </div>
-        {embedUrl ? (
-          <iframe
-            src={embedUrl}
-            title={`Transmissão de ${data.jogo.time1} x ${data.jogo.time2}`}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            className="aspect-video w-full bg-background"
-          />
+        {youtubeUrl ? (
+          <a
+            href={youtubeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="group relative block aspect-video overflow-hidden bg-background"
+            aria-label={`Abrir transmissão de ${data.jogo.time1} x ${data.jogo.time2} no YouTube`}
+          >
+            {thumbnailUrl ? (
+              <img
+                src={thumbnailUrl}
+                alt={`Thumbnail da transmissão de ${data.jogo.time1} x ${data.jogo.time2}`}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              />
+            ) : (
+              <div className="grid h-full place-items-center bg-background/60 p-8 text-center">
+                <div>
+                  <Play className="mx-auto mb-3 h-10 w-10 text-primary" />
+                  <p className="font-semibold">Abrir transmissão no YouTube</p>
+                </div>
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/35 transition-colors group-hover:bg-black/20" />
+            <div className="absolute inset-0 grid place-items-center">
+              <span className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground shadow-lg">
+                <Play className="h-5 w-5 fill-current" />
+                Assistir no YouTube
+                <ExternalLink className="h-4 w-4" />
+              </span>
+            </div>
+          </a>
         ) : (
           <div className="grid aspect-video place-items-center bg-background/60 p-8 text-center">
             <div>
               <Play className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
               <p className="font-semibold">Link da transmissão ainda não cadastrado.</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Preencha `transmissao_url` em `public.jogos` para exibir o player.
+                Preencha `transmissao_url` em `public.jogos` para exibir a thumb do YouTube.
               </p>
             </div>
           </div>
         )}
       </section>
 
-      <ChatPanel jogoId={data.jogo.id} isActive={isActive} isLive={isLive} />
+      <ChatPanel jogoId={data.jogo.id} isActive={isActive} />
     </div>
   );
 }
 
-function ChatPanel({
-  jogoId,
-  isActive,
-  isLive,
-}: {
-  jogoId: string;
-  isActive: boolean;
-  isLive: boolean;
-}) {
+function ChatPanel({ jogoId, isActive }: { jogoId: string; isActive: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [message, setMessage] = useState("");
   const [usuario, setUsuario] = useState<{ id: string; nome_completo: string } | null>(null);
@@ -386,7 +401,7 @@ function ChatPanel({
   }, []);
 
   useEffect(() => {
-    if (!isActive || !isLive) return;
+    if (!isActive) return;
 
     const supabase = createClient();
     const nextChannel = supabase.channel(`jogo-chat:${jogoId}`, {
@@ -405,12 +420,12 @@ function ChatPanel({
       setChannel(null);
       supabase.removeChannel(nextChannel);
     };
-  }, [isActive, isLive, jogoId]);
+  }, [isActive, jogoId]);
 
   async function sendMessage(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = message.trim();
-    if (!text || !channel || !isLive) return;
+    if (!text || !channel) return;
 
     const payload: ChatMessage = {
       id: crypto.randomUUID(),
@@ -427,11 +442,9 @@ function ChatPanel({
   return (
     <aside className="flex min-h-[420px] flex-col overflow-hidden rounded-xl border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
-        <h3 className="font-display text-lg font-black">Chat do jogo</h3>
+        <h3 className="font-display text-lg font-black">Chat interno</h3>
         <p className="text-xs text-muted-foreground">
-          {isLive
-            ? "Canal aberto enquanto a partida estiver em andamento."
-            : "O chat abre quando o jogo estiver ao vivo."}
+          Conversa interna do bolão, separada do chat do YouTube.
         </p>
       </div>
 
@@ -463,11 +476,11 @@ function ChatPanel({
           value={message}
           onChange={(event) => setMessage(event.target.value)}
           maxLength={280}
-          disabled={!isLive || !channel}
-          placeholder={isLive ? "Escreva uma mensagem..." : "Chat fechado"}
+          disabled={!channel}
+          placeholder={channel ? "Escreva uma mensagem..." : "Abrindo chat interno..."}
           className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
         />
-        <Button type="submit" disabled={!message.trim() || !isLive || !channel}>
+        <Button type="submit" disabled={!message.trim() || !channel}>
           Enviar
         </Button>
       </form>
@@ -577,20 +590,31 @@ function buildDashboard(data: JogoPalpitesResponse) {
   };
 }
 
-function toEmbedUrl(url: string | null | undefined) {
+function normalizeYoutubeUrl(url: string | null | undefined) {
   if (!url) return null;
 
   try {
     const parsed = new URL(url);
-    if (parsed.hostname.includes("youtube.com")) {
-      const videoId = parsed.searchParams.get("v");
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
-    }
-    if (parsed.hostname.includes("youtu.be")) {
-      const videoId = parsed.pathname.replace("/", "");
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
-    }
-    return url;
+    return parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be")
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function getYoutubeThumbnailUrl(url: string) {
+  const videoId = getYoutubeVideoId(url);
+  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+}
+
+function getYoutubeVideoId(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtu.be")) return parsed.pathname.replace("/", "") || null;
+    if (parsed.pathname.startsWith("/embed/")) return parsed.pathname.split("/")[2] || null;
+    if (parsed.pathname.startsWith("/shorts/")) return parsed.pathname.split("/")[2] || null;
+    return parsed.searchParams.get("v");
   } catch {
     return null;
   }
