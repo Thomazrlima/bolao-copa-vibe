@@ -28,15 +28,15 @@ export function SpinningBallLoader({
       className={cn("grid min-h-[260px] place-items-center", className)}
     >
       <span className="sr-only">{label}</span>
-      <img
-        src={src}
-        alt=""
+      <span
         className={cn(
           SIZE_CLASS[size],
-          "animate-spin drop-shadow-[0_12px_24px_rgba(0,0,0,0.28)] motion-reduce:animate-none",
+          "grid origin-center animate-spin place-items-center drop-shadow-[0_12px_24px_rgba(0,0,0,0.28)] motion-reduce:animate-none",
         )}
         aria-hidden="true"
-      />
+      >
+        <img src={src} alt="" className="block h-full w-full object-contain" />
+      </span>
     </div>
   );
 }
