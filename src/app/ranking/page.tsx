@@ -5,6 +5,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { motion, useReducedMotion } from "framer-motion";
 import { Trophy } from "lucide-react";
 
+import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { getDisplayName, getInitials } from "@/lib/display-name";
 import { getRanking } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -212,67 +213,7 @@ function RankingRow({
 }
 
 function RankingSkeleton() {
-  const podiumHeights = ["h-32 sm:h-40", "h-40 sm:h-52", "h-28 sm:h-32"];
-
-  return (
-    <div aria-busy="true" aria-label="Carregando ranking">
-      <span className="sr-only">Carregando ranking</span>
-
-      <div
-        className="mb-8 animate-pulse rounded-lg border border-border bg-card/60 p-2.5 min-[380px]:p-4 sm:p-6"
-        aria-hidden
-      >
-        <div className="mb-3 h-3 w-16 rounded bg-muted" />
-        <div className="grid grid-cols-3 items-end gap-1.5 min-[380px]:gap-3 sm:gap-6">
-          {podiumHeights.map((height, index) => (
-            <div key={height} className="flex min-w-0 flex-col items-center">
-              <div className="mb-2 flex min-h-28 w-full flex-col items-center justify-end sm:min-h-32">
-                <div
-                  className={cn(
-                    "mb-2 rounded-full bg-muted",
-                    index === 1 ? "h-16 w-16 sm:h-20 sm:w-20" : "h-9 w-9",
-                  )}
-                />
-                <div className="mb-2 h-3 w-4/5 rounded bg-muted" />
-                <div className="h-4 w-3/4 rounded-full bg-muted" />
-              </div>
-              <div
-                className={cn(
-                  "w-full rounded-t-md border border-b-0 border-border bg-muted/60",
-                  height,
-                )}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="animate-pulse overflow-hidden rounded-lg border border-border bg-card">
-        <div className="grid grid-cols-[32px_minmax(0,1fr)_46px_52px] items-center gap-1.5 border-b border-border bg-background/40 px-2 py-2 sm:grid-cols-[64px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-3">
-          <div className="h-3 w-3 rounded bg-muted" />
-          <div className="h-3 w-24 rounded bg-muted" />
-          <div className="ml-auto h-3 w-8 rounded bg-muted" />
-          <div className="ml-auto h-3 w-6 rounded bg-muted" />
-        </div>
-        <div className="divide-y divide-border">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div
-              key={index}
-              className="grid grid-cols-[32px_minmax(0,1fr)_46px_52px] items-center gap-1.5 px-2 py-3 sm:grid-cols-[64px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-4"
-            >
-              <div className="h-5 w-5 rounded bg-muted" />
-              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-                <div className="h-9 w-9 shrink-0 rounded-full bg-muted" />
-                <div className="h-3 w-3/5 rounded bg-muted" />
-              </div>
-              <div className="ml-auto h-4 w-5 rounded bg-muted" />
-              <div className="ml-auto h-4 w-6 rounded bg-muted" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  return <SpinningBallLoader label="Carregando ranking" />;
 }
 
 function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -543,8 +484,7 @@ function profileHref(
   chineladaLeaderId: string | null,
   participantBadges: string[],
 ) {
-  const params = new URLSearchParams({
-  });
+  const params = new URLSearchParams({});
   const badges = [...participantBadges];
 
   if (row.id === chineladaLeaderId) badges.push("chinelada");

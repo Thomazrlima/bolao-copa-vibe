@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Check, CircleDot, Grid3X3, Network, Sparkles, Trophy } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
+import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { teamCodeFromName } from "@/data/iso2";
 import { useMounted } from "@/hooks/use-mounted";
 import {
@@ -679,36 +680,15 @@ function TeamSide({ team, fallback }: { team: TeamSlot | null; fallback: string 
 
 function ViewSkeleton({ view }: { view: View }) {
   return (
-    <div className="animate-pulse" aria-label="Carregando dados da Copa" aria-busy="true">
-      <div className="mb-4 h-20 rounded-xl bg-card/60" />
-      {view === "grupos" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <div key={index} className="h-56 rounded-xl border border-border bg-card/60" />
-          ))}
-        </div>
-      ) : (
-        <>
-          <div className="mb-6 h-32 rounded-2xl border border-primary/20 bg-card/60" />
-          <div className="flex gap-4 overflow-hidden">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-96 w-72 shrink-0 rounded-xl bg-card/60" />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <SpinningBallLoader
+      label={view === "grupos" ? "Carregando grupos" : "Carregando mata-mata"}
+      className="min-h-[360px]"
+    />
   );
 }
 
 export function CopaDashboardSkeleton() {
-  return (
-    <>
-      <header className="mb-4 h-56 animate-pulse rounded-2xl border border-border bg-card/60 sm:h-52" />
-      <div className="mb-6 h-16 animate-pulse rounded-xl border border-border bg-card/60" />
-      <ViewSkeleton view="grupos" />
-    </>
-  );
+  return <SpinningBallLoader label="Carregando dados da Copa" className="min-h-[520px]" />;
 }
 
 function nowAsStoredBrasiliaMs() {

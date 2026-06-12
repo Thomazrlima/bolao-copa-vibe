@@ -67,7 +67,9 @@ export type JogoPalpitesResponse = {
 export type PalpitesDashboardResponse = {
   jogos: Array<{
     id: string;
+    fase_id: number;
     fase: string;
+    grupo: string | null;
     rodada: number | null;
     time1: string;
     time2: string;

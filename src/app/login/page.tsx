@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { LogIn, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
+import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +18,7 @@ type Usuario = {
 };
 
 export default function LoginPage() {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,11 +32,13 @@ export default function LoginPage() {
 
     if (response.status === 401) {
       setUsuario(null);
-      return;
+      return null;
     }
 
     const body = await response.json();
-    setUsuario(body.usuario ?? null);
+    const loadedUsuario = body.usuario ?? null;
+    setUsuario(loadedUsuario);
+    return loadedUsuario as Usuario | null;
   }
 
   useEffect(() => {
@@ -75,9 +80,14 @@ export default function LoginPage() {
       return;
     }
 
-    await loadUsuario();
+    const loadedUsuario = await loadUsuario();
     setPassword("");
     setSubmitting(false);
+
+    if (loadedUsuario?.id) {
+      router.replace(`/perfil/${encodeURIComponent(loadedUsuario.id)}`);
+      router.refresh();
+    }
   }
 
   async function handleLogout() {
@@ -107,7 +117,7 @@ export default function LoginPage() {
 
         <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
           {loading ? (
-            <p className="text-sm text-muted-foreground">Carregando sessão...</p>
+            <SpinningBallLoader label="Carregando sessão" size="md" className="min-h-[180px]" />
           ) : usuario ? (
             <div className="space-y-4">
               <div>

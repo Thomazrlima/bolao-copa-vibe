@@ -19,6 +19,7 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronsUpDown,
   Clock3,
   LockKeyhole,
   LogIn,
@@ -33,15 +34,26 @@ import {
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
+import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -52,19 +64,31 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
-import { ESPECIAIS, ESPECIAIS_DEADLINE_ISO, especiaisAreOpen } from "@/lib/especiais";
 import {
+  CAMPEAO_BOLAO_QUESTION_ID,
+  ESPECIAIS,
+  ESPECIAIS_DEADLINE_ISO,
+  especiaisAreOpen,
+} from "@/lib/especiais";
+import {
+  getRanking,
   getPalpitesDashboard,
   getPalpitesEspeciais,
   savePalpite,
   savePalpiteEspecial,
   type PalpitesDashboardResponse,
+  type RankingUsuario,
 } from "@/lib/queries";
 import type { GuessOutcome } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 
 type Score = { home: number | null; away: number | null };
 type DashboardGame = PalpitesDashboardResponse["jogos"][number];
+type PalpiteFilters = {
+  date: string;
+  round: string;
+  group: string;
+};
 
 const OUTCOME_META: Record<
   GuessOutcome,
@@ -102,6 +126,8 @@ const OUTCOME_META: Record<
   },
 };
 
+const WORLD_CUP_END_DATE_KEY = "2026-07-19";
+
 const accuracyChartConfig = {
   geral: { label: "Geral", color: "var(--muted-foreground)" },
   voce: { label: "Você", color: "var(--primary)" },
@@ -127,17 +153,25 @@ export default function PalpitesPage() {
   const [savedSpecialIds, setSavedSpecialIds] = useState<Set<string>>(new Set());
   const [savingSpecialId, setSavingSpecialId] = useState<string | null>(null);
   const [recentlySavedSpecialId, setRecentlySavedSpecialId] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<RankingUsuario[]>([]);
+  const [filters, setFilters] = useState<PalpiteFilters>({
+    date: "all",
+    round: "all",
+    group: "all",
+  });
 
   async function load() {
     setLoading(true);
     setError(null);
 
     try {
-      const [loaded, specialResponses] = await Promise.all([
+      const [loaded, specialResponses, ranking] = await Promise.all([
         getPalpitesDashboard(),
         getPalpitesEspeciais(),
+        getRanking(),
       ]);
       setData(loaded);
+      setParticipants(ranking);
       setScores(
         Object.fromEntries(
           loaded.jogos.map((game) => [
@@ -176,6 +210,15 @@ export default function PalpitesPage() {
         .filter((game) => game.encerrado && game.palpite)
         .sort((a, b) => b.data.localeCompare(a.data)) ?? [],
     [data],
+  );
+  const filterOptions = useMemo(() => buildPalpiteFilterOptions(data?.jogos ?? []), [data]);
+  const filteredOpenGames = useMemo(
+    () => filterDashboardGames(openGames, filters),
+    [filters, openGames],
+  );
+  const filteredHistoryGames = useMemo(
+    () => filterDashboardGames(historyGames, filters),
+    [filters, historyGames],
   );
   const editableGames = openGames.filter((game) => !game.iniciado);
   const completed = editableGames.filter((game) => game.palpite).length;
@@ -311,19 +354,19 @@ export default function PalpitesPage() {
       <Tabs defaultValue="open" className="mt-6">
         <TabsList className="grid h-auto w-full grid-cols-4 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]">
           <TabsTrigger value="open" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <CalendarClock className="h-3.5 w-3.5" />
+            <CalendarClock className="hidden h-3.5 w-3.5 sm:block" />
             Abertos
           </TabsTrigger>
           <TabsTrigger value="specials" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <WandSparkles className="h-3.5 w-3.5" />
+            <WandSparkles className="hidden h-3.5 w-3.5 sm:block" />
             Especiais
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <CheckCircle2 className="hidden h-3.5 w-3.5 sm:block" />
             Histórico
           </TabsTrigger>
           <TabsTrigger value="dashboard" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <BarChart3 className="h-3.5 w-3.5" />
+            <BarChart3 className="hidden h-3.5 w-3.5 sm:block" />
             Dashboard
           </TabsTrigger>
         </TabsList>
@@ -331,11 +374,16 @@ export default function PalpitesPage() {
         <TabsContent value="open" className="mt-6">
           <SectionHeading
             title="Jogos não finalizados"
-            description={`${data.resumo.pendentes} palpites ainda precisam da sua atenção`}
+            description={`${filteredOpenGames.length} de ${openGames.length} jogos exibidos · ${data.resumo.pendentes} palpites ainda precisam da sua atenção`}
           />
-          {openGames.length ? (
+          <PalpitesFilters
+            filters={filters}
+            options={filterOptions}
+            onChange={(partial) => setFilters((current) => ({ ...current, ...partial }))}
+          />
+          {filteredOpenGames.length ? (
             <div className="grid gap-4 lg:grid-cols-2">
-              {openGames.map((game) => (
+              {filteredOpenGames.map((game) => (
                 <OpenMatchCard
                   key={game.id}
                   game={game}
@@ -348,13 +396,20 @@ export default function PalpitesPage() {
               ))}
             </div>
           ) : (
-            <EmptyState message="Não há jogos abertos no momento." />
+            <EmptyState
+              message={
+                openGames.length
+                  ? "Nenhum jogo encontrado com os filtros atuais."
+                  : "Não há jogos abertos no momento."
+              }
+            />
           )}
         </TabsContent>
 
         <TabsContent value="specials" className="mt-6">
           <SpecialsSection
             answers={specialAnswers}
+            participants={participants}
             savedIds={savedSpecialIds}
             savingId={savingSpecialId}
             recentlySavedId={recentlySavedSpecialId}
@@ -369,16 +424,27 @@ export default function PalpitesPage() {
         <TabsContent value="history" className="mt-6">
           <SectionHeading
             title="Palpites anteriores"
-            description="A classificação segue exatamente a linguagem da página de regras"
+            description={`${filteredHistoryGames.length} de ${historyGames.length} palpites exibidos`}
           />
-          {historyGames.length ? (
+          <PalpitesFilters
+            filters={filters}
+            options={filterOptions}
+            onChange={(partial) => setFilters((current) => ({ ...current, ...partial }))}
+          />
+          {filteredHistoryGames.length ? (
             <div className="grid gap-4 lg:grid-cols-2">
-              {historyGames.map((game) => (
+              {filteredHistoryGames.map((game) => (
                 <HistoryMatchCard key={game.id} game={game} />
               ))}
             </div>
           ) : (
-            <EmptyState message="Você ainda não tem palpites de jogos encerrados." />
+            <EmptyState
+              message={
+                historyGames.length
+                  ? "Nenhum palpite encontrado com os filtros atuais."
+                  : "Você ainda não tem palpites de jogos encerrados."
+              }
+            />
           )}
         </TabsContent>
 
@@ -390,8 +456,105 @@ export default function PalpitesPage() {
   );
 }
 
+function PalpitesFilters({
+  filters,
+  options,
+  onChange,
+}: {
+  filters: PalpiteFilters;
+  options: { dates: string[]; rounds: number[]; groups: string[] };
+  onChange: (partial: Partial<PalpiteFilters>) => void;
+}) {
+  const [dateOpen, setDateOpen] = useState(false);
+  const todayKey = brasiliaTodayKey();
+  const selectedDate =
+    filters.date === "all" ? undefined : new Date(`${filters.date}T12:00:00.000Z`);
+
+  return (
+    <div className="mb-4 grid gap-2 rounded-xl border border-border bg-card/70 p-2 sm:grid-cols-3">
+      <Popover open={dateOpen} onOpenChange={setDateOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 justify-start gap-2 rounded-lg border-border bg-background/55 px-3 text-left font-bold"
+          >
+            <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 truncate">
+              {filters.date === "all" ? "Todas as datas" : formatFilterDate(filters.date)}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-0">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            defaultMonth={selectedDate ?? new Date(`${todayKey}T12:00:00.000Z`)}
+            startMonth={new Date(`${todayKey}T12:00:00.000Z`)}
+            endMonth={new Date(`${WORLD_CUP_END_DATE_KEY}T12:00:00.000Z`)}
+            disabled={(date) => {
+              const key = dateKey(date);
+              return key < todayKey || key > WORLD_CUP_END_DATE_KEY;
+            }}
+            onSelect={(date) => {
+              if (!date) return;
+              onChange({ date: dateKey(date) });
+              setDateOpen(false);
+            }}
+          />
+          {filters.date !== "all" && (
+            <div className="border-t border-border p-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  onChange({ date: "all" });
+                  setDateOpen(false);
+                }}
+              >
+                Limpar data
+              </Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      <Select value={filters.round} onValueChange={(round) => onChange({ round })}>
+        <SelectTrigger className="h-10 rounded-lg bg-background/55 font-bold">
+          <SelectValue placeholder="Todas as rodadas" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todas as rodadas</SelectItem>
+          {options.rounds.map((round) => (
+            <SelectItem key={round} value={String(round)}>
+              Rodada {round}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={filters.group} onValueChange={(group) => onChange({ group })}>
+        <SelectTrigger className="h-10 rounded-lg bg-background/55 font-bold">
+          <SelectValue placeholder="Todos os grupos" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os grupos</SelectItem>
+          {options.groups.map((group) => (
+            <SelectItem key={group} value={group}>
+              Grupo {group}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function SpecialsSection({
   answers,
+  participants,
   savedIds,
   savingId,
   recentlySavedId,
@@ -399,6 +562,7 @@ function SpecialsSection({
   onSave,
 }: {
   answers: Record<string, string>;
+  participants: RankingUsuario[];
   savedIds: Set<string>;
   savingId: string | null;
   recentlySavedId: string | null;
@@ -406,6 +570,10 @@ function SpecialsSection({
   onSave: (questionId: string) => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
+  const championQuestion = ESPECIAIS.find((question) => question.id === CAMPEAO_BOLAO_QUESTION_ID);
+  const regularQuestions = ESPECIAIS.filter(
+    (question) => question.id !== CAMPEAO_BOLAO_QUESTION_ID,
+  );
   const answered = ESPECIAIS.filter((question) => savedIds.has(question.id)).length;
   const completion = Math.round((answered / ESPECIAIS.length) * 100);
   const open = especiaisAreOpen(now);
@@ -446,8 +614,80 @@ function SpecialsSection({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {ESPECIAIS.map((question, index) => {
+      {championQuestion && (
+        <article
+          className={cn(
+            "overflow-hidden rounded-xl border border-primary/40 bg-primary/10 shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition-colors",
+            !open && "opacity-75",
+          )}
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-primary/25 bg-primary/15 px-4 py-3">
+            <div className="min-w-0">
+              <span className="text-[0.65rem] font-black uppercase text-primary">Destaque</span>
+              <h4 className="mt-1 font-display text-xl font-black">{championQuestion.question}</h4>
+            </div>
+            {savedIds.has(championQuestion.id) && (
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
+            )}
+          </div>
+
+          <div className="p-4">
+            <ParticipantCombobox
+              value={answers[championQuestion.id] ?? ""}
+              participants={participants}
+              disabled={!open}
+              onValueChange={(participantId) => onSelect(championQuestion.id, participantId)}
+            />
+
+            <div className="mt-4 flex flex-col gap-3 border-t border-primary/20 pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {answers[championQuestion.id]
+                  ? `Sua escolha: ${
+                      participants.find(
+                        (participant) => participant.id === answers[championQuestion.id],
+                      )?.nome_completo ?? "Usuário selecionado"
+                    }`
+                  : "Nenhum usuário selecionado"}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant={savedIds.has(championQuestion.id) ? "secondary" : "default"}
+                disabled={
+                  !open || !answers[championQuestion.id] || savingId === championQuestion.id
+                }
+                onClick={() => onSave(championQuestion.id)}
+                className="shrink-0 gap-1.5"
+              >
+                {!open ? (
+                  <>
+                    <LockKeyhole className="h-3.5 w-3.5" />
+                    Encerrado
+                  </>
+                ) : recentlySavedId === championQuestion.id ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    Salvo
+                  </>
+                ) : savedIds.has(championQuestion.id) ? (
+                  <>
+                    <Pencil className="h-3.5 w-3.5" />
+                    {savingId === championQuestion.id ? "Atualizando..." : "Atualizar"}
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-3.5 w-3.5" />
+                    {savingId === championQuestion.id ? "Salvando..." : "Salvar"}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </article>
+      )}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {regularQuestions.map((question, index) => {
           const answer = answers[question.id];
           const saved = savedIds.has(question.id);
           const saving = savingId === question.id;
@@ -536,6 +776,69 @@ function SpecialsSection({
         })}
       </div>
     </>
+  );
+}
+
+function ParticipantCombobox({
+  value,
+  participants,
+  disabled,
+  onValueChange,
+}: {
+  value: string;
+  participants: RankingUsuario[];
+  disabled: boolean;
+  onValueChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = participants.find((participant) => participant.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled || participants.length === 0}
+          className="h-12 w-full justify-between rounded-xl border-primary/35 bg-background/75 px-3 text-left font-bold"
+        >
+          <span className="min-w-0 truncate">
+            {selected?.nome_completo ?? "Selecione um usuário"}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[calc(100vw-2rem)] p-0 sm:w-[640px]">
+        <Command>
+          <CommandInput placeholder="Buscar usuário..." />
+          <CommandList>
+            <CommandEmpty>Nenhum usuário encontrado.</CommandEmpty>
+            <CommandGroup>
+              {participants.map((participant) => (
+                <CommandItem
+                  key={participant.id}
+                  value={`${participant.nome_completo} ${participant.id}`}
+                  onSelect={() => {
+                    onValueChange(participant.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      participant.id === value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <span className="min-w-0 truncate">{participant.nome_completo}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1136,25 +1439,73 @@ function EmptyState({ message }: { message: string }) {
 }
 
 function PageSkeleton() {
-  return (
-    <div className="animate-pulse">
-      <div className="mb-6 h-9 w-52 rounded bg-muted" />
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="h-20 rounded-xl border border-border bg-card" />
-        ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-52 rounded-xl border border-border bg-card" />
-        ))}
-      </div>
-    </div>
-  );
+  return <SpinningBallLoader label="Carregando palpites" />;
+}
+
+function buildPalpiteFilterOptions(games: DashboardGame[]) {
+  return {
+    dates: [...new Set(games.map((game) => brasiliaDateKey(game.data)))].sort((a, b) =>
+      a.localeCompare(b),
+    ),
+    rounds: [
+      ...new Set(
+        games
+          .map((game) => game.rodada)
+          .filter((round): round is number => typeof round === "number"),
+      ),
+    ].sort((a, b) => a - b),
+    groups: [...new Set(games.map((game) => game.grupo).filter(Boolean) as string[])].sort((a, b) =>
+      a.localeCompare(b, "pt-BR"),
+    ),
+  };
+}
+
+function filterDashboardGames(games: DashboardGame[], filters: PalpiteFilters) {
+  return games.filter((game) => {
+    if (filters.date !== "all" && brasiliaDateKey(game.data) !== filters.date) return false;
+    if (filters.round !== "all" && String(game.rodada ?? "") !== filters.round) return false;
+    if (filters.group !== "all" && game.grupo !== filters.group) return false;
+    return true;
+  });
 }
 
 function phaseLabel(game: DashboardGame) {
-  return game.rodada ? `${game.fase} · Rodada ${game.rodada}` : game.fase;
+  return [
+    game.fase,
+    game.grupo ? `Grupo ${game.grupo}` : null,
+    game.rodada ? `Rodada ${game.rodada}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function formatFilterDate(date: string) {
+  return new Date(`${date}T12:00:00.000Z`).toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
+function brasiliaDateKey(iso: string) {
+  return iso.slice(0, 10);
+}
+
+function brasiliaTodayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatDateTime(iso: string) {

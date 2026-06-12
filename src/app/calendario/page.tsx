@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
+import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -551,7 +552,7 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
         {palpitesOpen && (
           <div className="mt-3 rounded-lg border border-border bg-background/45 p-3">
             {palpitesLoading ? (
-              <p className="text-xs text-muted-foreground">Carregando palpites...</p>
+              <SpinningBallLoader label="Carregando palpites" size="sm" className="min-h-[96px]" />
             ) : palpitesError ? (
               <p className="text-xs text-destructive">{palpitesError}</p>
             ) : palpites?.palpites.length ? (
@@ -599,20 +600,10 @@ function TeamSide({ name, align = "left" }: { name: string; align?: "left" | "ri
 
 function CalendarSkeleton({ compact }: { compact?: boolean }) {
   return (
-    <>
-      {!compact && (
-        <header className="mb-4 h-56 animate-pulse rounded-2xl border border-border bg-card/60 sm:h-52" />
-      )}
-      <div className="mb-6 h-14 animate-pulse rounded-xl border border-border bg-card/60" />
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div
-            key={index}
-            className="h-52 animate-pulse rounded-xl border border-border bg-card/60"
-          />
-        ))}
-      </div>
-    </>
+    <SpinningBallLoader
+      label="Carregando calendário"
+      className={compact ? "min-h-[220px]" : "min-h-[420px]"}
+    />
   );
 }
 

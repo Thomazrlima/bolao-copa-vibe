@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { Camera, Check, Eye, EyeOff, LogOut, Save, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,7 +144,9 @@ export default function ConfiguracoesPage() {
       setConfirmPassword("");
       setPasswordSaved(true);
     } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : "Não foi possível alterar a senha.");
+      setPasswordError(
+        error instanceof Error ? error.message : "Não foi possível alterar a senha.",
+      );
     } finally {
       setPasswordSaving(false);
     }
@@ -157,11 +160,7 @@ export default function ConfiguracoesPage() {
   }
 
   if (!usuario && !profileError) {
-    return (
-      <div className="mx-auto max-w-4xl rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
-        Carregando configurações...
-      </div>
-    );
+    return <SpinningBallLoader label="Carregando configurações" />;
   }
 
   return (
@@ -333,7 +332,12 @@ export default function ConfiguracoesPage() {
               </p>
             )}
 
-            <Button type="submit" variant="secondary" disabled={passwordSaving} className="mt-5 w-full">
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={passwordSaving}
+              className="mt-5 w-full"
+            >
               {passwordSaving ? "Alterando..." : "Alterar senha"}
             </Button>
           </form>

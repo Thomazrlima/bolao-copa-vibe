@@ -39,35 +39,46 @@ type FaseRow = {
   nome: string;
 };
 
+type GrupoRow = {
+  grupo: string;
+  time: string;
+};
+
 const OUTCOMES: GuessOutcome[] = ["chinelada", "strong", "result", "goals", "miss"];
 
 export async function getPalpitesDashboard(supabase: SupabaseClient, userId: string) {
-  const [gamesResult, guessesResult, phasesResult, rankingResult] = await Promise.all([
-    supabase
-      .from("jogos")
-      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,sportsdb_status")
-      .order("data", { ascending: true }),
-    supabase
-      .from("palpites")
-      .select("user_id,jogo_id,gols1,gols2,pontos,chinelada,calculado_em,criado_em"),
-    supabase.from("fases").select("id,nome"),
-    supabase
-      .from("ranking_usuarios")
-      .select("id,nome_completo,pontos,chineladas")
-      .order("pontos", { ascending: false })
-      .order("chineladas", { ascending: false }),
-  ]);
+  const [gamesResult, guessesResult, phasesResult, rankingResult, groupsResult] = await Promise.all(
+    [
+      supabase
+        .from("jogos")
+        .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,sportsdb_status")
+        .order("data", { ascending: true }),
+      supabase
+        .from("palpites")
+        .select("user_id,jogo_id,gols1,gols2,pontos,chinelada,calculado_em,criado_em"),
+      supabase.from("fases").select("id,nome"),
+      supabase
+        .from("ranking_usuarios")
+        .select("id,nome_completo,pontos,chineladas")
+        .order("pontos", { ascending: false })
+        .order("chineladas", { ascending: false }),
+      supabase.from("grupos").select("grupo,time"),
+    ],
+  );
 
   assertNoError(gamesResult.error);
   assertNoError(guessesResult.error);
   assertNoError(phasesResult.error);
   assertNoError(rankingResult.error);
+  assertNoError(groupsResult.error);
 
   const games = (gamesResult.data ?? []) as JogoRow[];
   const guesses = (guessesResult.data ?? []) as PalpiteRow[];
   const phases = (phasesResult.data ?? []) as FaseRow[];
   const ranking = (rankingResult.data ?? []) as RankingRow[];
+  const groups = (groupsResult.data ?? []) as GrupoRow[];
   const phaseById = new Map(phases.map((phase) => [phase.id, phase.nome]));
+  const groupByTeam = new Map(groups.map((group) => [group.time, group.grupo]));
   const gameById = new Map(games.map((game) => [game.id, game]));
   const myGuessByGame = new Map(
     guesses.filter((guess) => guess.user_id === userId).map((guess) => [guess.jogo_id, guess]),
@@ -80,7 +91,9 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
 
     return {
       id: game.id,
+      fase_id: game.fase_id,
       fase: phaseById.get(game.fase_id) ?? "Copa do Mundo",
+      grupo: game.fase_id === 1 ? (groupByTeam.get(game.time1) ?? null) : null,
       rodada: game.rodada,
       time1: game.time1,
       time2: game.time2,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { especiaisAreOpen, getEspecialQuestion } from "@/lib/especiais";
+import { CAMPEAO_BOLAO_QUESTION_ID, especiaisAreOpen, getEspecialQuestion } from "@/lib/especiais";
 import { createClient } from "@/lib/supabase/server";
 
 const answerSchema = z.object({
@@ -51,7 +51,27 @@ export async function PUT(request: Request) {
   }
 
   const question = getEspecialQuestion(payload.data.pergunta_id);
-  if (!question || !question.options.includes(payload.data.resposta)) {
+  if (!question) {
+    return NextResponse.json(
+      { error: "Essa opção não pertence à pergunta informada." },
+      { status: 400 },
+    );
+  }
+
+  if (question.id === CAMPEAO_BOLAO_QUESTION_ID) {
+    const { data: participant, error: participantError } = await supabase
+      .from("ranking_usuarios")
+      .select("id")
+      .eq("id", payload.data.resposta)
+      .maybeSingle();
+
+    if (participantError || !participant) {
+      return NextResponse.json(
+        { error: "Essa opção não pertence à pergunta informada." },
+        { status: 400 },
+      );
+    }
+  } else if (!question.options.includes(payload.data.resposta)) {
     return NextResponse.json(
       { error: "Essa opção não pertence à pergunta informada." },
       { status: 400 },

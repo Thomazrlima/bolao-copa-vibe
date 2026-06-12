@@ -5,12 +5,18 @@ export type EspecialQuestion = {
 };
 
 export const ESPECIAIS_DEADLINE_ISO = "2026-06-13T19:00:00.000Z";
+export const CAMPEAO_BOLAO_QUESTION_ID = "campeao-bolao";
 
 export function especiaisAreOpen(now = Date.now()) {
   return now < new Date(ESPECIAIS_DEADLINE_ISO).getTime();
 }
 
 export const ESPECIAIS: readonly EspecialQuestion[] = [
+  {
+    id: CAMPEAO_BOLAO_QUESTION_ID,
+    question: "Quem será o grande campeão do bolão?",
+    options: [],
+  },
   {
     id: "primeiro-gol-brasil",
     question: "Quem faz o primeiro gol do Brasil?",

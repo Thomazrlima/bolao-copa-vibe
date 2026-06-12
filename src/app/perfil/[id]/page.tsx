@@ -17,6 +17,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Flag } from "@/components/common/Flag";
+import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import {
   Select,
   SelectContent,
@@ -163,7 +164,7 @@ export default function PerfilPage() {
   }, [id]);
 
   if (loading) {
-    return <ProfileState message="Carregando perfil..." />;
+    return <SpinningBallLoader label="Carregando perfil" />;
   }
 
   if (error || !profile) {
@@ -180,6 +181,14 @@ export default function PerfilPage() {
     if (phaseFilter !== "all" && guess.fase !== phaseFilter) return false;
     return true;
   });
+  const pointsByOutcome = Object.fromEntries(
+    STAT_CARDS.map((card) => [
+      card.outcome,
+      profile.palpites
+        .filter((guess) => guess.outcome === card.outcome)
+        .reduce((total, guess) => total + (guess.pontos ?? 0), 0),
+    ]),
+  ) as Record<GuessOutcome, number>;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -257,12 +266,17 @@ export default function PerfilPage() {
       <section className="mt-5">
         <h2 className="mb-3 font-display text-lg font-black">Desempenho</h2>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-          {STAT_CARDS.map(({ outcome, label, points, icon: Icon, className }) => (
+          {STAT_CARDS.map(({ outcome, label, icon: Icon, className, pointsClassName }) => (
             <div key={outcome} className={cn("rounded-xl border p-3 sm:p-4", className)}>
               <div className="flex items-center justify-between gap-2">
                 <Icon className="h-4 w-4" />
-                <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">
-                  {points} pts
+                <span
+                  className={cn(
+                    "text-[9px] font-bold uppercase tracking-wider opacity-80",
+                    pointsClassName,
+                  )}
+                >
+                  +{pointsByOutcome[outcome]} pts
                 </span>
               </div>
               <div className="mt-4 font-display text-3xl font-black num">
