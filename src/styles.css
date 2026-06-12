@@ -146,6 +146,7 @@
 
 .app-shell {
   position: relative;
+  background-color: var(--color-background);
   background-image:
     linear-gradient(
       color-mix(in oklab, var(--background) 76%, transparent),

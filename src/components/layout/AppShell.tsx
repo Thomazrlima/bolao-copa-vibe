@@ -53,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname, pendingPath]);
 
   return (
-    <div className="app-shell min-h-screen bg-background text-foreground">
+    <div className="app-shell min-h-screen text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
         <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2.5 sm:px-6 lg:grid-cols-[minmax(150px,1fr)_minmax(520px,580px)_minmax(150px,1fr)] lg:gap-5 lg:py-3">
           <Link

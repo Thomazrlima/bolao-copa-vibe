@@ -1,19 +1,147 @@
 "use client";
 
-import { useMemo } from "react";
-import { useBolaoStore } from "@/lib/store";
-import { allGroupStandings, bestThirds, type Standing } from "@/lib/standings";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { cn } from "@/lib/utils";
-import { Flag } from "@/components/common/Flag";
 import { useMounted } from "@/hooks/use-mounted";
+
+type GrupoRow = {
+  grupo: string;
+  time: string;
+  pontuacao: number;
+  saldo_gols: number;
+  gols_pro: number;
+  gols_contra: number;
+  updated_at?: string;
+};
+
+type JogoGrupo = {
+  id: string;
+  fase_id: number;
+  time1: string;
+  time2: string;
+  data: string;
+  gols1: number | null;
+  gols2: number | null;
+  encerrado: boolean;
+};
+
+type Standing = GrupoRow & {
+  jogos: number;
+};
+
+function nowAsStoredBrasiliaMs() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .formatToParts(new Date())
+    .reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+  return Date.parse(
+    `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`,
+  );
+}
 
 export default function GruposPage() {
   const mounted = useMounted();
-  const results = useBolaoStore((s) => s.results);
-  const groups = useMemo(() => allGroupStandings(results), [results]);
-  const thirds = useMemo(() => bestThirds(results), [results]);
+  const [grupos, setGrupos] = useState<GrupoRow[]>([]);
+  const [jogos, setJogos] = useState<JogoGrupo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
-  if (!mounted) {
+  const loadGrupos = useCallback(async () => {
+    const response = await fetch("/api/grupos", { cache: "no-store" });
+    const body = await response.json();
+
+    if (!response.ok) {
+      setError(body.error ?? "Não foi possível carregar os grupos.");
+      return;
+    }
+
+    setGrupos(body.grupos ?? []);
+    setJogos(body.jogos ?? []);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      await loadGrupos();
+      if (active) setLoading(false);
+    }
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [loadGrupos]);
+
+  const hasStartedOpenGame = useMemo(() => {
+    if (!mounted) return false;
+    void nowTick;
+    const nowMs = nowAsStoredBrasiliaMs();
+    return jogos.some((jogo) => !jogo.encerrado && new Date(jogo.data).getTime() <= nowMs);
+  }, [jogos, mounted, nowTick]);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    const interval = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 120_000);
+
+    return () => window.clearInterval(interval);
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!hasStartedOpenGame) return;
+
+    const interval = window.setInterval(loadGrupos, 120_000);
+
+    return () => window.clearInterval(interval);
+  }, [hasStartedOpenGame, loadGrupos]);
+
+  const groups = useMemo(() => {
+    const liveRows = computeLiveStandings(grupos, jogos);
+    const grouped = new Map<string, Standing[]>();
+
+    liveRows.forEach((row) => {
+      if (!grouped.has(row.grupo)) grouped.set(row.grupo, []);
+      grouped.get(row.grupo)!.push(row);
+    });
+
+    return [...grouped.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([group, standings]) => ({
+        group,
+        standings: standings.sort((a, b) => sortStandings(a, b, jogos)),
+      }));
+  }, [grupos, jogos]);
+
+  const thirds = useMemo(
+    () =>
+      groups
+        .map(({ standings }) => standings[2])
+        .filter(Boolean)
+        .sort((a, b) => sortStandings(a, b, jogos)),
+    [groups, jogos],
+  );
+
+  if (!mounted || loading) {
     return <PageSkeleton title="Grupos & Classificação" />;
   }
 
@@ -24,9 +152,15 @@ export default function GruposPage() {
           Grupos & Classificação
         </h2>
         <p className="text-sm text-muted-foreground">
-          12 grupos · 4 seleções · 2 primeiros + 8 melhores 3ºs avançam
+          Classificação real · jogos ao vivo recalculados no navegador a cada 2 minutos
         </p>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {groups.map(({ group, standings }) => (
@@ -41,7 +175,7 @@ export default function GruposPage() {
               Ranking dos 3º Colocados
             </h3>
             <p className="text-sm text-muted-foreground">
-              8 melhores avançam ao mata-mata · atualização em tempo real
+              8 melhores avançam ao mata-mata · desempate por pontos, saldo e gols pró
             </p>
           </div>
           <span className="hidden text-xs text-muted-foreground sm:inline">P · SG · GP</span>
@@ -56,11 +190,11 @@ export default function GruposPage() {
             <span className="text-right">Status</span>
           </div>
           <ul className="divide-y divide-border">
-            {thirds.map((s, i) => {
-              const classified = i < 8;
+            {thirds.map((standing, index) => {
+              const classified = index < 8;
               return (
                 <li
-                  key={s.team.code}
+                  key={`${standing.grupo}-${standing.time}`}
                   className={cn(
                     "grid grid-cols-[28px_minmax(0,1fr)_32px_36px_68px] items-center gap-1.5 px-2 py-2.5 text-xs sm:grid-cols-[48px_minmax(0,1fr)_60px_60px_60px_120px] sm:gap-2 sm:px-5 sm:text-sm",
                     classified ? "bg-primary/10" : "opacity-60",
@@ -72,23 +206,17 @@ export default function GruposPage() {
                       classified ? "text-primary" : "text-muted-foreground",
                     )}
                   >
-                    {i + 1}
+                    {index + 1}
                   </span>
                   <span className="flex min-w-0 items-center gap-2">
-                    <Flag
-                      code={s.team.code}
-                      name={s.team.name}
-                      size="md"
-                      className="sm:h-7 sm:w-11"
-                    />
-                    <span className="truncate font-semibold">{s.team.name}</span>
+                    <span className="truncate font-semibold">{standing.time}</span>
                     <span className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground sm:inline">
-                      G{s.group}
+                      G{standing.grupo}
                     </span>
                   </span>
-                  <span className="num text-right font-bold">{s.points}</span>
-                  <span className="num text-right">{s.gd > 0 ? `+${s.gd}` : s.gd}</span>
-                  <span className="num hidden text-right sm:block">{s.gf}</span>
+                  <span className="num text-right font-bold">{standing.pontuacao}</span>
+                  <span className="num text-right">{formatSigned(standing.saldo_gols)}</span>
+                  <span className="num text-right">{standing.gols_pro}</span>
                   <span className="text-right">
                     <span
                       className={cn(
@@ -112,6 +240,85 @@ export default function GruposPage() {
       </section>
     </>
   );
+}
+
+function computeLiveStandings(grupos: GrupoRow[], jogos: JogoGrupo[]): Standing[] {
+  const map = new Map<string, Standing>();
+
+  grupos.forEach((row) => {
+    map.set(row.time, {
+      ...row,
+      pontuacao: 0,
+      saldo_gols: 0,
+      gols_pro: 0,
+      gols_contra: 0,
+      jogos: 0,
+    });
+  });
+
+  jogos.forEach((jogo) => {
+    if (jogo.gols1 == null || jogo.gols2 == null) return;
+
+    const home = map.get(jogo.time1);
+    const away = map.get(jogo.time2);
+    if (!home || !away || home.grupo !== away.grupo) return;
+
+    home.jogos += 1;
+    away.jogos += 1;
+    home.gols_pro += jogo.gols1;
+    home.gols_contra += jogo.gols2;
+    away.gols_pro += jogo.gols2;
+    away.gols_contra += jogo.gols1;
+
+    if (jogo.gols1 > jogo.gols2) {
+      home.pontuacao += 3;
+    } else if (jogo.gols1 < jogo.gols2) {
+      away.pontuacao += 3;
+    } else {
+      home.pontuacao += 1;
+      away.pontuacao += 1;
+    }
+  });
+
+  map.forEach((row) => {
+    row.saldo_gols = row.gols_pro - row.gols_contra;
+  });
+
+  return [...map.values()];
+}
+
+function sortStandings(a: Standing, b: Standing, jogos: JogoGrupo[]) {
+  if (b.pontuacao !== a.pontuacao) return b.pontuacao - a.pontuacao;
+
+  const direct = compareDirect(a, b, jogos);
+  if (direct !== 0) return direct;
+
+  if (b.saldo_gols !== a.saldo_gols) return b.saldo_gols - a.saldo_gols;
+  if (b.gols_pro !== a.gols_pro) return b.gols_pro - a.gols_pro;
+  return a.time.localeCompare(b.time);
+}
+
+function compareDirect(a: Standing, b: Standing, jogos: JogoGrupo[]) {
+  const directGame = jogos.find(
+    (jogo) =>
+      jogo.gols1 != null &&
+      jogo.gols2 != null &&
+      ((jogo.time1 === a.time && jogo.time2 === b.time) ||
+        (jogo.time1 === b.time && jogo.time2 === a.time)),
+  );
+
+  if (!directGame || directGame.gols1 == null || directGame.gols2 == null) return 0;
+
+  const aGoals = directGame.time1 === a.time ? directGame.gols1 : directGame.gols2;
+  const bGoals = directGame.time1 === b.time ? directGame.gols1 : directGame.gols2;
+
+  if (aGoals > bGoals) return -1;
+  if (aGoals < bGoals) return 1;
+  return 0;
+}
+
+function formatSigned(value: number) {
+  return value > 0 ? `+${value}` : value;
 }
 
 function PageSkeleton({ title }: { title: string }) {
@@ -142,12 +349,12 @@ function GroupCard({ group, standings }: { group: string; standings: Standing[] 
         </span>
       </div>
       <ul className="divide-y divide-border">
-        {standings.map((s, i) => {
-          const top2 = i < 2;
-          const third = i === 2;
+        {standings.map((standing, index) => {
+          const top2 = index < 2;
+          const third = index === 2;
           return (
             <li
-              key={s.team.code}
+              key={standing.time}
               className={cn(
                 "grid grid-cols-[20px_minmax(0,1fr)_28px_36px_28px] items-center gap-2 px-3 py-2 text-sm",
                 top2 && "bg-primary/10",
@@ -160,17 +367,14 @@ function GroupCard({ group, standings }: { group: string; standings: Standing[] 
                   top2 ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                {i + 1}
+                {index + 1}
               </span>
-              <span className="flex min-w-0 items-center gap-2">
-                <Flag code={s.team.code} name={s.team.name} size="md" />
-                <span className="truncate text-[13px] font-medium">{s.team.name}</span>
-              </span>
-              <span className="num text-right font-bold">{s.points}</span>
+              <span className="min-w-0 truncate text-[13px] font-medium">{standing.time}</span>
+              <span className="num text-right font-bold">{standing.pontuacao}</span>
               <span className="num text-right text-muted-foreground">
-                {s.gd > 0 ? `+${s.gd}` : s.gd}
+                {formatSigned(standing.saldo_gols)}
               </span>
-              <span className="num text-right text-muted-foreground">{s.gf}</span>
+              <span className="num text-right text-muted-foreground">{standing.gols_pro}</span>
             </li>
           );
         })}

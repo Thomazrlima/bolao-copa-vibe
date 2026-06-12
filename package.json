@@ -7,6 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "db:import:grupos": "node scripts/import-fase-grupos.mjs",
+    "db:import:palpites": "node scripts/import-palpites-4-primeiros.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
