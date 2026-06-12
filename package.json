@@ -4,9 +4,9 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "BUN_OPTIONS=--use-system-ca bun --use-system-ca next dev",
+    "build": "BUN_OPTIONS=--use-system-ca bun --use-system-ca next build",
+    "start": "BUN_OPTIONS=--use-system-ca bun --use-system-ca next start",
     "db:import:grupos": "node scripts/import-fase-grupos.mjs",
     "db:import:palpites": "node scripts/import-palpites-4-primeiros.mjs",
     "lint": "eslint .",

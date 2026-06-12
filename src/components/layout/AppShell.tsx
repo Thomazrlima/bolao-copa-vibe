@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Trophy, LayoutGrid, CalendarDays, LogIn, ScrollText } from "lucide-react";
+import { Trophy, LayoutGrid, CalendarDays, LogIn, ScrollText, Goal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getDisplayName, getInitials } from "@/lib/display-name";
@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const TABS = [
   { to: "/ranking", label: "Ranking", icon: Trophy },
+  { to: "/palpites", label: "Palpites", icon: Goal },
   { to: "/grupos", label: "Copa", icon: LayoutGrid },
   { to: "/calendario", label: "Calendário", icon: CalendarDays },
   { to: "/regras", label: "Regras", icon: ScrollText },
@@ -142,7 +143,7 @@ function NavigationItems({
   desktop = false,
 }: NavigationProps & { desktop?: boolean }) {
   return (
-    <div className={cn("grid grid-cols-4", desktop ? "gap-1" : "mx-auto max-w-lg gap-1")}>
+    <div className={cn("grid grid-cols-5", desktop ? "gap-1" : "mx-auto max-w-lg gap-1")}>
       {TABS.map(({ to, label, icon: Icon }) => {
         const active = activePath.startsWith(to);
 

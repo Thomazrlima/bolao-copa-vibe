@@ -64,6 +64,51 @@ export type JogoPalpitesResponse = {
   palpites: JogoPalpite[];
 };
 
+export type PalpitesDashboardResponse = {
+  jogos: Array<{
+    id: string;
+    fase: string;
+    rodada: number | null;
+    time1: string;
+    time2: string;
+    data: string;
+    gols1: number | null;
+    gols2: number | null;
+    encerrado: boolean;
+    iniciado: boolean;
+    sportsdb_status: string | null;
+    palpite: { gols1: number; gols2: number } | null;
+    pontos: number | null;
+    outcome: GuessOutcome | null;
+  }>;
+  resumo: {
+    feitos: number;
+    pendentes: number;
+    pontos: number;
+    posicao: number | null;
+  };
+  geral: {
+    participantes: number;
+    palpites: number;
+    chineladas: number;
+    media_pontos: number;
+    outcomes: Array<{ outcome: GuessOutcome; count: number }>;
+    rodadas: Array<{ round: string; geral: number; voce: number }>;
+    jogo_popular: { id: string; time1: string; time2: string } | null;
+    palpites_populares: Array<{ score: string; count: number; percent: number }>;
+  };
+  pessoal: {
+    nome: string;
+    posicao: number | null;
+    pontos: number;
+    chineladas: number;
+    encerrados: number;
+    acertos: number;
+    outcomes: Array<{ outcome: GuessOutcome; count: number }>;
+    evolucao: Array<{ game: string; points: number }>;
+  };
+};
+
 type ApiErrorBody = {
   error?: string;
 };
@@ -138,4 +183,15 @@ export async function getPerfil(id: string) {
 
 export async function getPalpitesDoJogo(jogoId: string) {
   return requestJson<JogoPalpitesResponse>(`/api/jogos/${encodeURIComponent(jogoId)}/palpites`);
+}
+
+export async function getPalpitesDashboard() {
+  return requestJson<PalpitesDashboardResponse>("/api/palpites");
+}
+
+export async function savePalpite(jogoId: string, palpite: { gols1: number; gols2: number }) {
+  return requestJson<{ palpite: { jogo_id: string; gols1: number; gols2: number } }>(
+    `/api/jogos/${encodeURIComponent(jogoId)}/palpites`,
+    { method: "PUT", body: JSON.stringify(palpite) },
+  );
 }
