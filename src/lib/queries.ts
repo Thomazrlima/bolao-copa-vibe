@@ -184,6 +184,21 @@ export async function updateCurrentUserPassword(payload: {
   });
 }
 
+export async function createUsuario(payload: {
+  email: string;
+  nome_completo: string;
+  telefone: string;
+}) {
+  return requestJson<{
+    usuario: Pick<Usuario, "id" | "email" | "nome_completo" | "telefone" | "pontos" | "chineladas">;
+    temporary_password: string;
+    email_confirmation_required: boolean;
+  }>("/api/usuarios", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getRanking() {
   const body = await requestJson<{ ranking: RankingUsuario[] }>("/api/ranking");
   return body.ranking;
