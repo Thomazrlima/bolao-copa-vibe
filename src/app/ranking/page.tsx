@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Trophy } from "lucide-react";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { getDisplayName } from "@/lib/display-name";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { getRanking, type RankingUsuario } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -58,31 +67,28 @@ export default function RankingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const loadRanking = useCallback(async ({ showLoading = false } = {}) => {
+    if (showLoading) setLoading(true);
+    setError(null);
 
-    async function loadRanking() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const loadedRanking = await getRanking();
-        if (!active) return;
-        setRanking(loadedRanking);
-      } catch (error) {
-        if (!active) return;
-        setError(error instanceof Error ? error.message : "Não foi possível carregar o ranking.");
-      }
-
-      setLoading(false);
+    try {
+      setRanking(await getRanking());
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Não foi possível carregar o ranking.");
+    } finally {
+      if (showLoading) setLoading(false);
     }
-
-    loadRanking();
-
-    return () => {
-      active = false;
-    };
   }, []);
+
+  useEffect(() => {
+    void loadRanking({ showLoading: true });
+  }, [loadRanking]);
+
+  useRealtimeRefresh({
+    channelName: "ranking-live",
+    signals: ["ranking"],
+    onRefresh: loadRanking,
+  });
 
   const podium = useMemo(() => ranking.slice(0, 3), [ranking]);
   const rest = useMemo(() => ranking.slice(3), [ranking]);

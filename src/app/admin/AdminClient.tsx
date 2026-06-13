@@ -1,15 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
-import { AlertCircle, Bug, Check, Loader2, Settings, UserPlus } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  AlertCircle,
+  Bug,
+  Check,
+  ClockAlert,
+  ExternalLink,
+  Loader2,
+  Radio,
+  RefreshCw,
+  Settings,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { canManageUsers } from "@/lib/admin-users";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { createUsuario, getCurrentUsuario, type Usuario } from "@/lib/queries";
 
 type CreatedUser = {
@@ -33,10 +54,56 @@ type BugReport = {
   criado_em: string;
 };
 
+type AdminGame = {
+  id: string;
+  fase_id: number;
+  time1: string;
+  time2: string;
+  data: string;
+  encerrado: boolean;
+  transmissao_url: string | null;
+};
+
+type PendingUser = {
+  id: string;
+  nome_completo: string;
+  email: string;
+  jogos_pendentes: AdminGame[];
+};
+
+type Highlight = {
+  slot: number;
+  jogo_id: string | null;
+  url: string;
+};
+
+type AdminOverview = {
+  generated_at: string;
+  pending_users: PendingUser[];
+  urgent_games: AdminGame[];
+  games: AdminGame[];
+  highlights: Highlight[];
+  sync_status: {
+    bloqueado_ate: string | null;
+    ultima_tentativa: string | null;
+    ultimo_sucesso: string | null;
+    ultimo_erro: string | null;
+    jogos_elegiveis: number;
+    jogos_sincronizados: number;
+    duracao_ms: number | null;
+  } | null;
+};
+
 export function AdminClient() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [highlights, setHighlights] = useState<Highlight[]>(defaultHighlights);
+  const [highlightsSaving, setHighlightsSaving] = useState(false);
+  const [highlightsMessage, setHighlightsMessage] = useState<string | null>(null);
   const [reports, setReports] = useState<BugReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
@@ -47,34 +114,30 @@ export function AdminClient() {
   const [userCreationError, setUserCreationError] = useState<string | null>(null);
   const [createdUser, setCreatedUser] = useState<CreatedUser | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const loadOverview = useCallback(async ({ syncHighlights = true } = {}) => {
+    setOverviewLoading(true);
+    setOverviewError(null);
 
-    async function load() {
-      try {
-        const currentUser = await getCurrentUsuario();
-        if (!active) return;
-        setUsuario(currentUser);
+    try {
+      const response = await fetch("/api/admin/overview", { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
 
-        if (currentUser && canManageUsers(currentUser.email)) {
-          await loadReports();
-        }
-      } catch (error) {
-        if (!active) return;
-        setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a área.");
-      } finally {
-        if (active) setLoading(false);
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível carregar os dados administrativos.");
       }
+
+      setOverview(body);
+      if (syncHighlights) setHighlights(body.highlights ?? defaultHighlights());
+    } catch (error) {
+      setOverviewError(
+        error instanceof Error ? error.message : "Não foi possível carregar o relatório.",
+      );
+    } finally {
+      setOverviewLoading(false);
     }
-
-    load();
-
-    return () => {
-      active = false;
-    };
   }, []);
 
-  async function loadReports() {
+  const loadReports = useCallback(async () => {
     setReportsLoading(true);
     setReportsError(null);
 
@@ -94,7 +157,55 @@ export function AdminClient() {
     } finally {
       setReportsLoading(false);
     }
-  }
+  }, []);
+
+  const refreshOverview = useCallback(
+    () => loadOverview({ syncHighlights: false }),
+    [loadOverview],
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        const currentUser = await getCurrentUsuario();
+        if (!active) return;
+        setUsuario(currentUser);
+
+        if (currentUser && canManageUsers(currentUser.email)) {
+          await Promise.all([loadOverview(), loadReports()]);
+        }
+      } catch (error) {
+        if (!active) return;
+        setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a área.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [loadOverview, loadReports]);
+
+  const realtimeEnabled = Boolean(usuario && canManageUsers(usuario.email));
+
+  useRealtimeRefresh({
+    channelName: "admin-overview-live",
+    signals: ["jogos", "grupos", "ranking", "palpites", "transmissoes"],
+    onRefresh: refreshOverview,
+    enabled: realtimeEnabled,
+  });
+
+  useRealtimeRefresh({
+    channelName: "admin-bugs-live",
+    signals: ["bugs"],
+    onRefresh: loadReports,
+    enabled: realtimeEnabled,
+  });
 
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,6 +228,7 @@ export function AdminClient() {
       setNewUserEmail("");
       setNewUserName("");
       setNewUserPhone("");
+      await loadOverview();
     } catch (error) {
       setUserCreationError(
         error instanceof Error ? error.message : "Não foi possível adicionar o usuário.",
@@ -124,6 +236,56 @@ export function AdminClient() {
     } finally {
       setUserCreating(false);
     }
+  }
+
+  async function handleSaveHighlights(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setHighlightsSaving(true);
+    setHighlightsMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/transmissoes", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ highlights }),
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível salvar as transmissões.");
+      }
+
+      setHighlightsMessage("Jogos e links atualizados.");
+      await loadOverview();
+    } catch (error) {
+      setHighlightsMessage(
+        error instanceof Error ? error.message : "Não foi possível salvar as transmissões.",
+      );
+    } finally {
+      setHighlightsSaving(false);
+    }
+  }
+
+  function updateHighlight(slot: number, field: "jogo_id" | "url", value: string) {
+    setHighlights((current) =>
+      current.map((highlight) =>
+        highlight.slot === slot ? { ...highlight, [field]: value } : highlight,
+      ),
+    );
+    setHighlightsMessage(null);
+  }
+
+  function selectHighlightGame(slot: number, jogoId: string) {
+    const game = overview?.games.find((item) => item.id === jogoId);
+
+    setHighlights((current) =>
+      current.map((highlight) =>
+        highlight.slot === slot
+          ? { ...highlight, jogo_id: jogoId, url: game?.transmissao_url ?? "" }
+          : highlight,
+      ),
+    );
+    setHighlightsMessage(null);
   }
 
   if (loading) {
@@ -149,143 +311,404 @@ export function AdminClient() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-6xl">
       <header className="mb-6 sm:mb-8">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Administração</p>
         <h2 className="mt-2 font-display text-2xl font-black tracking-tight sm:text-3xl">
           Painel administrativo
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gerencie participantes e acompanhe os bugs reportados.
+          Acompanhe pendências, transmissões, participantes e relatos do site.
         </p>
+        <SyncStatus status={overview?.sync_status ?? null} />
       </header>
 
-      <div className="grid gap-5">
-        <form
-          onSubmit={handleCreateUser}
-          className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6"
-        >
-          <SectionHeader
-            icon={UserPlus}
-            title="Adicionar usuário"
-            description="O novo participante começa com pontos e chineladas zerados."
-          />
+      <Tabs defaultValue="pending">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+          <TabsTrigger value="pending" className="gap-2">
+            <ClockAlert className="h-4 w-4" />
+            Pendências
+          </TabsTrigger>
+          <TabsTrigger value="transmissions" className="gap-2">
+            <Radio className="h-4 w-4" />
+            Transmissões
+          </TabsTrigger>
+          <TabsTrigger value="users" className="gap-2">
+            <Users className="h-4 w-4" />
+            Participantes
+          </TabsTrigger>
+          <TabsTrigger value="bugs" className="gap-2">
+            <Bug className="h-4 w-4" />
+            Bug reports
+          </TabsTrigger>
+        </TabsList>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="new-user-email">E-mail</Label>
-              <Input
+        <TabsContent value="pending" className="mt-5">
+          <PendingReport
+            overview={overview}
+            loading={overviewLoading}
+            error={overviewError}
+            onRefresh={() => void loadOverview()}
+          />
+        </TabsContent>
+
+        <TabsContent value="transmissions" className="mt-5">
+          <form
+            onSubmit={handleSaveHighlights}
+            className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6"
+          >
+            <SectionHeader
+              icon={Radio}
+              title="Jogos em destaque"
+              description="Escolha os dois jogos e edite os links exibidos nas páginas de transmissão e melhores momentos."
+            />
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              {highlights.map((highlight) => (
+                <div
+                  key={highlight.slot}
+                  className="rounded-lg border border-border bg-background/50 p-4"
+                >
+                  <p className="mb-4 text-xs font-black uppercase tracking-[0.16em] text-primary">
+                    Jogo {highlight.slot}
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor={`highlight-game-${highlight.slot}`}>Partida</Label>
+                    <Select
+                      value={highlight.jogo_id ?? ""}
+                      onValueChange={(value) => selectHighlightGame(highlight.slot, value)}
+                    >
+                      <SelectTrigger id={`highlight-game-${highlight.slot}`}>
+                        <SelectValue placeholder="Selecione um jogo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(overview?.games ?? []).map((game) => (
+                          <SelectItem key={game.id} value={game.id}>
+                            {formatGameOption(game)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <Label htmlFor={`highlight-url-${highlight.slot}`}>Link do vídeo</Label>
+                    <Input
+                      id={`highlight-url-${highlight.slot}`}
+                      type="url"
+                      value={highlight.url}
+                      onChange={(event) =>
+                        updateHighlight(highlight.slot, "url", event.target.value)
+                      }
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      required
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {overviewError ? <InlineError message={overviewError} /> : null}
+            {highlightsMessage ? (
+              <p className="mt-4 rounded-lg border border-border bg-background/50 p-3 text-sm">
+                {highlightsMessage}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <Button type="submit" disabled={highlightsSaving || overviewLoading}>
+                {highlightsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {highlightsSaving ? "Salvando..." : "Salvar transmissões"}
+              </Button>
+              <Button asChild type="button" variant="secondary">
+                <Link href="/transmissao">
+                  Visualizar página
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </form>
+        </TabsContent>
+
+        <TabsContent value="users" className="mt-5">
+          <form
+            onSubmit={handleCreateUser}
+            className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6"
+          >
+            <SectionHeader
+              icon={UserPlus}
+              title="Adicionar usuário"
+              description="O novo participante começa com pontos e chineladas zerados."
+            />
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <FormInput
                 id="new-user-email"
+                label="E-mail"
                 type="email"
                 value={newUserEmail}
-                onChange={(event) => setNewUserEmail(event.target.value)}
-                autoComplete="off"
-                required
+                onChange={setNewUserEmail}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-user-name">Nome completo</Label>
-              <Input
+              <FormInput
                 id="new-user-name"
+                label="Nome completo"
                 value={newUserName}
-                onChange={(event) => setNewUserName(event.target.value)}
-                autoComplete="off"
-                required
+                onChange={setNewUserName}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-user-phone">Telefone</Label>
-              <Input
+              <FormInput
                 id="new-user-phone"
-                value={newUserPhone}
-                onChange={(event) => setNewUserPhone(event.target.value)}
+                label="Telefone"
                 type="tel"
-                inputMode="tel"
+                value={newUserPhone}
+                onChange={setNewUserPhone}
                 placeholder="+5581979142974"
-                autoComplete="off"
-                required
               />
             </div>
-          </div>
 
-          {userCreationError ? (
-            <p className="mt-4 text-sm text-destructive" role="alert">
-              {userCreationError}
-            </p>
-          ) : null}
+            {userCreationError ? <InlineError message={userCreationError} /> : null}
+            {createdUser ? <CreatedUserMessage user={createdUser} /> : null}
 
-          {createdUser ? (
-            <div className="mt-4 rounded-lg border border-success/30 bg-success/10 p-4 text-sm">
-              <p className="flex items-center gap-2 font-semibold text-success">
-                <Check className="h-4 w-4" />
-                Usuário {createdUser.email} criado.
-              </p>
-              <p className="mt-2 text-muted-foreground">
-                Senha inicial:{" "}
-                <strong className="select-all font-mono text-foreground">
-                  {createdUser.temporaryPassword}
-                </strong>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                A senha inicial é a parte do e-mail antes do @.
-              </p>
-              {createdUser.emailConfirmationRequired ? (
-                <p className="mt-2 text-xs font-medium text-foreground">
-                  O participante precisa confirmar o e-mail antes do primeiro acesso.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          <Button type="submit" disabled={userCreating} className="mt-5 w-full sm:w-auto">
-            {userCreating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <UserPlus className="h-4 w-4" />
-            )}
-            {userCreating ? "Adicionando..." : "Adicionar usuário"}
-          </Button>
-        </form>
-
-        <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <SectionHeader
-              icon={Bug}
-              title="Bug reports"
-              description="Últimos relatos enviados pelo formulário do site."
-              className="mb-0"
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={loadReports}
-              disabled={reportsLoading}
-              className="w-full sm:w-auto"
-            >
-              {reportsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Atualizar
+            <Button type="submit" disabled={userCreating} className="mt-5 w-full sm:w-auto">
+              {userCreating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              {userCreating ? "Adicionando..." : "Adicionar usuário"}
             </Button>
-          </div>
+          </form>
+        </TabsContent>
 
-          {reportsError ? (
-            <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              {reportsError}
-            </p>
-          ) : null}
+        <TabsContent value="bugs" className="mt-5">
+          <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <SectionHeader
+                icon={Bug}
+                title="Bug reports"
+                description="Últimos relatos enviados pelo formulário do site."
+                className="mb-0"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={loadReports}
+                disabled={reportsLoading}
+                className="w-full sm:w-auto"
+              >
+                {reportsLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Atualizar
+              </Button>
+            </div>
 
-          <div className="mt-5 space-y-3">
-            {reportsLoading && reports.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Carregando reports...</p>
-            ) : reports.length ? (
-              reports.map((report) => <BugReportCard key={report.id} report={report} />)
-            ) : (
-              <p className="rounded-lg border border-border bg-background/50 p-4 text-sm text-muted-foreground">
-                Nenhum bug report enviado ainda.
-              </p>
-            )}
-          </div>
-        </section>
+            {reportsError ? <InlineError message={reportsError} /> : null}
+
+            <div className="mt-5 space-y-3">
+              {reportsLoading && reports.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Carregando reports...</p>
+              ) : reports.length ? (
+                reports.map((report) => <BugReportCard key={report.id} report={report} />)
+              ) : (
+                <EmptyMessage message="Nenhum bug report enviado ainda." />
+              )}
+            </div>
+          </section>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function PendingReport({
+  overview,
+  loading,
+  error,
+  onRefresh,
+}: {
+  overview: AdminOverview | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  const pendingCount =
+    overview?.pending_users.reduce((total, user) => total + user.jogos_pendentes.length, 0) ?? 0;
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SectionHeader
+          icon={ClockAlert}
+          title="Palpites pendentes"
+          description="Usuários sem palpite em jogos que começam nas próximas 24 horas."
+          className="mb-0"
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onRefresh}
+          disabled={loading}
+          className="w-full sm:w-auto"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Atualizar
+        </Button>
       </div>
+
+      {error ? <InlineError message={error} /> : null}
+
+      {overview ? (
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <Metric label="Usuários atrasados" value={overview.pending_users.length} />
+          <Metric label="Palpites faltantes" value={pendingCount} />
+          <Metric label="Jogos em até 24h" value={overview.urgent_games.length} />
+        </div>
+      ) : null}
+
+      <div className="mt-5 space-y-3">
+        {loading && !overview ? (
+          <p className="text-sm text-muted-foreground">Calculando pendências...</p>
+        ) : overview?.pending_users.length ? (
+          overview.pending_users.map((user) => <PendingUserCard key={user.id} user={user} />)
+        ) : overview && overview.urgent_games.length === 0 ? (
+          <EmptyMessage message="Não há jogos começando nas próximas 24 horas." />
+        ) : overview ? (
+          <EmptyMessage message="Todos os participantes já palpitaram nos jogos das próximas 24 horas." />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function PendingUserCard({ user }: { user: PendingUser }) {
+  return (
+    <article className="rounded-lg border border-border bg-background/50 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h4 className="font-display font-black">{user.nome_completo}</h4>
+          <p className="mt-1 text-xs text-muted-foreground">{user.email}</p>
+        </div>
+        <Badge variant="destructive">
+          {user.jogos_pendentes.length} pendente
+          {user.jogos_pendentes.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        {user.jogos_pendentes.map((game) => (
+          <Link
+            key={game.id}
+            href={`/calendario/${game.id}`}
+            className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/50"
+          >
+            <p className="text-sm font-bold">
+              {game.time1} <span className="text-muted-foreground">x</span> {game.time2}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(game.data)}</p>
+          </Link>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-border bg-background/50 p-4">
+      <p className="text-2xl font-black text-primary">{value}</p>
+      <p className="mt-1 text-xs font-semibold text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function SyncStatus({ status }: { status: AdminOverview["sync_status"] }) {
+  if (!status) {
+    return (
+      <p className="mt-3 text-xs text-muted-foreground">
+        Sincronizador aguardando a primeira execução.
+      </p>
+    );
+  }
+
+  const running = Boolean(
+    status.bloqueado_ate && new Date(status.bloqueado_ate).getTime() > Date.now(),
+  );
+  const healthy = Boolean(
+    status.ultimo_sucesso &&
+    Date.now() - new Date(status.ultimo_sucesso).getTime() < 2 * 60_000 &&
+    !status.ultimo_erro,
+  );
+  const label = running ? "Sincronizando" : healthy ? "Sincronizador saudável" : "Verificar sync";
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <Badge variant={status.ultimo_erro ? "destructive" : "secondary"}>{label}</Badge>
+      {status.ultimo_sucesso ? (
+        <span>Último sucesso: {formatDateTime(status.ultimo_sucesso)}</span>
+      ) : null}
+      <span>
+        {status.jogos_sincronizados}/{status.jogos_elegiveis} jogos na última execução
+      </span>
+      {status.duracao_ms != null ? <span>{status.duracao_ms} ms</span> : null}
+      {status.ultimo_erro ? <span className="text-destructive">{status.ultimo_erro}</span> : null}
+    </div>
+  );
+}
+
+function FormInput({
+  id,
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        autoComplete="off"
+        required
+      />
+    </div>
+  );
+}
+
+function CreatedUserMessage({ user }: { user: CreatedUser }) {
+  return (
+    <div className="mt-4 rounded-lg border border-success/30 bg-success/10 p-4 text-sm">
+      <p className="flex items-center gap-2 font-semibold text-success">
+        <Check className="h-4 w-4" />
+        Usuário {user.email} criado.
+      </p>
+      <p className="mt-2 text-muted-foreground">
+        Senha inicial:{" "}
+        <strong className="select-all font-mono text-foreground">{user.temporaryPassword}</strong>
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        A senha inicial é a parte do e-mail antes do @.
+      </p>
+      {user.emailConfirmationRequired ? (
+        <p className="mt-2 text-xs font-medium text-foreground">
+          O participante precisa confirmar o e-mail antes do primeiro acesso.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -318,7 +741,7 @@ function SectionHeader({
 }) {
   return (
     <div className={`mb-5 flex items-center gap-3 ${className ?? ""}`}>
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
         <Icon className="h-5 w-5" />
       </div>
       <div>
@@ -326,6 +749,25 @@ function SectionHeader({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </div>
+  );
+}
+
+function InlineError({ message }: { message: string }) {
+  return (
+    <p
+      className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+      role="alert"
+    >
+      {message}
+    </p>
+  );
+}
+
+function EmptyMessage({ message }: { message: string }) {
+  return (
+    <p className="rounded-lg border border-border bg-background/50 p-4 text-sm text-muted-foreground">
+      {message}
+    </p>
   );
 }
 
@@ -378,8 +820,22 @@ function ReportField({
 }
 
 function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+}
+
+function formatGameOption(game: AdminGame) {
+  return `${game.time1} x ${game.time2} · ${formatDateTime(game.data)}`;
+}
+
+function defaultHighlights(): Highlight[] {
+  return [
+    { slot: 1, jogo_id: null, url: "" },
+    { slot: 2, jogo_id: null, url: "" },
+  ];
 }

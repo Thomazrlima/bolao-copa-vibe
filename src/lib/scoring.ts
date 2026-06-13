@@ -1,5 +1,3 @@
-import type { Score } from "@/data/fixtures";
-
 export const POINTS = {
   chinelada: 10,
   strong: 7,
@@ -83,15 +81,4 @@ export function calcularPontuacaoUsuarioNoJogo(
   }
 
   return calcularPontuacaoJogo(jogo, palpite);
-}
-
-export function compareGuess(guess: Score, real: Score): GuessOutcome {
-  return calcularPontuacaoJogo(
-    { id: "legacy", gols1: real.home, gols2: real.away, encerrado: true },
-    { user_id: "legacy", jogo_id: "legacy", gols1: guess.home, gols2: guess.away },
-  ).outcome;
-}
-
-export function pointsFor(o: GuessOutcome) {
-  return POINTS[o];
 }

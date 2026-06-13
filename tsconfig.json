@@ -8,15 +8,7 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "src/routes",
-    "src/router.tsx",
-    "src/routeTree.gen.ts",
-    "src/server.ts",
-    "src/start.ts",
-    "src/lib/api"
-  ],
+  "exclude": ["node_modules"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

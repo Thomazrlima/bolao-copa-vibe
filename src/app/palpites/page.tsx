@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   Area,
@@ -73,6 +73,7 @@ import {
   ESPECIAIS_DEADLINE_ISO,
   especiaisAreOpen,
 } from "@/lib/especiais";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
   getRanking,
   getPalpitesDashboard,
@@ -165,49 +166,73 @@ export default function PalpitesPage() {
     round: "all",
     group: "all",
   });
+  const dirtyScoresRef = useRef(new Set<string>());
 
-  async function load() {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(
+    async ({
+      showLoading = false,
+      preserveDrafts = true,
+      includeSpecials = false,
+    }: {
+      showLoading?: boolean;
+      preserveDrafts?: boolean;
+      includeSpecials?: boolean;
+    } = {}) => {
+      if (showLoading) setLoading(true);
+      setError(null);
 
-    try {
-      const [loaded, specialResponses, ranking] = await Promise.all([
-        getPalpitesDashboard(),
-        getPalpitesEspeciais(),
-        getRanking(),
-      ]);
-      setData(loaded);
-      setParticipants(ranking);
-      setScores(
-        Object.fromEntries(
-          loaded.jogos.map((game) => [
-            game.id,
-            game.palpite
-              ? { home: game.palpite.gols1, away: game.palpite.gols2 }
-              : { home: null, away: null },
-          ]),
-        ),
-      );
-      setSpecialAnswers(
-        Object.fromEntries(
-          specialResponses.map((response) => [response.pergunta_id, response.resposta]),
-        ),
-      );
-      setSavedSpecialIds(new Set(specialResponses.map((response) => response.pergunta_id)));
-      setUnauthenticated(false);
-    } catch (loadError) {
-      const message =
-        loadError instanceof Error ? loadError.message : "Não foi possível carregar os palpites.";
-      setError(message);
-      setUnauthenticated(message === "Não autenticado.");
-    } finally {
-      setLoading(false);
-    }
-  }
+      try {
+        const [loaded, specialResponses, ranking] = await Promise.all([
+          getPalpitesDashboard(),
+          includeSpecials ? getPalpitesEspeciais() : Promise.resolve(null),
+          getRanking(),
+        ]);
+        setData(loaded);
+        setParticipants(ranking);
+        setScores((current) =>
+          Object.fromEntries(
+            loaded.jogos.map((game) => {
+              const serverScore = game.palpite
+                ? { home: game.palpite.gols1, away: game.palpite.gols2 }
+                : { home: null, away: null };
+              const preserve =
+                preserveDrafts && dirtyScoresRef.current.has(game.id) && !game.iniciado;
+
+              return [game.id, preserve ? (current[game.id] ?? serverScore) : serverScore];
+            }),
+          ),
+        );
+        if (specialResponses) {
+          setSpecialAnswers(
+            Object.fromEntries(
+              specialResponses.map((response) => [response.pergunta_id, response.resposta]),
+            ),
+          );
+          setSavedSpecialIds(new Set(specialResponses.map((response) => response.pergunta_id)));
+        }
+        setUnauthenticated(false);
+      } catch (loadError) {
+        const message =
+          loadError instanceof Error ? loadError.message : "Não foi possível carregar os palpites.";
+        setError(message);
+        setUnauthenticated(message === "Não autenticado.");
+      } finally {
+        if (showLoading) setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    void load({ showLoading: true, preserveDrafts: false, includeSpecials: true });
+  }, [load]);
+
+  useRealtimeRefresh({
+    channelName: "palpites-live",
+    signals: ["jogos", "ranking", "palpites"],
+    onRefresh: load,
+    enabled: !unauthenticated,
+  });
 
   const openGames = useMemo(() => data?.jogos.filter((game) => !game.encerrado) ?? [], [data]);
   const historyGames = useMemo(
@@ -234,6 +259,7 @@ export default function PalpitesPage() {
 
   function updateScore(id: string, side: keyof Score, rawValue: string) {
     const value = rawValue === "" ? null : Math.min(20, Math.max(0, Number(rawValue)));
+    dirtyScoresRef.current.add(id);
     setScores((current) => ({ ...current, [id]: { ...current[id], [side]: value } }));
     setRecentlySaved(null);
   }
@@ -247,6 +273,7 @@ export default function PalpitesPage() {
 
     try {
       await savePalpite(game.id, { gols1: score.home, gols2: score.away });
+      dirtyScoresRef.current.delete(game.id);
       setRecentlySaved(game.id);
       setData((current) =>
         current

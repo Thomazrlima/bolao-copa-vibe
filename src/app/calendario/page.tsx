@@ -29,6 +29,7 @@ import {
 import { teamCodeFromName } from "@/data/iso2";
 import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 type Jogo = {
   id: string;
@@ -105,25 +106,6 @@ export default function CalendarioPage() {
     }
   }, []);
 
-  const syncLiveGames = useCallback(async () => {
-    try {
-      const response = await fetch("/api/jogos/sync", { method: "POST" });
-      const body = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(body.error ?? "Não foi possível sincronizar os placares.");
-      }
-
-      await loadData();
-    } catch (syncError) {
-      setError(
-        syncError instanceof Error
-          ? syncError.message
-          : "Não foi possível sincronizar os placares.",
-      );
-    }
-  }, [loadData]);
-
   useEffect(() => {
     let active = true;
 
@@ -145,17 +127,11 @@ export default function CalendarioPage() {
     return () => window.clearInterval(interval);
   }, [mounted]);
 
-  const hasLiveGame = useMemo(() => {
-    void nowTick;
-    return jogos.some((jogo) => matchState(jogo) === "live");
-  }, [jogos, nowTick]);
-
-  useEffect(() => {
-    if (!hasLiveGame) return;
-    syncLiveGames();
-    const interval = window.setInterval(syncLiveGames, 30_000);
-    return () => window.clearInterval(interval);
-  }, [hasLiveGame, syncLiveGames]);
+  useRealtimeRefresh({
+    channelName: "calendario-live",
+    signals: ["jogos", "grupos"],
+    onRefresh: loadData,
+  });
 
   const groupByTeam = useMemo(() => new Map(grupos.map((row) => [row.time, row.grupo])), [grupos]);
   const todayKey = brasiliaTodayKey();

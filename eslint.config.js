@@ -7,18 +7,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: [
-      "dist",
-      ".next",
-      ".output",
-      ".vinxi",
-      "src/routes",
-      "src/router.tsx",
-      "src/routeTree.gen.ts",
-      "src/server.ts",
-      "src/start.ts",
-      "src/lib/api",
-    ],
+    ignores: ["dist", ".next", ".output"],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

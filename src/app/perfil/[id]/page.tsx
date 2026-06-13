@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CalendarDays,
   Check,
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { teamCodeFromName } from "@/data/iso2";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { getPerfil, type PerfilPalpite, type PerfilUsuario } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import type { GuessOutcome } from "@/lib/scoring";
@@ -127,34 +128,34 @@ export default function PerfilPage() {
   const [outcomeFilter, setOutcomeFilter] = useState<GuessOutcomeFilter>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadProfile() {
-      setLoading(true);
+  const loadProfile = useCallback(
+    async ({ showLoading = false } = {}) => {
+      if (showLoading) setLoading(true);
       setError(null);
 
       try {
-        const loadedProfile = await getPerfil(id);
-        if (!active) return;
-        setProfile(loadedProfile);
+        setProfile(await getPerfil(id));
       } catch (loadError) {
-        if (!active) return;
         setError(
           loadError instanceof Error ? loadError.message : "Não foi possível carregar o perfil.",
         );
         setProfile(null);
+      } finally {
+        if (showLoading) setLoading(false);
       }
+    },
+    [id],
+  );
 
-      if (active) setLoading(false);
-    }
+  useEffect(() => {
+    void loadProfile({ showLoading: true });
+  }, [loadProfile]);
 
-    loadProfile();
-
-    return () => {
-      active = false;
-    };
-  }, [id]);
+  useRealtimeRefresh({
+    channelName: `perfil-live:${id}`,
+    signals: ["jogos", "ranking", "palpites"],
+    onRefresh: loadProfile,
+  });
 
   if (loading) {
     return <SpinningBallLoader label="Carregando perfil" />;

@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -90,25 +91,6 @@ export default function JogoDetalhePage() {
     [jogoId],
   );
 
-  const syncAndReload = useCallback(async () => {
-    try {
-      const response = await fetch("/api/jogos/sync", { method: "POST" });
-      const body = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(body.error ?? "Não foi possível sincronizar os placares.");
-      }
-
-      await load();
-    } catch (syncError) {
-      setError(
-        syncError instanceof Error
-          ? syncError.message
-          : "Não foi possível sincronizar os placares.",
-      );
-    }
-  }, [load]);
-
   useEffect(() => {
     load({ showLoading: true });
   }, [load]);
@@ -126,12 +108,11 @@ export default function JogoDetalhePage() {
       : false;
   }, [data, nowTick]);
 
-  useEffect(() => {
-    if (!isLive) return;
-    syncAndReload();
-    const interval = window.setInterval(syncAndReload, 30_000);
-    return () => window.clearInterval(interval);
-  }, [isLive, syncAndReload]);
+  useRealtimeRefresh({
+    channelName: `jogo-detalhe-live:${jogoId}`,
+    signals: ["jogos", "palpites", "ranking", "transmissoes"],
+    onRefresh: load,
+  });
 
   const dashboard = useMemo(() => (data ? buildDashboard(data) : null), [data]);
 

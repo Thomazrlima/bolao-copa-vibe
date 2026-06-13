@@ -10,6 +10,7 @@ import { Flag } from "@/components/common/Flag";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { teamCodeFromName } from "@/data/iso2";
 import { useMounted } from "@/hooks/use-mounted";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
   buildKnockoutBracket,
   groupStandings,
@@ -35,7 +36,6 @@ export function CopaDashboard() {
   const [jogos, setJogos] = useState<JogoGrupo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const loadData = useCallback(async () => {
     try {
@@ -72,26 +72,11 @@ export function CopaDashboard() {
     };
   }, [loadData]);
 
-  const hasStartedOpenGame = useMemo(() => {
-    if (!mounted) return false;
-    void nowTick;
-    const nowMs = nowAsStoredBrasiliaMs();
-    return jogos.some((jogo) => !jogo.encerrado && new Date(jogo.data).getTime() <= nowMs);
-  }, [jogos, mounted, nowTick]);
-
-  useEffect(() => {
-    if (!mounted) return;
-
-    const interval = window.setInterval(() => setNowTick(Date.now()), 120_000);
-    return () => window.clearInterval(interval);
-  }, [mounted]);
-
-  useEffect(() => {
-    if (!hasStartedOpenGame) return;
-
-    const interval = window.setInterval(loadData, 120_000);
-    return () => window.clearInterval(interval);
-  }, [hasStartedOpenGame, loadData]);
+  useRealtimeRefresh({
+    channelName: "copa-live",
+    signals: ["jogos", "grupos"],
+    onRefresh: loadData,
+  });
 
   const groups = useMemo(() => groupStandings(grupos, jogos), [grupos, jogos]);
   const thirds = useMemo(
@@ -750,28 +735,6 @@ function ViewSkeleton({ view }: { view: View }) {
 
 export function CopaDashboardSkeleton() {
   return <SpinningBallLoader label="Carregando dados da Copa" className="min-h-[520px]" />;
-}
-
-function nowAsStoredBrasiliaMs() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  })
-    .formatToParts(new Date())
-    .reduce<Record<string, string>>((acc, part) => {
-      if (part.type !== "literal") acc[part.type] = part.value;
-      return acc;
-    }, {});
-
-  return Date.parse(
-    `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`,
-  );
 }
 
 function formatSigned(value: number) {
