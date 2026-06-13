@@ -123,6 +123,7 @@ export default function JogoDetalhePage() {
   const [tab, setTab] = useState<TabValue>("dashboard");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   const load = useCallback(
@@ -149,6 +150,22 @@ export default function JogoDetalhePage() {
   useEffect(() => {
     load({ showLoading: true });
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+
+    getCurrentUsuario()
+      .then((usuario) => {
+        if (active) setCurrentUserId(usuario?.id ?? null);
+      })
+      .catch(() => {
+        if (active) setCurrentUserId(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNowTick(Date.now()), 30_000);
@@ -190,6 +207,12 @@ export default function JogoDetalhePage() {
 
   const { jogo } = data;
   const videoTabLabel = getVideoTabLabel(jogo, isLive);
+  const currentUserGuess = currentUserId
+    ? data.palpites.find((item) => item.user_id === currentUserId)
+    : null;
+  const currentUserGuessLabel = currentUserGuess
+    ? `${currentUserGuess.palpite.gols1} x ${currentUserGuess.palpite.gols2}`
+    : "-";
 
   return (
     <>
@@ -221,8 +244,12 @@ export default function JogoDetalhePage() {
 
             <div className="grid grid-cols-3 gap-2 sm:min-w-[340px]">
               <KpiCard icon={Users} label="Palpites" value={dashboard.totalPalpites} />
-              <KpiCard icon={Target} label="Mais comum" value={dashboard.mostPopularScore} />
-              <KpiCard icon={Trophy} label="Chineladas" value={dashboard.chineladas} />
+              <KpiCard icon={Target} label="Seu palpite" value={currentUserGuessLabel} />
+              <KpiCard
+                icon={BarChart3}
+                label="Pontuação média"
+                value={formatAveragePoints(dashboard.averagePoints)}
+              />
             </div>
           </div>
         </header>
@@ -522,13 +549,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
           ) : null}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-border bg-background/45 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Mais comum
-            </p>
-            <p className="num mt-2 font-display text-3xl font-black">{data.mostPopularScore}</p>
-          </div>
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-border bg-background/45 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Cravaram o placar
@@ -548,7 +569,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
         </div>
 
         <div className="mt-4 space-y-2">
-          {data.scoreBars.slice(0, 7).map((item) => {
+          {data.scoreBars.slice(0, 6).map((item) => {
             const percent = data.totalPalpites
               ? Math.round((item.count / data.totalPalpites) * 100)
               : 0;
@@ -1020,6 +1041,13 @@ function formatDateTime(iso: string) {
     minute: "2-digit",
     timeZone: "UTC",
   });
+}
+
+function formatAveragePoints(value: number) {
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} pts`;
 }
 
 function formatTime(iso: string) {
