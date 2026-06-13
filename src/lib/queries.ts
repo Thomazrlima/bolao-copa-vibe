@@ -41,6 +41,10 @@ export type PerfilUsuario = RankingUsuario & {
   is_current_user: boolean;
   badges: Array<"mae-dina" | "no-cangote" | "podio-e-podio" | "lanterna" | "chinelada">;
   estatisticas: Record<GuessOutcome, number>;
+  especiais: {
+    acertos: number;
+    pontos: number;
+  };
   palpites: PerfilPalpite[];
 };
 

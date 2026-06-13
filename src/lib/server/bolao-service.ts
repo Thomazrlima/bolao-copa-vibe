@@ -51,6 +51,11 @@ type FaseRow = {
   nome: string;
 };
 
+type PerfilEspeciaisRow = {
+  acertos: number;
+  pontos: number;
+};
+
 export type UsuarioUpdateInput = {
   nome_completo?: string;
   telefone?: string;
@@ -300,6 +305,7 @@ export async function getPerfilUsuario(
     { data: profile, error: profileError },
     phasesResult,
     { data: rankingRows, error: rankingError },
+    specialsResult,
   ] = await Promise.all([
     supabase
       .from("ranking_usuarios")
@@ -313,11 +319,13 @@ export async function getPerfilUsuario(
       .order("pontos", { ascending: false })
       .order("chineladas", { ascending: false })
       .order("nome_completo", { ascending: true }),
+    supabase.rpc("pontuacao_especiais_perfil", { p_user_id: id }),
   ]);
 
   assertNoError(profileError);
   assertNoError(phasesResult.error);
   assertNoError(rankingError);
+  assertNoError(specialsResult.error);
 
   if (!profile) {
     throw new ServiceError("Participante não encontrado.", 404);
@@ -337,6 +345,9 @@ export async function getPerfilUsuario(
     ((phasesResult.data ?? []) as FaseRow[]).map((phase) => [phase.id, phase.nome]),
   );
   const stats = emptyStats();
+  const specialsRow = (
+    Array.isArray(specialsResult.data) ? specialsResult.data[0] : specialsResult.data
+  ) as PerfilEspeciaisRow | null | undefined;
 
   const palpites = guesses
     .map((guess) => {
@@ -397,6 +408,10 @@ export async function getPerfilUsuario(
     is_current_user: authUser?.id === id,
     badges,
     estatisticas: stats,
+    especiais: {
+      acertos: Number(specialsRow?.acertos ?? 0),
+      pontos: Number(specialsRow?.pontos ?? 0),
+    },
     palpites,
   };
 }

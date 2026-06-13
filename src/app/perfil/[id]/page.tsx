@@ -12,6 +12,7 @@ import {
   Goal,
   Radio,
   Settings,
+  Sparkles,
   Trophy,
 } from "lucide-react";
 
@@ -254,7 +255,7 @@ export default function PerfilPage() {
 
       <section className="mt-5">
         <h2 className="mb-3 font-display text-lg font-black">Desempenho</h2>
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
           {STAT_CARDS.map(({ outcome, label, icon: Icon, className, pointsClassName }) => (
             <div key={outcome} className={cn("rounded-xl border p-3 sm:p-4", className)}>
               <div className="flex items-center justify-between gap-2">
@@ -274,6 +275,18 @@ export default function PerfilPage() {
               <div className="mt-0.5 text-[10px] font-black uppercase tracking-wide">{label}</div>
             </div>
           ))}
+          <div className="rounded-xl border border-primary/40 bg-primary/10 p-3 text-primary sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+                +{profile.especiais.pontos} pts
+              </span>
+            </div>
+            <div className="mt-4 font-display text-3xl font-black num">
+              {profile.especiais.acertos}
+            </div>
+            <div className="mt-0.5 text-[10px] font-black uppercase tracking-wide">Especiais</div>
+          </div>
         </div>
       </section>
 
