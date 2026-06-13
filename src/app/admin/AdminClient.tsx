@@ -6,6 +6,7 @@ import {
   AlertCircle,
   Bug,
   Check,
+  CheckCircle2,
   ClockAlert,
   ExternalLink,
   Loader2,
@@ -53,6 +54,8 @@ type BugReport = {
   status: string;
   criado_em: string;
 };
+
+type ReportFilter = "open" | "closed";
 
 type AdminGame = {
   id: string;
@@ -107,6 +110,8 @@ export function AdminClient() {
   const [reports, setReports] = useState<BugReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
+  const [reportFilter, setReportFilter] = useState<ReportFilter>("open");
+  const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserPhone, setNewUserPhone] = useState("");
@@ -163,6 +168,33 @@ export function AdminClient() {
     () => loadOverview({ syncHighlights: false }),
     [loadOverview],
   );
+
+  async function handleReportStatus(report: BugReport) {
+    const nextStatus = report.status === "resolvido" ? "novo" : "resolvido";
+    setUpdatingReportId(report.id);
+    setReportsError(null);
+
+    try {
+      const response = await fetch("/api/admin/bug-reports", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: report.id, status: nextStatus }),
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível atualizar o chamado.");
+      }
+
+      setReports((current) => current.map((item) => (item.id === report.id ? body.report : item)));
+    } catch (error) {
+      setReportsError(
+        error instanceof Error ? error.message : "Não foi possível atualizar o chamado.",
+      );
+    } finally {
+      setUpdatingReportId(null);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -309,6 +341,10 @@ export function AdminClient() {
       />
     );
   }
+
+  const openReports = reports.filter((report) => report.status !== "resolvido");
+  const closedReports = reports.filter((report) => report.status === "resolvido");
+  const visibleReports = reportFilter === "open" ? openReports : closedReports;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -483,8 +519,8 @@ export function AdminClient() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <SectionHeader
                 icon={Bug}
-                title="Bug reports"
-                description="Últimos relatos enviados pelo formulário do site."
+                title="Chamados"
+                description="Acompanhe os relatos enviados e feche os que já foram tratados."
                 className="mb-0"
               />
               <Button
@@ -505,13 +541,45 @@ export function AdminClient() {
 
             {reportsError ? <InlineError message={reportsError} /> : null}
 
+            <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
+              <Button
+                type="button"
+                variant={reportFilter === "open" ? "default" : "ghost"}
+                onClick={() => setReportFilter("open")}
+              >
+                Em aberto
+                <Badge variant="secondary">{openReports.length}</Badge>
+              </Button>
+              <Button
+                type="button"
+                variant={reportFilter === "closed" ? "default" : "ghost"}
+                onClick={() => setReportFilter("closed")}
+              >
+                Fechados
+                <Badge variant="secondary">{closedReports.length}</Badge>
+              </Button>
+            </div>
+
             <div className="mt-5 space-y-3">
               {reportsLoading && reports.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Carregando reports...</p>
-              ) : reports.length ? (
-                reports.map((report) => <BugReportCard key={report.id} report={report} />)
+                <p className="text-sm text-muted-foreground">Carregando chamados...</p>
+              ) : visibleReports.length ? (
+                visibleReports.map((report) => (
+                  <BugReportCard
+                    key={report.id}
+                    report={report}
+                    updating={updatingReportId === report.id}
+                    onStatusChange={() => void handleReportStatus(report)}
+                  />
+                ))
               ) : (
-                <EmptyMessage message="Nenhum bug report enviado ainda." />
+                <EmptyMessage
+                  message={
+                    reportFilter === "open"
+                      ? "Nenhum chamado em aberto."
+                      : "Nenhum chamado fechado ainda."
+                  }
+                />
               )}
             </div>
           </section>
@@ -771,14 +839,30 @@ function EmptyMessage({ message }: { message: string }) {
   );
 }
 
-function BugReportCard({ report }: { report: BugReport }) {
+function BugReportCard({
+  report,
+  updating,
+  onStatusChange,
+}: {
+  report: BugReport;
+  updating: boolean;
+  onStatusChange: () => void;
+}) {
+  const closed = report.status === "resolvido";
+
   return (
-    <article className="rounded-lg border border-border bg-background/50 p-4">
+    <article
+      className={`rounded-lg border p-4 ${
+        closed ? "border-success/30 bg-success/5" : "border-border bg-background/50"
+      }`}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-display font-black">{report.nome ?? report.email}</h4>
-            <Badge variant="secondary">{report.status}</Badge>
+            <Badge variant={closed ? "secondary" : "destructive"}>
+              {closed ? "Fechado" : "Em aberto"}
+            </Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {report.email} · {formatDateTime(report.criado_em)}
@@ -796,6 +880,22 @@ function BugReportCard({ report }: { report: BugReport }) {
       <ReportField label="Esperado" value={report.esperado} />
       <ReportField label="Atual" value={report.atual} />
       <ReportField label="Navegador" value={report.navegador} compact />
+
+      <Button
+        type="button"
+        variant={closed ? "secondary" : "default"}
+        size="sm"
+        className="mt-4 w-full sm:w-auto"
+        onClick={onStatusChange}
+        disabled={updating}
+      >
+        {updating ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <CheckCircle2 className="h-4 w-4" />
+        )}
+        {updating ? "Atualizando..." : closed ? "Reabrir chamado" : "Fechar chamado"}
+      </Button>
     </article>
   );
 }
