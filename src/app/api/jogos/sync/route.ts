@@ -2,12 +2,10 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient, hasAdminCredentials } from "@/lib/supabase/admin";
 import { lookupSportsDbScore } from "@/lib/thesportsdb";
-import { lookupWorldCup2026Scores } from "@/lib/worldcup2026";
 
 type JogoSync = {
   id: string;
   sportsdb_event_id: string | null;
-  worldcup2026_game_id: string | null;
   data: string;
   encerrado: boolean;
 };
@@ -17,7 +15,6 @@ type SyncSummary = {
   jogos_sincronizados: number;
   jogos_encerrados: number;
   provedores: {
-    worldcup2026: number;
     thesportsdb: number;
   };
 };
@@ -64,7 +61,7 @@ export async function POST(request: Request) {
     jogos_elegiveis: 0,
     jogos_sincronizados: 0,
     jogos_encerrados: 0,
-    provedores: { worldcup2026: 0, thesportsdb: 0 },
+    provedores: { thesportsdb: 0 },
   };
   let syncError: string | null = null;
 
@@ -115,50 +112,24 @@ async function synchronizeGames(supabase: ReturnType<typeof createAdminClient>) 
   const nowIso = nowAsStoredBrasiliaIso();
   const { data: jogos, error } = await supabase
     .from("jogos")
-    .select("id,sportsdb_event_id,worldcup2026_game_id,data,encerrado")
+    .select("id,sportsdb_event_id,data,encerrado")
     .lte("data", nowIso)
     .eq("encerrado", false)
+    .not("sportsdb_event_id", "is", null)
     .order("data", { ascending: true })
     .limit(10);
 
   if (error) throw new Error(error.message);
 
-  const syncableJogos = ((jogos ?? []) as JogoSync[]).filter(
-    (jogo) => jogo.worldcup2026_game_id || jogo.sportsdb_event_id,
-  );
+  const syncableJogos = (jogos ?? []) as JogoSync[];
   const summary: SyncSummary = {
     jogos_elegiveis: syncableJogos.length,
     jogos_sincronizados: 0,
     jogos_encerrados: 0,
-    provedores: { worldcup2026: 0, thesportsdb: 0 },
+    provedores: { thesportsdb: 0 },
   };
-  const shouldUseWorldCup2026 = syncableJogos.some((jogo) => jogo.worldcup2026_game_id);
-  const worldCupScores = shouldUseWorldCup2026
-    ? await lookupWorldCup2026Scores().catch(() => null)
-    : null;
 
   for (const jogo of syncableJogos) {
-    if (jogo.worldcup2026_game_id && worldCupScores) {
-      const score = worldCupScores.get(jogo.worldcup2026_game_id);
-
-      if (score) {
-        const { error: updateError } = await supabase.rpc("atualizar_placar_jogo_worldcup2026", {
-          p_worldcup2026_game_id: score.gameId,
-          p_gols1: score.gols1,
-          p_gols2: score.gols2,
-          p_placar_status: score.placarStatus,
-          p_status_origem: score.statusOrigem,
-        });
-
-        if (updateError) throw new Error(updateError.message);
-
-        summary.jogos_sincronizados += 1;
-        summary.provedores.worldcup2026 += 1;
-        if (score.placarStatus === "finished") summary.jogos_encerrados += 1;
-        continue;
-      }
-    }
-
     if (!jogo.sportsdb_event_id) continue;
 
     const score = await lookupSportsDbScore(jogo.sportsdb_event_id);
