@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { MatchDateGroups } from "@/components/common/MatchDateGroups";
 import { Button } from "@/components/ui/button";
 import { Flag } from "@/components/common/Flag";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
@@ -336,15 +337,19 @@ export default function PerfilPage() {
           </Select>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2">
-          {filteredGuesses.length > 0 ? (
-            filteredGuesses.map((guess) => <GuessCard key={guess.jogo_id} guess={guess} />)
-          ) : (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground lg:col-span-2">
-              Nenhum palpite encontrado com os filtros atuais.
-            </div>
-          )}
-        </div>
+        {filteredGuesses.length > 0 ? (
+          <MatchDateGroups
+            items={filteredGuesses}
+            direction="desc"
+            getKey={(guess) => guess.jogo_id}
+            isLive={(guess) => guess.iniciado && !guess.encerrado}
+            renderItem={(guess) => <GuessCard guess={guess} />}
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            Nenhum palpite encontrado com os filtros atuais.
+          </div>
+        )}
       </section>
     </div>
   );

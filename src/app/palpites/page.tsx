@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import type { DateRange } from "react-day-picker";
 import {
   Area,
   AreaChart,
@@ -36,6 +37,7 @@ import {
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
+import { MatchDateGroups } from "@/components/common/MatchDateGroups";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -89,7 +91,8 @@ import { cn } from "@/lib/utils";
 type Score = { home: number | null; away: number | null };
 type DashboardGame = PalpitesDashboardResponse["jogos"][number];
 type PalpiteFilters = {
-  date: string;
+  dateFrom: string;
+  dateTo: string;
   round: string;
   group: string;
 };
@@ -131,6 +134,14 @@ const OUTCOME_META: Record<
 };
 
 const WORLD_CUP_END_DATE_KEY = "2026-07-19";
+const HISTORY_START_DATE_KEY = "2026-06-11";
+
+const EMPTY_PALPITE_FILTERS: PalpiteFilters = {
+  dateFrom: "",
+  dateTo: "",
+  round: "all",
+  group: "all",
+};
 
 const accuracyChartConfig = {
   geral: { label: "Geral", color: "var(--muted-foreground)" },
@@ -161,11 +172,8 @@ export default function PalpitesPage() {
   const [savingSpecialId, setSavingSpecialId] = useState<string | null>(null);
   const [recentlySavedSpecialId, setRecentlySavedSpecialId] = useState<string | null>(null);
   const [participants, setParticipants] = useState<RankingUsuario[]>([]);
-  const [filters, setFilters] = useState<PalpiteFilters>({
-    date: "all",
-    round: "all",
-    group: "all",
-  });
+  const [openFilters, setOpenFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
+  const [historyFilters, setHistoryFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
   const dirtyScoresRef = useRef(new Set<string>());
 
   const load = useCallback(
@@ -244,12 +252,12 @@ export default function PalpitesPage() {
   );
   const filterOptions = useMemo(() => buildPalpiteFilterOptions(data?.jogos ?? []), [data]);
   const filteredOpenGames = useMemo(
-    () => filterDashboardGames(openGames, filters),
-    [filters, openGames],
+    () => filterDashboardGames(openGames, openFilters),
+    [openFilters, openGames],
   );
   const filteredHistoryGames = useMemo(
-    () => filterDashboardGames(historyGames, filters),
-    [filters, historyGames],
+    () => filterDashboardGames(historyGames, historyFilters),
+    [historyFilters, historyGames],
   );
   const editableGames = openGames.filter((game) => !game.iniciado);
   const completed = editableGames.filter((game) => game.palpite).length;
@@ -432,15 +440,19 @@ export default function PalpitesPage() {
             description={`${filteredOpenGames.length} de ${openGames.length} jogos exibidos · ${data.resumo.pendentes} palpites ainda precisam da sua atenção`}
           />
           <PalpitesFilters
-            filters={filters}
+            filters={openFilters}
             options={filterOptions}
-            onChange={(partial) => setFilters((current) => ({ ...current, ...partial }))}
+            minDate={brasiliaTodayKey()}
+            maxDate={WORLD_CUP_END_DATE_KEY}
+            onChange={(partial) => setOpenFilters((current) => ({ ...current, ...partial }))}
           />
           {filteredOpenGames.length ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {filteredOpenGames.map((game) => (
+            <MatchDateGroups
+              items={filteredOpenGames}
+              getKey={(game) => game.id}
+              isLive={(game) => game.iniciado && !game.encerrado}
+              renderItem={(game) => (
                 <OpenMatchCard
-                  key={game.id}
                   game={game}
                   score={scores[game.id] ?? { home: null, away: null }}
                   saving={savingId === game.id}
@@ -448,8 +460,8 @@ export default function PalpitesPage() {
                   onChange={(side, value) => updateScore(game.id, side, value)}
                   onSave={() => persistGuess(game)}
                 />
-              ))}
-            </div>
+              )}
+            />
           ) : (
             <EmptyState
               message={
@@ -482,16 +494,19 @@ export default function PalpitesPage() {
             description={`${filteredHistoryGames.length} de ${historyGames.length} palpites exibidos`}
           />
           <PalpitesFilters
-            filters={filters}
+            filters={historyFilters}
             options={filterOptions}
-            onChange={(partial) => setFilters((current) => ({ ...current, ...partial }))}
+            minDate={HISTORY_START_DATE_KEY}
+            maxDate={brasiliaTodayKey()}
+            onChange={(partial) => setHistoryFilters((current) => ({ ...current, ...partial }))}
           />
           {filteredHistoryGames.length ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {filteredHistoryGames.map((game) => (
-                <HistoryMatchCard key={game.id} game={game} />
-              ))}
-            </div>
+            <MatchDateGroups
+              items={filteredHistoryGames}
+              direction="desc"
+              getKey={(game) => game.id}
+              renderItem={(game) => <HistoryMatchCard game={game} />}
+            />
           ) : (
             <EmptyState
               message={
@@ -514,16 +529,24 @@ export default function PalpitesPage() {
 function PalpitesFilters({
   filters,
   options,
+  minDate,
+  maxDate,
   onChange,
 }: {
   filters: PalpiteFilters;
   options: { dates: string[]; rounds: number[]; groups: string[] };
+  minDate: string;
+  maxDate: string;
   onChange: (partial: Partial<PalpiteFilters>) => void;
 }) {
   const [dateOpen, setDateOpen] = useState(false);
-  const todayKey = brasiliaTodayKey();
-  const selectedDate =
-    filters.date === "all" ? undefined : new Date(`${filters.date}T12:00:00.000Z`);
+  const selectedRange: DateRange | undefined = filters.dateFrom
+    ? {
+        from: calendarDate(filters.dateFrom),
+        to: filters.dateTo ? calendarDate(filters.dateTo) : undefined,
+      }
+    : undefined;
+  const hasDateFilter = Boolean(filters.dateFrom);
 
   return (
     <div className="mb-4 grid gap-2 rounded-xl border border-border bg-card/70 p-2 sm:grid-cols-3">
@@ -535,29 +558,35 @@ function PalpitesFilters({
             className="h-10 justify-start gap-2 rounded-lg border-border bg-background/55 px-3 text-left font-bold"
           >
             <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 truncate">
-              {filters.date === "all" ? "Todas as datas" : formatFilterDate(filters.date)}
-            </span>
+            <span className="min-w-0 truncate">{formatDateRangeFilter(filters)}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar
-            mode="single"
-            selected={selectedDate}
-            defaultMonth={selectedDate ?? new Date(`${todayKey}T12:00:00.000Z`)}
-            startMonth={new Date(`${todayKey}T12:00:00.000Z`)}
-            endMonth={new Date(`${WORLD_CUP_END_DATE_KEY}T12:00:00.000Z`)}
+            mode="range"
+            selected={selectedRange}
+            defaultMonth={selectedRange?.from ?? calendarDate(minDate)}
+            startMonth={calendarDate(minDate)}
+            endMonth={calendarDate(maxDate)}
             disabled={(date) => {
               const key = dateKey(date);
-              return key < todayKey || key > WORLD_CUP_END_DATE_KEY;
+              return key < minDate || key > maxDate;
             }}
-            onSelect={(date) => {
-              if (!date) return;
-              onChange({ date: dateKey(date) });
-              setDateOpen(false);
+            onSelect={(range) => {
+              if (!range?.from) {
+                onChange({ dateFrom: "", dateTo: "" });
+                return;
+              }
+              onChange({
+                dateFrom: dateKey(range.from),
+                dateTo: range.to ? dateKey(range.to) : "",
+              });
             }}
           />
-          {filters.date !== "all" && (
+          <div className="border-t border-border px-3 py-2 text-center text-xs text-muted-foreground">
+            Selecione um dia ou clique em duas datas para definir um período.
+          </div>
+          {hasDateFilter && (
             <div className="border-t border-border p-2">
               <Button
                 type="button"
@@ -565,11 +594,11 @@ function PalpitesFilters({
                 size="sm"
                 className="w-full"
                 onClick={() => {
-                  onChange({ date: "all" });
+                  onChange({ dateFrom: "", dateTo: "" });
                   setDateOpen(false);
                 }}
               >
-                Limpar data
+                Limpar período
               </Button>
             </div>
           )}
@@ -1557,7 +1586,9 @@ function buildPalpiteFilterOptions(games: DashboardGame[]) {
 
 function filterDashboardGames(games: DashboardGame[], filters: PalpiteFilters) {
   return games.filter((game) => {
-    if (filters.date !== "all" && brasiliaDateKey(game.data) !== filters.date) return false;
+    const gameDate = brasiliaDateKey(game.data);
+    if (filters.dateFrom && gameDate < filters.dateFrom) return false;
+    if (filters.dateTo && gameDate > filters.dateTo) return false;
     if (filters.round !== "all" && String(game.rodada ?? "") !== filters.round) return false;
     if (filters.group !== "all" && game.grupo !== filters.group) return false;
     return true;
@@ -1576,11 +1607,19 @@ function phaseLabel(game: DashboardGame) {
 
 function formatFilterDate(date: string) {
   return new Date(`${date}T12:00:00.000Z`).toLocaleDateString("pt-BR", {
-    weekday: "short",
     day: "2-digit",
-    month: "short",
+    month: "2-digit",
+    year: "numeric",
     timeZone: "UTC",
   });
+}
+
+function formatDateRangeFilter(filters: PalpiteFilters) {
+  if (!filters.dateFrom) return "Todas as datas";
+  if (!filters.dateTo || filters.dateFrom === filters.dateTo) {
+    return formatFilterDate(filters.dateFrom);
+  }
+  return `${formatFilterDate(filters.dateFrom)} até ${formatFilterDate(filters.dateTo)}`;
 }
 
 function brasiliaDateKey(iso: string) {
@@ -1601,6 +1640,11 @@ function dateKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function calendarDate(key: string) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function formatDateTime(iso: string) {
