@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   AreaChart,
   Bar,
@@ -61,6 +62,7 @@ const resultChartConfig = {
 export default function JogoDetalhePage() {
   const params = useParams<{ id: string }>();
   const jogoId = params.id;
+  const reduceMotion = useReducedMotion();
   const [data, setData] = useState<JogoPalpitesResponse | null>(null);
   const [tab, setTab] = useState<TabValue>("dashboard");
   const [loading, setLoading] = useState(true);
@@ -191,13 +193,39 @@ export default function JogoDetalhePage() {
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabValue)}>
         <TabsList className="grid h-auto w-full grid-cols-2 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[360px]">
-          <TabsTrigger value="dashboard" className="gap-1.5 py-2.5">
-            <BarChart3 className="h-4 w-4" />
-            Dashboard
+          <TabsTrigger
+            value="dashboard"
+            className="relative gap-1.5 py-2.5 data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+          >
+            {tab === "dashboard" && (
+              <motion.span
+                layoutId="game-detail-tab"
+                className="absolute inset-0 rounded-md bg-primary"
+                transition={{
+                  duration: reduceMotion ? 0 : 0.18,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              />
+            )}
+            <BarChart3 className="relative z-10 h-4 w-4" />
+            <span className="relative z-10">Dashboard</span>
           </TabsTrigger>
-          <TabsTrigger value="transmissao" className="gap-1.5 py-2.5">
-            <Play className="h-4 w-4" />
-            Transmissão
+          <TabsTrigger
+            value="transmissao"
+            className="relative gap-1.5 py-2.5 data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+          >
+            {tab === "transmissao" && (
+              <motion.span
+                layoutId="game-detail-tab"
+                className="absolute inset-0 rounded-md bg-primary"
+                transition={{
+                  duration: reduceMotion ? 0 : 0.18,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              />
+            )}
+            <Play className="relative z-10 h-4 w-4" />
+            <span className="relative z-10">Transmissão</span>
           </TabsTrigger>
         </TabsList>
 
@@ -215,10 +243,10 @@ export default function JogoDetalhePage() {
 
 function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-      <section className="rounded-xl border border-border bg-card p-4">
+    <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
         <h3 className="mb-4 font-display text-lg font-black">Distribuição dos palpites</h3>
-        <div className="h-[280px]">
+        <div className="h-[280px] min-w-0 max-w-full overflow-hidden">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.scoreBars} margin={{ left: -18, right: 8, top: 12 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -239,7 +267,7 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-4">
+      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
         <h3 className="mb-4 font-display text-lg font-black">Resultado previsto</h3>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center lg:block">
           <ChartContainer config={resultChartConfig} className="mx-auto h-[210px] max-w-[300px]">
@@ -279,7 +307,7 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-4 lg:col-span-2">
+      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 lg:col-span-2">
         <h3 className="mb-4 font-display text-lg font-black">Todos os palpites</h3>
         {data.rows.length ? (
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">

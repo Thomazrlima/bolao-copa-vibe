@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Area,
   AreaChart,
@@ -143,7 +145,10 @@ const outcomeChartConfig = {
 } satisfies ChartConfig;
 
 export default function PalpitesPage() {
+  const reduceMotion = useReducedMotion();
   const [data, setData] = useState<PalpitesDashboardResponse | null>(null);
+  const [activeSection, setActiveSection] = useState("open");
+  const activeSectionIndex = ["open", "specials", "history", "dashboard"].indexOf(activeSection);
   const [scores, setScores] = useState<Record<string, Score>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -352,23 +357,45 @@ export default function PalpitesPage() {
         position={data.resumo.posicao}
       />
 
-      <Tabs defaultValue="open" className="mt-6">
-        <TabsList className="grid h-auto w-full grid-cols-4 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]">
-          <TabsTrigger value="open" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <CalendarClock className="hidden h-3.5 w-3.5 sm:block" />
-            Abertos
+      <Tabs value={activeSection} onValueChange={setActiveSection} className="mt-6">
+        <TabsList className="relative grid h-auto w-full grid-cols-4 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]">
+          <motion.span
+            aria-hidden="true"
+            className="absolute inset-y-1 left-1 rounded-md bg-primary"
+            style={{ width: "calc((100% - 0.5rem) / 4)" }}
+            animate={{ x: `${Math.max(activeSectionIndex, 0) * 100}%` }}
+            transition={{
+              duration: reduceMotion ? 0 : 0.34,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          />
+          <TabsTrigger
+            value="open"
+            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
+          >
+            <CalendarClock className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
+            <span className="relative z-10">Abertos</span>
           </TabsTrigger>
-          <TabsTrigger value="specials" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <WandSparkles className="hidden h-3.5 w-3.5 sm:block" />
-            Especiais
+          <TabsTrigger
+            value="specials"
+            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
+          >
+            <WandSparkles className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
+            <span className="relative z-10">Especiais</span>
           </TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <CheckCircle2 className="hidden h-3.5 w-3.5 sm:block" />
-            Histórico
+          <TabsTrigger
+            value="history"
+            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
+          >
+            <CheckCircle2 className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
+            <span className="relative z-10">Histórico</span>
           </TabsTrigger>
-          <TabsTrigger value="dashboard" className="gap-1.5 py-2.5 text-xs sm:text-sm">
-            <BarChart3 className="hidden h-3.5 w-3.5 sm:block" />
-            Dashboard
+          <TabsTrigger
+            value="dashboard"
+            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
+          >
+            <BarChart3 className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
+            <span className="relative z-10">Dashboard</span>
           </TabsTrigger>
         </TabsList>
 
@@ -967,13 +994,32 @@ function OpenMatchCard({
   onChange: (side: keyof Score, value: string) => void;
   onSave: () => void;
 }) {
+  const router = useRouter();
   const complete = score.home != null && score.away != null;
+  const isLive = game.iniciado && !game.encerrado;
 
   return (
     <article
+      role={isLive ? "link" : undefined}
+      tabIndex={isLive ? 0 : undefined}
+      aria-label={isLive ? `Acompanhar ${game.time1} x ${game.time2} ao vivo` : undefined}
+      onClick={(event) => {
+        if (!isLive) return;
+        if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+        router.push(`/calendario/${game.id}`);
+      }}
+      onKeyDown={(event) => {
+        if (!isLive || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        router.push(`/calendario/${game.id}`);
+      }}
       className={cn(
         "overflow-hidden rounded-xl border bg-card transition-colors",
-        game.iniciado ? "border-border opacity-80" : "border-border hover:border-primary/40",
+        isLive
+          ? "cursor-pointer border-live/60 bg-gradient-to-br from-live/[0.1] to-card hover:border-live focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live"
+          : game.iniciado
+            ? "border-border opacity-80"
+            : "border-border hover:border-primary/40",
       )}
     >
       <div className="flex items-center justify-between gap-3 border-b border-border bg-background/35 px-4 py-3">
@@ -1102,6 +1148,7 @@ function HistoryMatchCard({ game }: { game: DashboardGame }) {
 }
 
 function Dashboard({ data }: { data: PalpitesDashboardResponse }) {
+  const reduceMotion = useReducedMotion();
   const [view, setView] = useState<"general" | "mine">("general");
 
   return (
@@ -1122,13 +1169,23 @@ function Dashboard({ data }: { data: PalpitesDashboardResponse }) {
               type="button"
               onClick={() => setView(value as "general" | "mine")}
               className={cn(
-                "rounded-md px-3 py-2 text-xs font-bold transition-colors",
+                "relative cursor-pointer rounded-md px-3 py-2 text-xs font-bold transition-colors",
                 view === value
-                  ? "bg-primary text-primary-foreground"
+                  ? "text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {label}
+              {view === value && (
+                <motion.span
+                  layoutId="palpites-dashboard-tab"
+                  className="absolute inset-0 rounded-md bg-primary"
+                  transition={{
+                    duration: reduceMotion ? 0 : 0.34,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                />
+              )}
+              <span className="relative z-10">{label}</span>
             </button>
           ))}
         </div>
@@ -1158,7 +1215,7 @@ function GeneralDashboard({ data }: { data: PalpitesDashboardResponse }) {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
         <DashboardCard title="Precisão por rodada" description="Acertos gerais comparados aos seus">
           {data.geral.rodadas.length ? (
             <ChartContainer config={accuracyChartConfig} className="h-[260px] w-full">
@@ -1261,7 +1318,7 @@ function PersonalDashboard({ data }: { data: PalpitesDashboardResponse }) {
         <MetricCard icon={Sparkles} label="Aproveitamento" value={`${accuracy}%`} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
         <DashboardCard title="Evolução dos seus pontos" description="Pontuação acumulada por jogo">
           {data.pessoal.evolucao.length ? (
             <ChartContainer config={pointsChartConfig} className="h-[260px] w-full">
@@ -1407,7 +1464,7 @@ function DashboardCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+    <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="mb-4">
         <h3 className="font-display text-base font-black">{title}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>

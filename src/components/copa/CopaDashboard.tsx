@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Check, CircleDot, Grid3X3, Network, Sparkles, Trophy } from "lucide-react";
 
@@ -183,6 +183,7 @@ function HeroStat({ value, label }: { value: string; label: string }) {
 }
 
 function ViewSwitcher({ view }: { view: View }) {
+  const reduceMotion = useReducedMotion();
   const items = [
     {
       value: "grupos" as const,
@@ -212,15 +213,25 @@ function ViewSwitcher({ view }: { view: View }) {
               scroll={false}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group relative flex min-w-0 items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-left transition-colors sm:px-4 sm:py-3",
+                "group relative flex min-w-0 cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors sm:px-4 sm:py-3",
                 active
-                  ? "bg-primary text-primary-foreground shadow-[0_8px_24px_-14px_var(--primary)]"
+                  ? "text-primary-foreground"
                   : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
               )}
             >
+              {active && (
+                <motion.span
+                  layoutId="copa-view-tab"
+                  className="absolute inset-0 rounded-xl bg-primary shadow-[0_8px_24px_-14px_var(--primary)]"
+                  transition={{
+                    duration: reduceMotion ? 0 : 0.18,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                />
+              )}
               <span
                 className={cn(
-                  "grid h-9 w-9 shrink-0 place-items-center rounded-lg border",
+                  "relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-lg border",
                   active
                     ? "border-primary-foreground/20 bg-primary-foreground/10"
                     : "border-border bg-background/60",
@@ -228,7 +239,7 @@ function ViewSwitcher({ view }: { view: View }) {
               >
                 <Icon className="h-4 w-4" />
               </span>
-              <span className="min-w-0">
+              <span className="relative z-10 min-w-0">
                 <span className="block truncate font-display text-sm font-black sm:text-base">
                   {label}
                 </span>
@@ -243,7 +254,7 @@ function ViewSwitcher({ view }: { view: View }) {
               </span>
               <ArrowRight
                 className={cn(
-                  "ml-auto hidden h-4 w-4 shrink-0 transition-transform sm:block",
+                  "relative z-10 ml-auto hidden h-4 w-4 shrink-0 transition-transform sm:block",
                   active && "translate-x-0.5",
                 )}
               />
@@ -490,13 +501,32 @@ function ThirdsRanking({ thirds }: { thirds: Standing[] }) {
 }
 
 function BracketView({ bracket }: { bracket: KnockoutBracket }) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [selectedRound, setSelectedRound] = useState<number | null>(null);
   const rounds = [
     { title: "16-avos", subtitle: "32 seleções", matches: bracket.r32 },
     { title: "Oitavas", subtitle: "16 seleções", matches: bracket.r16 },
     { title: "Quartas", subtitle: "8 seleções", matches: bracket.quartas },
     { title: "Semifinais", subtitle: "4 seleções", matches: bracket.semifinais },
-    { title: "Final", subtitle: "A taça", matches: [bracket.final], highlight: true },
+    { title: "Final", subtitle: "A taça", matches: [bracket.final] },
   ];
+
+  function selectRound(roundIndex: number) {
+    setSelectedRound(roundIndex);
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const target = container.querySelector<HTMLElement>(`[data-bracket-round="${roundIndex}"]`);
+    if (!target) return;
+
+    const left = target.offsetLeft - (container.clientWidth - target.offsetWidth) / 2;
+    const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+    container.scrollTo({
+      left: Math.min(Math.max(0, left), maxLeft),
+      behavior: "smooth",
+    });
+  }
 
   return (
     <div>
@@ -545,10 +575,20 @@ function BracketView({ bracket }: { bracket: KnockoutBracket }) {
         </div>
       </div>
 
-      <div className="-mx-3 overflow-x-auto px-3 pb-5 [scrollbar-width:thin] sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+      <div
+        ref={scrollContainerRef}
+        className="-mx-3 overflow-x-auto px-3 pb-5 pt-1 [scrollbar-width:thin] sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0"
+      >
         <div className="flex min-w-fit items-stretch gap-4 sm:gap-5">
           {rounds.map((round, index) => (
-            <Round key={round.title} index={index + 1} {...round} />
+            <Round
+              key={round.title}
+              index={index + 1}
+              scrollIndex={index}
+              selected={selectedRound === index}
+              onSelect={() => selectRound(index)}
+              {...round}
+            />
           ))}
         </div>
       </div>
@@ -571,20 +611,30 @@ function Round({
   title,
   subtitle,
   matches,
-  highlight,
+  scrollIndex,
+  selected,
+  onSelect,
 }: {
   index: number;
   title: string;
   subtitle: string;
   matches: KnockoutMatch[];
-  highlight?: boolean;
+  scrollIndex: number;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <section className="flex w-[calc(100vw-2.5rem)] max-w-[286px] shrink-0 snap-start flex-col sm:w-[272px]">
-      <div
+    <section
+      data-bracket-round={scrollIndex}
+      className="flex w-[calc(100vw-2.5rem)] max-w-[286px] shrink-0 snap-start flex-col sm:w-[272px]"
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
         className={cn(
-          "relative mb-3 flex items-center rounded-xl border px-3 py-2.5",
-          highlight
+          "relative mb-3 flex cursor-pointer items-center rounded-xl border px-3 py-2.5 text-left transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          selected
             ? "border-primary bg-primary text-primary-foreground"
             : "border-border bg-card/95",
         )}
@@ -592,7 +642,7 @@ function Round({
         <span
           className={cn(
             "mr-2 grid h-7 w-7 place-items-center rounded-lg font-display text-xs font-black",
-            highlight ? "bg-primary-foreground/15" : "bg-primary/12 text-primary",
+            selected ? "bg-primary-foreground/15" : "bg-primary/12 text-primary",
           )}
         >
           {index}
@@ -602,7 +652,7 @@ function Round({
           <span
             className={cn(
               "block text-[9px] uppercase tracking-wider",
-              highlight ? "text-primary-foreground/65" : "text-muted-foreground",
+              selected ? "text-primary-foreground/65" : "text-muted-foreground",
             )}
           >
             {subtitle}
@@ -611,26 +661,21 @@ function Round({
         <span className="ml-auto text-[10px] font-bold opacity-70">
           {matches.length} {matches.length === 1 ? "jogo" : "jogos"}
         </span>
-      </div>
+      </button>
 
       <div className="flex flex-1 flex-col justify-around gap-3">
         {matches.map((match) => (
-          <MatchCard key={match.id} match={match} />
+          <MatchCard key={match.id} match={match} onClick={onSelect} />
         ))}
       </div>
     </section>
   );
 }
 
-function MatchCard({ match }: { match: KnockoutMatch }) {
+function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => void }) {
   const isFinal = match.fase === "Final";
-  return (
-    <article
-      className={cn(
-        "overflow-hidden rounded-xl border bg-card shadow-[0_14px_30px_-28px_rgba(0,0,0,0.95)]",
-        isFinal ? "border-primary ring-yellow" : "border-border",
-      )}
-    >
+  const content = (
+    <>
       <div className="flex items-center justify-between border-b border-border/70 bg-background/35 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
         <span>{match.id}</span>
         <span>{match.fase}</span>
@@ -644,8 +689,24 @@ function MatchCard({ match }: { match: KnockoutMatch }) {
         </div>
         <TeamSide team={match.time2} fallback={match.label2} />
       </div>
-    </article>
+    </>
   );
+  const className = cn(
+    "w-full overflow-hidden rounded-xl border bg-card text-left shadow-[0_14px_30px_-28px_rgba(0,0,0,0.95)]",
+    isFinal ? "border-primary ring-yellow" : "border-border",
+    onClick &&
+      "cursor-pointer transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-[0_18px_34px_-24px_rgba(0,0,0,0.95)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {content}
+      </button>
+    );
+  }
+
+  return <article className={className}>{content}</article>;
 }
 
 function TeamSide({ team, fallback }: { team: TeamSlot | null; fallback: string }) {

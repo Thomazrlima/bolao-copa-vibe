@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
@@ -371,12 +371,30 @@ function ProfileState({
 }
 
 function GuessCard({ guess }: { guess: PerfilPalpite }) {
+  const router = useRouter();
   const outcome = guess.outcome ? STAT_CARDS.find((item) => item.outcome === guess.outcome) : null;
   const OutcomeIcon = outcome?.icon;
   const isLive = guess.iniciado && !guess.encerrado;
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border bg-card/90">
+    <article
+      role={isLive ? "link" : undefined}
+      tabIndex={isLive ? 0 : undefined}
+      aria-label={isLive ? `Acompanhar ${guess.time1} x ${guess.time2} ao vivo` : undefined}
+      onClick={() => {
+        if (isLive) router.push(`/calendario/${guess.jogo_id}`);
+      }}
+      onKeyDown={(event) => {
+        if (!isLive || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        router.push(`/calendario/${guess.jogo_id}`);
+      }}
+      className={cn(
+        "overflow-hidden rounded-xl border border-border bg-card/90",
+        isLive &&
+          "cursor-pointer border-live/60 transition-colors hover:border-live focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live",
+      )}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <CalendarDays className="h-3.5 w-3.5" />

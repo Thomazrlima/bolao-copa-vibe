@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   CalendarDays,
   CheckCircle2,
@@ -69,7 +71,7 @@ export default function CalendarioPage() {
   const mounted = useMounted();
   const [jogos, setJogos] = useState<Jogo[]>([]);
   const [grupos, setGrupos] = useState<GrupoRow[]>([]);
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>("today");
   const [group, setGroup] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,13 +197,15 @@ export default function CalendarioPage() {
       dateMap.get(key)!.push(jogo);
     });
 
+    const direction = status === "finished" ? -1 : 1;
+
     return [...dateMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => direction * a.localeCompare(b))
       .map(([date, items]) => ({
         date,
-        items: items.sort((a, b) => a.data.localeCompare(b.data)),
+        items: items.sort((a, b) => direction * a.data.localeCompare(b.data)),
       }));
-  }, [filtered]);
+  }, [filtered, status]);
 
   if (!mounted) return <CalendarSkeleton />;
 
@@ -310,9 +314,10 @@ function CalendarFilters({
   onStatus: (status: StatusFilter) => void;
   onGroup: (group: string) => void;
 }) {
+  const reduceMotion = useReducedMotion();
   const filters: Array<{ value: StatusFilter; label: string; icon: typeof CalendarDays }> = [
-    { value: "all", label: "Todos", icon: CalendarDays },
     { value: "today", label: "Hoje", icon: Clock3 },
+    { value: "all", label: "Todos", icon: CalendarDays },
     { value: "live", label: "Ao vivo", icon: Radio },
     { value: "finished", label: "Encerrados", icon: CheckCircle2 },
   ];
@@ -329,14 +334,24 @@ function CalendarFilters({
                 type="button"
                 onClick={() => onStatus(value)}
                 className={cn(
-                  "flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[10px] font-black uppercase tracking-wider transition-colors sm:text-xs",
+                  "relative flex min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[10px] font-black uppercase tracking-wider transition-colors sm:text-xs",
                   active
-                    ? "bg-primary text-primary-foreground shadow-[0_8px_24px_-14px_var(--primary)]"
+                    ? "text-primary-foreground"
                     : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
                 )}
               >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{label}</span>
+                {active && (
+                  <motion.span
+                    layoutId="calendar-status-tab"
+                    className="absolute inset-0 rounded-xl bg-primary shadow-[0_8px_24px_-14px_var(--primary)]"
+                    transition={{
+                      duration: reduceMotion ? 0 : 0.18,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  />
+                )}
+                <Icon className="relative z-10 h-3.5 w-3.5 shrink-0" />
+                <span className="relative z-10 truncate">{label}</span>
               </button>
             );
           })}
@@ -457,6 +472,7 @@ function DateSection({
 }
 
 function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string, string> }) {
+  const router = useRouter();
   const state = matchState(jogo);
   const status: "live" | "finished" | "scheduled" =
     state === "live" ? "live" : state === "finished" ? "finished" : "scheduled";
@@ -464,13 +480,26 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
 
   return (
     <article
+      role={state === "live" ? "link" : undefined}
+      tabIndex={state === "live" ? 0 : undefined}
+      aria-label={state === "live" ? `Acompanhar ${jogo.time1} x ${jogo.time2} ao vivo` : undefined}
+      onClick={(event) => {
+        if (state !== "live") return;
+        if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+        router.push(`/calendario/${jogo.id}`);
+      }}
+      onKeyDown={(event) => {
+        if (state !== "live" || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        router.push(`/calendario/${jogo.id}`);
+      }}
       className={cn(
         "relative overflow-hidden rounded-xl border bg-card shadow-[0_12px_35px_-30px_rgba(0,0,0,0.9)] transition-colors",
         state === "finished" && "border-border bg-card/60 opacity-75",
         state === "today" && "border-primary/50 bg-gradient-to-br from-primary/[0.12] to-card",
         state === "future" && "border-accent/25 hover:border-accent/50",
         state === "live" &&
-          "border-live/65 bg-gradient-to-br from-live/[0.16] to-card shadow-[0_0_28px_color-mix(in_oklab,var(--live)_14%,transparent)]",
+          "cursor-pointer border-live/65 bg-gradient-to-br from-live/[0.16] to-card shadow-[0_0_28px_color-mix(in_oklab,var(--live)_14%,transparent)] hover:border-live focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live",
       )}
     >
       <div

@@ -53,7 +53,7 @@ const RULES = [
         <strong>E</strong> sem acertar a diferença de gols.
       </>
     ),
-    examples: [{ guess: "2 x 0", result: "1 x 0" }],
+    examples: [{ guess: "3 x 0", result: "2 x 1" }],
   },
   {
     points: 2,
