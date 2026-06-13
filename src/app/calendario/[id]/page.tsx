@@ -19,7 +19,11 @@ import {
 import {
   ArrowLeft,
   BarChart3,
+  CheckCircle2,
+  CircleHelp,
   ExternalLink,
+  Flame,
+  Goal,
   MessageCircle,
   Play,
   Target,
@@ -43,6 +47,7 @@ import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import type { GuessOutcome } from "@/lib/scoring";
 
 type TabValue = "dashboard" | "transmissao";
 
@@ -59,6 +64,66 @@ const COLORS = ["var(--primary)", "var(--success)", "var(--warning)", "var(--des
 const resultChartConfig = {
   count: { label: "Palpites" },
 } satisfies ChartConfig;
+
+const outcomeChartConfig = {
+  count: { label: "Usuários" },
+} satisfies ChartConfig;
+
+const OUTCOME_CARDS: Array<{
+  outcome: GuessOutcome;
+  label: string;
+  points: number;
+  icon: typeof Trophy;
+  className: string;
+  barClassName: string;
+  color: string;
+}> = [
+  {
+    outcome: "chinelada",
+    label: "Chinelada",
+    points: 10,
+    icon: Trophy,
+    className: "border-primary/40 bg-primary/10 text-primary",
+    barClassName: "bg-primary",
+    color: "var(--primary)",
+  },
+  {
+    outcome: "strong",
+    label: "Na trave",
+    points: 7,
+    icon: Flame,
+    className: "border-warning/40 bg-warning/10 text-warning",
+    barClassName: "bg-warning",
+    color: "var(--warning)",
+  },
+  {
+    outcome: "result",
+    label: "Só o básico",
+    points: 5,
+    icon: CheckCircle2,
+    className: "border-success/40 bg-success/10 text-success",
+    barClassName: "bg-success",
+    color: "var(--success)",
+  },
+  {
+    outcome: "goals",
+    label: "Deu sorte",
+    points: 2,
+    icon: Goal,
+    className: "border-border bg-background/55 text-foreground",
+    barClassName: "bg-foreground",
+    color: "var(--foreground)",
+  },
+  {
+    outcome: "miss",
+    label: "Sabe nada",
+    points: 0,
+    icon: CircleHelp,
+    className: "border-destructive/40 bg-destructive/10 text-destructive",
+    barClassName: "bg-destructive",
+    color: "var(--destructive)",
+  },
+];
 
 export default function JogoDetalhePage() {
   const params = useParams<{ id: string }>();
@@ -229,6 +294,14 @@ export default function JogoDetalhePage() {
 }
 
 function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
+  if (data.finished) {
+    return <FinishedDashboardTab data={data} />;
+  }
+
+  return <OpenGameDashboardTab data={data} />;
+}
+
+function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
@@ -317,6 +390,139 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
                 </span>
               </div>
             ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Nenhum palpite registrado para este jogo.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
+  return (
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <section className="min-w-0 overflow-hidden rounded-xl border border-primary/30 bg-card p-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-primary">
+              Jogo encerrado
+            </p>
+            <h3 className="font-display text-lg font-black">Distribuição da pontuação</h3>
+          </div>
+          <span className="text-xs font-bold text-muted-foreground">
+            {data.scoredUsers} de {data.totalPalpites} pontuaram
+          </span>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-5 xl:grid-cols-1">
+          {data.outcomeCards.map((item) => {
+            const meta = OUTCOME_CARDS.find((card) => card.outcome === item.outcome)!;
+            const Icon = meta.icon;
+
+            return (
+              <article
+                key={item.outcome}
+                className={cn("rounded-xl border p-3", meta.className)}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate text-[10px] font-black uppercase tracking-wide">
+                      {meta.label}
+                    </span>
+                  </span>
+                  <span className="num shrink-0 text-xs font-black">+{meta.points} pts</span>
+                </div>
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <span className="num font-display text-3xl font-black">{item.count}</span>
+                  <span className="text-[10px] font-bold uppercase text-current/75">
+                    {item.percent}%
+                  </span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background/65">
+                  <div
+                    className={cn("h-full rounded-full", meta.barClassName)}
+                    style={{ width: `${item.percent}%` }}
+                  />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="font-display text-lg font-black">Mapa de desempenho</h3>
+            <p className="text-xs text-muted-foreground">
+              Como os pontos desse jogo se espalharam entre os participantes.
+            </p>
+          </div>
+          <span className="num text-xs font-bold text-muted-foreground">
+            média {data.averagePoints.toFixed(1)} pts
+          </span>
+        </div>
+
+        <ChartContainer config={outcomeChartConfig} className="h-[250px] w-full">
+          <BarChart data={data.outcomeBars} margin={{ left: -18, right: 8, top: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
+            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+            <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+              {data.outcomeBars.map((item) => (
+                <Cell key={item.outcome} fill={item.color} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ChartContainer>
+      </section>
+
+      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 xl:col-span-2">
+        <h3 className="mb-4 font-display text-lg font-black">Palpites e pontos</h3>
+        {data.rows.length ? (
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {data.rows.map((row) => {
+              const meta =
+                OUTCOME_CARDS.find((item) => item.outcome === row.outcome) ??
+                OUTCOME_CARDS.find((item) => item.outcome === "miss")!;
+              const Icon = meta.icon;
+
+              return (
+                <div
+                  key={row.user_id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <UserAvatar
+                      name={row.nome_completo}
+                      avatarPath={row.avatar_url}
+                      className="h-8 w-8 bg-primary/15"
+                      fallbackClassName="bg-primary/15 text-xs font-black text-primary"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">
+                        {row.nome_completo}
+                      </span>
+                      <span className="num text-xs text-muted-foreground">
+                        {row.palpite.gols1} x {row.palpite.gols2}
+                      </span>
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-black",
+                      meta.className,
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span className="num">+{row.pontos ?? 0}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Nenhum palpite registrado para este jogo.</p>
@@ -592,6 +798,10 @@ function buildDashboard(data: JogoPalpitesResponse) {
     ["Empate", 0],
     [data.jogo.time2, 0],
   ]);
+  const outcomeCount = new Map<GuessOutcome, number>(
+    OUTCOME_CARDS.map((item) => [item.outcome, 0]),
+  );
+  let totalPoints = 0;
 
   data.palpites.forEach((item) => {
     const score = `${item.palpite.gols1} x ${item.palpite.gols2}`;
@@ -604,6 +814,10 @@ function buildDashboard(data: JogoPalpitesResponse) {
           ? data.jogo.time2
           : "Empate";
     resultCount.set(result, (resultCount.get(result) ?? 0) + 1);
+
+    const outcome = item.outcome ?? "miss";
+    outcomeCount.set(outcome, (outcomeCount.get(outcome) ?? 0) + 1);
+    totalPoints += item.pontos ?? 0;
   });
 
   const scoreBars = [...scoreCount.entries()]
@@ -611,14 +825,39 @@ function buildDashboard(data: JogoPalpitesResponse) {
     .sort((a, b) => b.count - a.count || a.score.localeCompare(b.score))
     .slice(0, 12);
   const mostPopularScore = scoreBars[0]?.score ?? "-";
+  const outcomeCards = OUTCOME_CARDS.map((item) => {
+    const count = outcomeCount.get(item.outcome) ?? 0;
+    return {
+      outcome: item.outcome,
+      count,
+      percent: data.palpites.length ? Math.round((count / data.palpites.length) * 100) : 0,
+    };
+  });
 
   return {
+    finished: data.jogo.encerrado,
     totalPalpites: data.palpites.length,
     mostPopularScore,
     chineladas: data.palpites.filter((item) => item.chinelada).length,
+    scoredUsers: data.palpites.filter((item) => (item.pontos ?? 0) > 0).length,
+    averagePoints: data.palpites.length ? totalPoints / data.palpites.length : 0,
     scoreBars,
     resultPie: [...resultCount.entries()].map(([label, count]) => ({ label, count })),
-    rows: data.palpites,
+    outcomeCards,
+    outcomeBars: outcomeCards.map((item) => {
+      const meta = OUTCOME_CARDS.find((card) => card.outcome === item.outcome)!;
+      return {
+        ...item,
+        label: meta.label,
+        color: meta.color,
+      };
+    }),
+    rows: data.jogo.encerrado
+      ? [...data.palpites].sort(
+          (a, b) =>
+            (b.pontos ?? 0) - (a.pontos ?? 0) || a.nome_completo.localeCompare(b.nome_completo),
+        )
+      : data.palpites,
   };
 }
 
