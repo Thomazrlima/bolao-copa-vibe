@@ -153,6 +153,164 @@
   background-attachment: fixed;
 }
 
+.app-shell[data-brazil-live-theme="true"]
+  .ranking-page
+  .brazil-ranking-name
+  .brazil-themed-name-flag {
+  display: inline-block;
+}
+
+@property --brazil-avatar-ring-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-themed-avatar::after {
+  position: absolute;
+  z-index: 0;
+  inset: -5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--brazil-avatar-ring-angle),
+    #009c3b,
+    #ffdf00,
+    #009c3b,
+    #ffdf00,
+    #009c3b
+  );
+  animation: brazil-avatar-border-spin 3s linear infinite;
+  content: "";
+  pointer-events: none;
+}
+
+.brazil-themed-avatar > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-themed-avatar {
+  border-width: 0 !important;
+  border-color: transparent !important;
+  container-type: inline-size;
+  --tw-ring-color: transparent !important;
+  --tw-ring-shadow: 0 0 0 0 transparent !important;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-themed-avatar-fallback {
+  background-color: #fff !important;
+  color: #002776 !important;
+  font-size: 40cqi !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+@keyframes brazil-avatar-border-spin {
+  to {
+    --brazil-avatar-ring-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell[data-brazil-live-theme="true"] .brazil-themed-avatar::after {
+    animation: none;
+  }
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-podium-position-1 {
+  border-color: color-mix(in srgb, #ffdf00 80%, transparent);
+  background-color: color-mix(in srgb, #ffdf00 15%, transparent);
+  color: #ffdf00;
+  box-shadow: 0 0 24px rgb(255 223 0 / 20%);
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-podium-position-2 {
+  border-color: color-mix(in srgb, #009c3b 80%, transparent);
+  background-color: color-mix(in srgb, #009c3b 20%, transparent);
+  color: #35d26f;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-podium-position-3 {
+  border-color: color-mix(in srgb, #002776 80%, transparent);
+  background-color: color-mix(in srgb, #002776 30%, transparent);
+  color: #5d8cff;
+}
+
+.brazil-flag-loader {
+  position: relative;
+  overflow: hidden;
+  background: #009c3b;
+  transform-origin: left center;
+  animation: brazil-flag-wave 1.05s ease-in-out infinite;
+  clip-path: polygon(0 3%, 100% 0, 97% 50%, 100% 100%, 0 97%);
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-loader-default {
+  display: none;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-flag-loader {
+  display: block;
+}
+
+.brazil-flag-loader-diamond {
+  position: absolute;
+  inset: 16% 18%;
+  background: #ffdf00;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.brazil-flag-loader-circle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: #002776;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes brazil-flag-wave {
+  0%,
+  100% {
+    transform: perspective(180px) rotateY(-8deg) skewY(-1deg);
+  }
+  50% {
+    transform: perspective(180px) rotateY(12deg) skewY(2deg) scaleX(0.94);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brazil-flag-loader {
+    animation: none;
+  }
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-profile-banner {
+  border-color: color-mix(in srgb, #ffdf00 72%, transparent);
+  background: transparent;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent),
+    0 18px 46px color-mix(in srgb, #009c3b 18%, transparent);
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-profile-banner-image {
+  display: block;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-profile-banner::before {
+  display: none;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-profile-banner::after {
+  display: none;
+}
+
+.app-shell[data-brazil-live-theme="true"] .brazil-profile-banner-glow {
+  display: none;
+}
+
 .live-score-marquee {
   overflow: hidden;
 }

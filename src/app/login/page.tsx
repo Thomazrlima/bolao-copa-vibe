@@ -5,6 +5,7 @@ import { LogIn, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
+import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,7 +107,10 @@ export default function LoginPage() {
           {usuario ? (
             <p className="mt-1 text-sm text-muted-foreground">
               Você está logado como{" "}
-              <span className="font-semibold text-foreground">{usuario.nome_completo}</span>.
+              <BrazilThemedName className="font-semibold text-foreground">
+                {usuario.nome_completo}
+              </BrazilThemedName>
+              .
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">
@@ -124,7 +128,9 @@ export default function LoginPage() {
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Usuário logado
                 </p>
-                <p className="mt-2 font-display text-xl font-black">{usuario.nome_completo}</p>
+                <p className="mt-2 font-display text-xl font-black">
+                  <BrazilThemedName>{usuario.nome_completo}</BrazilThemedName>
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">{usuario.email}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{usuario.telefone}</p>
               </div>

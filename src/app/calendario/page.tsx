@@ -576,7 +576,6 @@ function matchState(jogo: Jogo): MatchState {
   if (jogo.placar_status === "finished") return "finished";
   if (jogo.placar_status === "live") return "live";
   if (jogo.encerrado) return "finished";
-  if (new Date(jogo.data).getTime() <= nowAsStoredBrasiliaMs()) return "live";
   if (brasiliaDateKey(jogo.data) === brasiliaTodayKey()) return "today";
   return "future";
 }
@@ -633,26 +632,4 @@ function formatDate(yyyymmdd: string) {
     month: "long",
     timeZone: "UTC",
   });
-}
-
-function nowAsStoredBrasiliaMs() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  })
-    .formatToParts(new Date())
-    .reduce<Record<string, string>>((acc, part) => {
-      if (part.type !== "literal") acc[part.type] = part.value;
-      return acc;
-    }, {});
-
-  return Date.parse(
-    `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`,
-  );
 }

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
+import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { Button } from "@/components/ui/button";
@@ -124,7 +125,6 @@ export default function JogoDetalhePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const load = useCallback(
     async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
@@ -167,18 +167,7 @@ export default function JogoDetalhePage() {
     };
   }, []);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => setNowTick(Date.now()), 30_000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const isLive = useMemo(() => {
-    void nowTick;
-    return data
-      ? data.jogo.placar_status === "live" ||
-          (!data.jogo.encerrado && new Date(data.jogo.data).getTime() <= nowAsStoredBrasiliaMs())
-      : false;
-  }, [data, nowTick]);
+  const isLive = data?.jogo.placar_status === "live" && !data.jogo.encerrado;
 
   useRealtimeRefresh({
     channelName: `jogo-detalhe-live:${jogoId}`,
@@ -448,7 +437,9 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                     className="h-8 w-8 bg-primary/15"
                     fallbackClassName="bg-primary/15 text-xs font-black text-primary"
                   />
-                  <span className="truncate text-sm font-semibold">{row.nome_completo}</span>
+                  <BrazilThemedName className="truncate text-sm font-semibold">
+                    {row.nome_completo}
+                  </BrazilThemedName>
                 </span>
                 <span className="num font-display text-lg font-black">
                   {row.palpite.gols1} x {row.palpite.gols2}
@@ -640,7 +631,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                     />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold">
-                        {row.nome_completo}
+                        <BrazilThemedName>{row.nome_completo}</BrazilThemedName>
                       </span>
                       <span className="num text-xs text-muted-foreground">
                         {row.palpite.gols1} x {row.palpite.gols2}
@@ -831,7 +822,9 @@ function ChatPanel({ jogoId, isActive }: { jogoId: string; isActive: boolean }) 
           messages.map((item) => (
             <div key={item.id} className="rounded-lg border border-border bg-background/45 p-2">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="truncate text-xs font-bold">{item.nome}</span>
+                <BrazilThemedName className="truncate text-xs font-bold">
+                  {item.nome}
+                </BrazilThemedName>
                 <span className="num shrink-0 text-[10px] text-muted-foreground">
                   {formatTime(item.enviado_em)}
                 </span>
@@ -1053,26 +1046,4 @@ function formatTime(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function nowAsStoredBrasiliaMs() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  })
-    .formatToParts(new Date())
-    .reduce<Record<string, string>>((acc, part) => {
-      if (part.type !== "literal") acc[part.type] = part.value;
-      return acc;
-    }, {});
-
-  return Date.parse(
-    `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`,
-  );
 }

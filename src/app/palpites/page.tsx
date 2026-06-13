@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
+import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { MatchDateGroups } from "@/components/common/MatchDateGroups";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -450,7 +451,7 @@ export default function PalpitesPage() {
             <MatchDateGroups
               items={filteredOpenGames}
               getKey={(game) => game.id}
-              isLive={(game) => game.iniciado && !game.encerrado}
+              isLive={(game) => game.ao_vivo}
               renderItem={(game) => (
                 <OpenMatchCard
                   game={game}
@@ -895,7 +896,11 @@ function ParticipantCombobox({
               />
             )}
             <span className="min-w-0 truncate">
-              {selected?.nome_completo ?? "Selecione um usuário"}
+              {selected ? (
+                <BrazilThemedName>{selected.nome_completo}</BrazilThemedName>
+              ) : (
+                "Selecione um usuário"
+              )}
             </span>
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
@@ -928,7 +933,9 @@ function ParticipantCombobox({
                     className="h-7 w-7"
                     fallbackClassName="bg-primary/15 text-[10px] font-black text-primary"
                   />
-                  <span className="min-w-0 truncate">{participant.nome_completo}</span>
+                  <BrazilThemedName className="min-w-0 truncate">
+                    {participant.nome_completo}
+                  </BrazilThemedName>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -1049,7 +1056,7 @@ function OpenMatchCard({
 }) {
   const router = useRouter();
   const complete = score.home != null && score.away != null;
-  const isLive = game.iniciado && !game.encerrado;
+  const isLive = game.ao_vivo;
 
   return (
     <article
@@ -1082,7 +1089,7 @@ function OpenMatchCard({
           </p>
           <p className="mt-0.5 text-xs font-semibold">{formatDateTime(game.data)}</p>
         </div>
-        <StatusBadge status={game.iniciado ? "live" : "scheduled"} />
+        <StatusBadge status={game.ao_vivo ? "live" : "scheduled"} />
       </div>
 
       <div className="p-4">
@@ -1107,10 +1114,12 @@ function OpenMatchCard({
             {game.iniciado ? "Palpite encerrado" : deadlineLabel(game.data)}
           </div>
 
-          {game.iniciado ? (
+          {game.ao_vivo ? (
             <span className="num text-xs font-bold text-live">
               Parcial: {game.gols1 ?? 0} x {game.gols2 ?? 0}
             </span>
+          ) : game.iniciado ? (
+            <span className="num text-xs font-bold text-muted-foreground">Aguardando início</span>
           ) : (
             <Button
               type="button"

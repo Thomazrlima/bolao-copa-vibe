@@ -14,7 +14,9 @@ import {
   Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Flag } from "@/components/common/Flag";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { teamCodeFromName } from "@/data/iso2";
 import { getDisplayName } from "@/lib/display-name";
 import { USER_PROFILE_UPDATED_EVENT } from "@/lib/avatar-storage";
 import { createClient } from "@/lib/supabase/client";
@@ -52,6 +54,9 @@ const FOOTER_NAMES = [
   "Ono Cloro",
 ];
 
+const FORCE_BRAZIL_LIVE_THEME =
+  process.env.NEXT_PUBLIC_FORCE_BRAZIL_LIVE_THEME?.toLowerCase() === "true";
+
 type Usuario = {
   id: string;
   nome_completo: string;
@@ -71,6 +76,7 @@ type LiveGame = {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
+  const [brazilLiveTheme, setBrazilLiveTheme] = useState(FORCE_BRAZIL_LIVE_THEME);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const activePath = pendingPath ?? pathname;
   const currentTab = Math.max(
@@ -91,7 +97,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname, pendingPath]);
 
   return (
-    <div className="app-shell flex min-h-screen flex-col text-foreground">
+    <div
+      className="app-shell flex min-h-screen flex-col text-foreground"
+      data-brazil-live-theme={brazilLiveTheme || undefined}
+    >
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
         <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2.5 sm:px-6 lg:grid-cols-[minmax(150px,1fr)_minmax(520px,580px)_minmax(150px,1fr)] lg:gap-5 lg:py-3">
           <Link
@@ -122,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <HeaderAuth />
           </div>
         </div>
-        <LiveScoreTicker />
+        <LiveScoreTicker onBrazilThemeChange={setBrazilLiveTheme} />
         <AnimatePresence>
           {pendingPath && (
             <motion.div
@@ -158,7 +167,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function LiveScoreTicker() {
+function LiveScoreTicker({
+  onBrazilThemeChange,
+}: {
+  onBrazilThemeChange: (active: boolean) => void;
+}) {
   const reduceMotion = useReducedMotion();
   const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
   const marqueeRef = useRef<HTMLDivElement>(null);
@@ -171,8 +184,17 @@ function LiveScoreTicker() {
       if (!response.ok) return;
 
       const body = (await response.json()) as { jogos?: LiveGame[] };
+      const games = body.jogos ?? [];
+      const actualLiveGames = games.filter(
+        (game) => game.placar_status === "live" && !game.encerrado,
+      );
+      const previewBrazilGame = FORCE_BRAZIL_LIVE_THEME
+        ? (games.find((game) => isBrazilGame(game) && !game.encerrado) ??
+          games.find((game) => isBrazilGame(game)))
+        : undefined;
+
       setLiveGames(
-        (body.jogos ?? []).filter((game) => game.placar_status === "live" && !game.encerrado),
+        actualLiveGames.length > 0 ? actualLiveGames : previewBrazilGame ? [previewBrazilGame] : [],
       );
     } catch {
       // Keep the latest score visible through brief connection failures.
@@ -189,6 +211,12 @@ function LiveScoreTicker() {
     onRefresh: loadLiveGames,
     fallbackIntervalMs: 60_000,
   });
+
+  const brazilThemeActive = FORCE_BRAZIL_LIVE_THEME || liveGames.some((game) => isBrazilGame(game));
+
+  useEffect(() => {
+    onBrazilThemeChange(brazilThemeActive);
+  }, [brazilThemeActive, onBrazilThemeChange]);
 
   useEffect(() => {
     const viewport = marqueeRef.current;
@@ -231,13 +259,31 @@ function LiveScoreTicker() {
               : { height: 0, opacity: 0, y: -12, transition: { duration: 0.32 } }
           }
           transition={{ duration: reduceMotion ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="overflow-hidden bg-live text-white shadow-[0_8px_24px_rgba(170,20,30,0.24)]"
+          className={cn(
+            "overflow-hidden text-white",
+            brazilThemeActive
+              ? "bg-[linear-gradient(90deg,#006b2d_0%,#009c3b_42%,#8cbd1f_50%,#ffdf00_58%,#ffdf00_100%)] shadow-[0_8px_26px_rgba(0,156,59,0.3)]"
+              : "bg-live shadow-[0_8px_24px_rgba(170,20,30,0.24)]",
+          )}
           role="status"
           aria-live="polite"
           aria-label={liveGames.map(liveGameLabel).join(". ")}
         >
-          <div className="relative flex min-h-10 items-center overflow-hidden">
-            <div className="absolute inset-y-0 left-0 z-10 flex items-center gap-1.5 bg-live px-3 shadow-[10px_0_18px_var(--live)] sm:px-5">
+          <div
+            className="relative flex min-h-10 items-center overflow-hidden"
+            data-brazil-live-score-bar={brazilThemeActive || undefined}
+          >
+            <div
+              className={cn(
+                "absolute inset-y-0 left-0 z-10 flex items-center gap-1.5 px-3 sm:px-5",
+                brazilThemeActive
+                  ? "bg-[#006b2d] shadow-[10px_0_18px_#006b2d]"
+                  : "bg-live shadow-[10px_0_18px_var(--live)]",
+              )}
+            >
+              {brazilThemeActive && (
+                <Flag code={teamCodeFromName("Brasil")} name="Brasil" size="sm" static />
+              )}
               <span className="relative flex h-2 w-2" aria-hidden>
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-70" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
@@ -245,11 +291,17 @@ function LiveScoreTicker() {
               <span className="text-[10px] font-black uppercase tracking-[0.16em] sm:text-xs">
                 Ao vivo
               </span>
+              {brazilThemeActive && (
+                <Flag code={teamCodeFromName("Brasil")} name="Brasil" size="sm" static />
+              )}
             </div>
 
             <div
               ref={marqueeRef}
-              className="live-score-marquee ml-[88px] min-w-0 flex-1 sm:ml-[108px]"
+              className={cn(
+                "live-score-marquee min-w-0 flex-1",
+                brazilThemeActive ? "ml-[148px] sm:ml-[168px]" : "ml-[88px] sm:ml-[108px]",
+              )}
             >
               <div className="live-score-track" style={marqueeStyle}>
                 {Array.from({ length: marquee.copies }, (_, index) => (
@@ -264,7 +316,10 @@ function LiveScoreTicker() {
             </div>
 
             <div
-              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-live to-transparent"
+              className={cn(
+                "pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l to-transparent",
+                brazilThemeActive ? "from-[#ffdf00]" : "from-live",
+              )}
               aria-hidden
             />
           </div>
@@ -286,23 +341,63 @@ function LiveScoreGroup({
   return (
     <div ref={groupRef} className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
       {games.map((game) => (
-        <Link
+        <LiveScoreItem
           key={`${hidden ? "copy-" : ""}${game.id}`}
-          href={`/calendario/${game.id}`}
-          tabIndex={hidden ? -1 : undefined}
-          className="group flex h-10 shrink-0 items-center gap-2 px-5 text-xs font-bold text-white transition-colors hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white sm:gap-3 sm:px-8 sm:text-sm"
-        >
-          <Radio className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
-          <span>{game.time1}</span>
-          <strong className="num rounded-md bg-black/20 px-2 py-0.5 font-display text-sm font-black tracking-wide sm:text-base">
-            {formatLiveScore(game.gols1)} × {formatLiveScore(game.gols2)}
-          </strong>
-          <span>{game.time2}</span>
-          <span className="ml-2 h-4 w-px bg-white/35" aria-hidden />
-        </Link>
+          game={game}
+          hidden={hidden}
+        />
       ))}
     </div>
   );
+}
+
+function LiveScoreItem({
+  game,
+  hidden,
+}: {
+  game: LiveGame;
+  hidden: boolean;
+}) {
+  return (
+    <Link
+      href={`/calendario/${game.id}`}
+      tabIndex={hidden ? -1 : undefined}
+      className="group relative flex h-10 shrink-0 items-center text-xs font-bold text-white hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white sm:text-sm"
+    >
+      <LiveScoreContent game={game} />
+    </Link>
+  );
+}
+
+function LiveScoreContent({ game }: { game: LiveGame }) {
+  return (
+    <span className="flex h-10 shrink-0 items-center gap-2 px-5 sm:gap-3 sm:px-8">
+      <Radio className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+      <LiveTeamName name={game.time1} />
+      <strong className="num rounded-md bg-black/20 px-2 py-0.5 font-display text-sm font-black tracking-wide sm:text-base">
+        {formatLiveScore(game.gols1)} × {formatLiveScore(game.gols2)}
+      </strong>
+      <LiveTeamName name={game.time2} />
+      <span className="ml-2 h-4 w-px bg-current opacity-35" aria-hidden />
+    </span>
+  );
+}
+
+function LiveTeamName({ name }: { name: string }) {
+  return isBrazilTeam(name) ? (
+    <strong className="font-black drop-shadow-sm">{name}</strong>
+  ) : (
+    <span>{name}</span>
+  );
+}
+
+function isBrazilGame(game: LiveGame) {
+  return isBrazilTeam(game.time1) || isBrazilTeam(game.time2);
+}
+
+function isBrazilTeam(team: string) {
+  const normalizedTeam = team.trim().toLocaleLowerCase("pt-BR");
+  return normalizedTeam === "brasil" || normalizedTeam === "brazil";
 }
 
 function formatLiveScore(score: number | null) {

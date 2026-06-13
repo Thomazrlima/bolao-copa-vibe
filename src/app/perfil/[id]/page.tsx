@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import brazilFlag from "@/app/flag.png";
 import {
   CalendarDays,
   Check,
@@ -177,6 +178,8 @@ export default function PerfilPage() {
     if (phaseFilter !== "all" && guess.fase !== phaseFilter) return false;
     return true;
   });
+  const openGuesses = filteredGuesses.filter((guess) => !guess.encerrado);
+  const finishedGuesses = filteredGuesses.filter((guess) => guess.encerrado);
   const pointsByOutcome = Object.fromEntries(
     STAT_CARDS.map((card) => [
       card.outcome,
@@ -188,8 +191,14 @@ export default function PerfilPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <section className="relative overflow-hidden rounded-2xl border border-primary/25 bg-card/90 p-5 sm:p-8">
-        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/15 to-transparent" />
+      <section className="brazil-profile-banner relative isolate overflow-hidden rounded-2xl border border-primary/25 bg-card/90 p-5 sm:p-8">
+        <img
+          src={brazilFlag.src}
+          alt=""
+          className="brazil-profile-banner-image absolute inset-0 hidden h-full w-full object-cover"
+          aria-hidden="true"
+        />
+        <div className="brazil-profile-banner-glow absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/15 to-transparent" />
         {profile.is_current_user && (
           <Button
             asChild
@@ -351,19 +360,78 @@ export default function PerfilPage() {
         </div>
 
         {filteredGuesses.length > 0 ? (
-          <MatchDateGroups
-            items={filteredGuesses}
-            direction="desc"
-            getKey={(guess) => guess.jogo_id}
-            isLive={(guess) => guess.iniciado && !guess.encerrado}
-            renderItem={(guess) => <GuessCard guess={guess} />}
-          />
+          <div className="space-y-10">
+            {openGuesses.length > 0 && (
+              <div>
+                <GuessSectionHeading
+                  icon={Clock3}
+                  title="Jogos em aberto"
+                  description="Jogos em andamento ou que ainda vão acontecer."
+                  count={openGuesses.length}
+                  className="border-warning/35 bg-warning/10 text-warning"
+                />
+                <MatchDateGroups
+                  items={openGuesses}
+                  direction="asc"
+                  getKey={(guess) => guess.jogo_id}
+                  isLive={(guess) => guess.ao_vivo}
+                  renderItem={(guess) => <GuessCard guess={guess} />}
+                />
+              </div>
+            )}
+            {finishedGuesses.length > 0 && (
+              <div>
+                <GuessSectionHeading
+                  icon={Check}
+                  title="Jogos finalizados"
+                  description="Resultados confirmados e pontos conquistados."
+                  count={finishedGuesses.length}
+                  className="border-success/35 bg-success/10 text-success"
+                />
+                <MatchDateGroups
+                  items={finishedGuesses}
+                  direction="desc"
+                  getKey={(guess) => guess.jogo_id}
+                  renderItem={(guess) => <GuessCard guess={guess} />}
+                />
+              </div>
+            )}
+          </div>
         ) : (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             Nenhum palpite encontrado com os filtros atuais.
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function GuessSectionHeading({
+  icon: Icon,
+  title,
+  description,
+  count,
+  className,
+}: {
+  icon: typeof Clock3;
+  title: string;
+  description: string;
+  count: number;
+  className: string;
+}) {
+  return (
+    <div className={cn("mb-5 flex items-center gap-3 rounded-xl border p-3 sm:p-4", className)}>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-current/10">
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display text-base font-black text-foreground sm:text-lg">{title}</h3>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <span className="shrink-0 rounded-full bg-background/70 px-2.5 py-1 text-xs font-black num">
+        {count}
+      </span>
     </div>
   );
 }
@@ -393,7 +461,7 @@ function GuessCard({ guess }: { guess: PerfilPalpite }) {
   const router = useRouter();
   const outcome = guess.outcome ? STAT_CARDS.find((item) => item.outcome === guess.outcome) : null;
   const OutcomeIcon = outcome?.icon;
-  const isLive = guess.iniciado && !guess.encerrado;
+  const isLive = guess.ao_vivo;
 
   return (
     <article

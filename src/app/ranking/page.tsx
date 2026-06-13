@@ -14,6 +14,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Trophy } from "lucide-react";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
+import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { getDisplayName } from "@/lib/display-name";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
@@ -104,7 +105,7 @@ export default function RankingPage() {
   const firstRelegatedPosition = ranking.length - relegationCount + 1;
 
   return (
-    <>
+    <div className="ranking-page">
       <PageHeader title="Ranking Geral" />
 
       {loading ? (
@@ -153,7 +154,7 @@ export default function RankingPage() {
           </div>
         </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -257,7 +258,7 @@ function InlineParticipantName({ name, titles }: { name: string; titles: Partici
 
   return (
     <span ref={containerRef} className="relative flex min-w-0 flex-1 items-center gap-1">
-      <span className="min-w-0 truncate font-semibold">{displayName}</span>
+      <BrazilThemedName className="min-w-0 truncate font-semibold">{displayName}</BrazilThemedName>
       {showTitles && <ParticipantTitles titles={titles} variant="inline" />}
 
       <span className="pointer-events-none absolute invisible whitespace-nowrap" aria-hidden>
@@ -346,9 +347,9 @@ function Podium({
   };
   const labels: Record<1 | 2 | 3, string> = { 1: "1º", 2: "2º", 3: "3º" };
   const positionStyles: Record<1 | 2 | 3, string> = {
-    1: "border-primary/70 bg-primary/20 text-primary shadow-[0_0_24px_color-mix(in_oklab,var(--primary)_18%,transparent)]",
-    2: "border-zinc-300/50 bg-zinc-300/10 text-zinc-200",
-    3: "border-amber-700/60 bg-amber-800/15 text-amber-500",
+    1: "brazil-podium-position-1 border-primary/70 bg-primary/20 text-primary shadow-[0_0_24px_color-mix(in_oklab,var(--primary)_18%,transparent)]",
+    2: "brazil-podium-position-2 border-zinc-300/50 bg-zinc-300/10 text-zinc-200",
+    3: "brazil-podium-position-3 border-amber-700/60 bg-amber-800/15 text-amber-500",
   };
   const avatarStyles: Record<1 | 2 | 3, string> = {
     1: "bg-primary/20 text-primary ring-primary/70",
@@ -400,7 +401,7 @@ function Podium({
               >
                 {pos === 1 && (
                   <span
-                    className="absolute -top-5 left-1/2 -translate-x-1/2 text-xl leading-none sm:-top-5.5 sm:text-2xl"
+                    className="absolute -top-5 left-1/2 z-10 -translate-x-1/2 text-xl leading-none sm:-top-5.5 sm:text-2xl"
                     role="img"
                     aria-label="Líder"
                   >
@@ -415,7 +416,7 @@ function Podium({
                 />
               </motion.div>
               <span className="mt-1 line-clamp-2 w-full break-words text-[10px] font-semibold leading-4 min-[380px]:text-xs sm:text-sm">
-                {getDisplayName(row.nome_completo)}
+                <BrazilThemedName>{getDisplayName(row.nome_completo)}</BrazilThemedName>
               </span>
               <ParticipantTitles titles={PODIUM_TITLES[pos]} variant="stacked" />
             </Link>

@@ -105,6 +105,7 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
       gols2: game.gols2,
       encerrado: game.encerrado,
       iniciado: new Date(game.data).getTime() <= now,
+      ao_vivo: !game.encerrado && game.placar_status === "live",
       placar_status: game.placar_status,
       sportsdb_status: game.sportsdb_status,
       palpite: guess ? { gols1: guess.gols1, gols2: guess.gols2 } : null,

@@ -353,9 +353,7 @@ export async function getPerfilUsuario(
     .map((guess) => {
       const game = gameById.get(guess.jogo_id);
       const gameStarted = game ? new Date(game.data).getTime() <= nowAsStoredBrasiliaMs() : false;
-      const gameIsLive = Boolean(
-        game && !game.encerrado && (game.placar_status === "live" || gameStarted),
-      );
+      const gameIsLive = Boolean(game && !game.encerrado && game.placar_status === "live");
       const scoring = game
         ? calcularPontuacaoJogo(
             {
@@ -388,9 +386,10 @@ export async function getPerfilUsuario(
         data: game?.data ?? guess.criado_em,
         palpite: { gols1: guess.gols1, gols2: guess.gols2 },
         encerrado: game?.encerrado ?? false,
-        iniciado: gameIsLive,
+        iniciado: gameStarted,
+        ao_vivo: gameIsLive,
         resultado:
-          game && game.gols1 != null && game.gols2 != null
+          game && (game.encerrado || gameIsLive) && game.gols1 != null && game.gols2 != null
             ? { gols1: game.gols1, gols2: game.gols2 }
             : null,
         pontos,

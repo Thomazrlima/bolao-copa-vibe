@@ -6,6 +6,7 @@ import { Bug, CheckCircle2, Loader2, LogIn } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
+import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -149,7 +150,7 @@ export function BugReportClient() {
 
             {usuario ? (
               <p className="rounded-full border border-border bg-background/60 px-3 py-1.5 text-xs font-bold text-muted-foreground">
-                Enviando como {usuario.nome_completo}
+                Enviando como <BrazilThemedName>{usuario.nome_completo}</BrazilThemedName>
               </p>
             ) : null}
           </div>

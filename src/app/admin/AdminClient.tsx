@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
+import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -927,7 +928,9 @@ function PendingUserCard({ user }: { user: PendingUser }) {
     <article className="rounded-lg border border-border bg-background/50 p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h4 className="font-display font-black">{user.nome_completo}</h4>
+          <h4 className="font-display font-black">
+            <BrazilThemedName>{user.nome_completo}</BrazilThemedName>
+          </h4>
           <p className="mt-1 text-xs text-muted-foreground">{user.email}</p>
         </div>
         <Badge variant="destructive">
