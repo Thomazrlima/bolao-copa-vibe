@@ -20,7 +20,15 @@ import { USER_PROFILE_UPDATED_EVENT } from "@/lib/avatar-storage";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Ref,
+} from "react";
 
 const TABS = [
   { to: "/ranking", label: "Ranking", icon: Trophy },
@@ -153,6 +161,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 function LiveScoreTicker() {
   const reduceMotion = useReducedMotion();
   const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
+  const marqueeRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const [marquee, setMarquee] = useState({ copies: 2, distance: 0 });
 
   const loadLiveGames = useCallback(async () => {
     try {
@@ -178,6 +189,34 @@ function LiveScoreTicker() {
     onRefresh: loadLiveGames,
     fallbackIntervalMs: 60_000,
   });
+
+  useEffect(() => {
+    const viewport = marqueeRef.current;
+    const group = groupRef.current;
+    if (!viewport || !group) return;
+
+    const updateMarquee = () => {
+      const distance = group.getBoundingClientRect().width;
+      if (distance <= 0) return;
+
+      const copies = Math.max(2, Math.ceil(viewport.clientWidth / distance) + 2);
+      setMarquee((current) =>
+        current.copies === copies && current.distance === distance ? current : { copies, distance },
+      );
+    };
+
+    updateMarquee();
+    const observer = new ResizeObserver(updateMarquee);
+    observer.observe(viewport);
+    observer.observe(group);
+
+    return () => observer.disconnect();
+  }, [liveGames]);
+
+  const marqueeStyle = {
+    "--live-score-distance": `${marquee.distance}px`,
+    "--live-score-duration": `${Math.max(14, marquee.distance / 16)}s`,
+  } as CSSProperties;
 
   return (
     <AnimatePresence initial={false}>
@@ -208,10 +247,19 @@ function LiveScoreTicker() {
               </span>
             </div>
 
-            <div className="live-score-marquee ml-[88px] min-w-0 flex-1 sm:ml-[108px]">
-              <div className="live-score-track">
-                <LiveScoreGroup games={liveGames} />
-                <LiveScoreGroup games={liveGames} hidden />
+            <div
+              ref={marqueeRef}
+              className="live-score-marquee ml-[88px] min-w-0 flex-1 sm:ml-[108px]"
+            >
+              <div className="live-score-track" style={marqueeStyle}>
+                {Array.from({ length: marquee.copies }, (_, index) => (
+                  <LiveScoreGroup
+                    key={index}
+                    games={liveGames}
+                    hidden={index > 0}
+                    groupRef={index === 0 ? groupRef : undefined}
+                  />
+                ))}
               </div>
             </div>
 
@@ -226,9 +274,17 @@ function LiveScoreTicker() {
   );
 }
 
-function LiveScoreGroup({ games, hidden = false }: { games: LiveGame[]; hidden?: boolean }) {
+function LiveScoreGroup({
+  games,
+  hidden = false,
+  groupRef,
+}: {
+  games: LiveGame[];
+  hidden?: boolean;
+  groupRef?: Ref<HTMLDivElement>;
+}) {
   return (
-    <div className="flex min-w-full shrink-0 items-center" aria-hidden={hidden || undefined}>
+    <div ref={groupRef} className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
       {games.map((game) => (
         <Link
           key={`${hidden ? "copy-" : ""}${game.id}`}

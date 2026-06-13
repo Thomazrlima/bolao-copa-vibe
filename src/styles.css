@@ -160,8 +160,7 @@
 .live-score-track {
   display: flex;
   width: max-content;
-  min-width: 100%;
-  animation: live-score-scroll 22s linear infinite;
+  animation: live-score-scroll var(--live-score-duration, 22s) linear infinite;
   will-change: transform;
 }
 
@@ -172,7 +171,7 @@
 
 @keyframes live-score-scroll {
   to {
-    transform: translateX(-50%);
+    transform: translateX(calc(-1 * var(--live-score-distance, 50%)));
   }
 }
 
