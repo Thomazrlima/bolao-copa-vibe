@@ -65,10 +65,6 @@ const resultChartConfig = {
   count: { label: "Palpites" },
 } satisfies ChartConfig;
 
-const outcomeChartConfig = {
-  count: { label: "Usuários" },
-} satisfies ChartConfig;
-
 const OUTCOME_CARDS: Array<{
   outcome: GuessOutcome;
   label: string;
@@ -76,7 +72,6 @@ const OUTCOME_CARDS: Array<{
   icon: typeof Trophy;
   className: string;
   barClassName: string;
-  color: string;
 }> = [
   {
     outcome: "chinelada",
@@ -85,7 +80,6 @@ const OUTCOME_CARDS: Array<{
     icon: Trophy,
     className: "border-primary/40 bg-primary/10 text-primary",
     barClassName: "bg-primary",
-    color: "var(--primary)",
   },
   {
     outcome: "strong",
@@ -94,7 +88,6 @@ const OUTCOME_CARDS: Array<{
     icon: Flame,
     className: "border-warning/40 bg-warning/10 text-warning",
     barClassName: "bg-warning",
-    color: "var(--warning)",
   },
   {
     outcome: "result",
@@ -103,7 +96,6 @@ const OUTCOME_CARDS: Array<{
     icon: CheckCircle2,
     className: "border-success/40 bg-success/10 text-success",
     barClassName: "bg-success",
-    color: "var(--success)",
   },
   {
     outcome: "goals",
@@ -112,7 +104,6 @@ const OUTCOME_CARDS: Array<{
     icon: Goal,
     className: "border-border bg-background/55 text-foreground",
     barClassName: "bg-foreground",
-    color: "var(--foreground)",
   },
   {
     outcome: "miss",
@@ -121,7 +112,6 @@ const OUTCOME_CARDS: Array<{
     icon: CircleHelp,
     className: "border-destructive/40 bg-destructive/10 text-destructive",
     barClassName: "bg-destructive",
-    color: "var(--destructive)",
   },
 ];
 
@@ -301,12 +291,43 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
   return <OpenGameDashboardTab data={data} />;
 }
 
+function ScoreTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ value?: number | string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+
+  const count = Number(payload[0]?.value ?? 0);
+
+  return (
+    <div className="rounded-lg border border-border bg-background px-3 py-2 shadow-xl">
+      <p className="num font-display text-lg font-black">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-primary">
+        {count} {count === 1 ? "palpite" : "palpites"}
+      </p>
+    </div>
+  );
+}
+
 function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
+  const [hoveredScore, setHoveredScore] = useState<string | null>(null);
+  const rows = hoveredScore
+    ? data.rows.filter((row) => `${row.palpite.gols1} x ${row.palpite.gols2}` === hoveredScore)
+    : data.rows;
+
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
         <h3 className="mb-4 font-display text-lg font-black">Distribuição dos palpites</h3>
-        <div className="h-[280px] min-w-0 max-w-full overflow-hidden">
+        <div
+          className="h-[280px] min-w-0 max-w-full overflow-hidden"
+          onMouseLeave={() => setHoveredScore(null)}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.scoreBars} margin={{ left: -18, right: 8, top: 12 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -314,14 +335,23 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
               <ChartTooltip
                 cursor={{ fill: "color-mix(in oklab, var(--primary) 12%, transparent)" }}
-                contentStyle={{
-                  background: "var(--card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  color: "var(--foreground)",
-                }}
+                content={<ScoreTooltip />}
               />
-              <Bar dataKey="count" fill="var(--primary)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="count" fill="var(--primary)" radius={[6, 6, 0, 0]}>
+                {data.scoreBars.map((item) => (
+                  <Cell
+                    key={item.score}
+                    fill={
+                      hoveredScore && hoveredScore !== item.score
+                        ? "color-mix(in oklab, var(--primary) 24%, transparent)"
+                        : "var(--primary)"
+                    }
+                    onMouseEnter={() =>
+                      setHoveredScore((current) => (current === item.score ? current : item.score))
+                    }
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -368,12 +398,20 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
       </section>
 
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 lg:col-span-2">
-        <h3 className="mb-4 font-display text-lg font-black">Todos os palpites</h3>
-        {data.rows.length ? (
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <h3 className="font-display text-lg font-black">Todos os palpites</h3>
+          {hoveredScore ? (
+            <span className="num text-xs font-bold text-primary">
+              Filtrando placar {hoveredScore} ({rows.length})
+            </span>
+          ) : null}
+        </div>
+        {rows.length ? (
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {data.rows.map((row) => (
-              <div
+            {rows.map((row) => (
+              <Link
                 key={row.user_id}
+                href={`/perfil/${row.user_id}`}
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3"
               >
                 <span className="flex min-w-0 items-center gap-2">
@@ -388,7 +426,7 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                 <span className="num font-display text-lg font-black">
                   {row.palpite.gols1} x {row.palpite.gols2}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         ) : (
@@ -400,6 +438,11 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
 }
 
 function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
+  const [hoveredOutcome, setHoveredOutcome] = useState<GuessOutcome | null>(null);
+  const rows = hoveredOutcome
+    ? data.rows.filter((row) => (row.outcome ?? "miss") === hoveredOutcome)
+    : data.rows;
+
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
       <section className="min-w-0 overflow-hidden rounded-xl border border-primary/30 bg-card p-4">
@@ -415,7 +458,10 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
           </span>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-5 xl:grid-cols-1">
+        <div
+          className="grid gap-2 sm:grid-cols-5 xl:grid-cols-1"
+          onMouseLeave={() => setHoveredOutcome(null)}
+        >
           {data.outcomeCards.map((item) => {
             const meta = OUTCOME_CARDS.find((card) => card.outcome === item.outcome)!;
             const Icon = meta.icon;
@@ -423,7 +469,16 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
             return (
               <article
                 key={item.outcome}
-                className={cn("rounded-xl border p-3", meta.className)}
+                onMouseEnter={() =>
+                  setHoveredOutcome((current) =>
+                    current === item.outcome ? current : item.outcome,
+                  )
+                }
+                className={cn(
+                  "rounded-xl border p-3 transition-opacity",
+                  meta.className,
+                  hoveredOutcome && hoveredOutcome !== item.outcome && "opacity-45",
+                )}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
@@ -455,44 +510,106 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="font-display text-lg font-black">Mapa de desempenho</h3>
+            <h3 className="font-display text-lg font-black">Placares mais apostados</h3>
             <p className="text-xs text-muted-foreground">
-              Como os pontos desse jogo se espalharam entre os participantes.
+              Compare a sabedoria coletiva com o placar final do jogo.
             </p>
           </div>
-          <span className="num text-xs font-bold text-muted-foreground">
-            média {data.averagePoints.toFixed(1)} pts
-          </span>
+          {data.actualScore ? (
+            <span className="num rounded-full bg-primary/15 px-2 py-1 text-xs font-black text-primary">
+              Final {data.actualScore}
+            </span>
+          ) : null}
         </div>
 
-        <ChartContainer config={outcomeChartConfig} className="h-[250px] w-full">
-          <BarChart data={data.outcomeBars} margin={{ left: -18, right: 8, top: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-            <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
-            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-            <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-              {data.outcomeBars.map((item) => (
-                <Cell key={item.outcome} fill={item.color} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ChartContainer>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border bg-background/45 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Mais comum
+            </p>
+            <p className="num mt-2 font-display text-3xl font-black">{data.mostPopularScore}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-background/45 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Cravaram o placar
+            </p>
+            <p className="num mt-2 font-display text-3xl font-black text-primary">
+              {data.exactScoreHits}
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-background/45 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Pontos distribuídos
+            </p>
+            <p className="num mt-2 font-display text-3xl font-black">
+              {data.totalPoints}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {data.scoreBars.slice(0, 7).map((item) => {
+            const percent = data.totalPalpites
+              ? Math.round((item.count / data.totalPalpites) * 100)
+              : 0;
+            const isActual = item.score === data.actualScore;
+
+            return (
+              <div
+                key={item.score}
+                className={cn(
+                  "rounded-lg border p-3",
+                  isActual
+                    ? "border-primary/45 bg-primary/10"
+                    : "border-border bg-background/45",
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="num font-display text-lg font-black">{item.score}</span>
+                    {isActual ? (
+                      <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-black uppercase text-primary-foreground">
+                        placar final
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="num shrink-0 text-sm font-black">
+                    {item.count} ({percent}%)
+                  </span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn("h-full rounded-full", isActual ? "bg-primary" : "bg-muted-foreground")}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 xl:col-span-2">
-        <h3 className="mb-4 font-display text-lg font-black">Palpites e pontos</h3>
-        {data.rows.length ? (
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <h3 className="font-display text-lg font-black">Palpites e pontos</h3>
+          {hoveredOutcome ? (
+            <span className="text-xs font-bold text-primary">
+              Filtrando {getOutcomeLabel(hoveredOutcome)} ({rows.length})
+            </span>
+          ) : null}
+        </div>
+        {rows.length ? (
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {data.rows.map((row) => {
+            {rows.map((row) => {
               const meta =
                 OUTCOME_CARDS.find((item) => item.outcome === row.outcome) ??
                 OUTCOME_CARDS.find((item) => item.outcome === "miss")!;
               const Icon = meta.icon;
 
               return (
-                <div
+                <Link
                   key={row.user_id}
+                  href={`/perfil/${row.user_id}`}
                   className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3"
                 >
                   <span className="flex min-w-0 items-center gap-2">
@@ -520,7 +637,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                     <Icon className="h-3.5 w-3.5" />
                     <span className="num">+{row.pontos ?? 0}</span>
                   </span>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -613,6 +730,10 @@ function getVideoTabLabel(jogo: JogoPalpitesResponse["jogo"], isLive: boolean) {
   const hasScore = jogo.gols1 != null && jogo.gols2 != null;
   const isFinished = jogo.encerrado || jogo.placar_status === "finished" || (!isLive && hasScore);
   return isFinished ? "Melhores momentos" : "Transmissão";
+}
+
+function getOutcomeLabel(outcome: GuessOutcome) {
+  return OUTCOME_CARDS.find((item) => item.outcome === outcome)?.label ?? outcome;
 }
 
 function ChatPanel({ jogoId, isActive }: { jogoId: string; isActive: boolean }) {
@@ -825,6 +946,11 @@ function buildDashboard(data: JogoPalpitesResponse) {
     .sort((a, b) => b.count - a.count || a.score.localeCompare(b.score))
     .slice(0, 12);
   const mostPopularScore = scoreBars[0]?.score ?? "-";
+  const actualScore =
+    data.jogo.gols1 != null && data.jogo.gols2 != null
+      ? `${data.jogo.gols1} x ${data.jogo.gols2}`
+      : null;
+  const exactScoreHits = actualScore ? (scoreCount.get(actualScore) ?? 0) : 0;
   const outcomeCards = OUTCOME_CARDS.map((item) => {
     const count = outcomeCount.get(item.outcome) ?? 0;
     return {
@@ -838,20 +964,15 @@ function buildDashboard(data: JogoPalpitesResponse) {
     finished: data.jogo.encerrado,
     totalPalpites: data.palpites.length,
     mostPopularScore,
+    actualScore,
+    exactScoreHits,
+    totalPoints,
     chineladas: data.palpites.filter((item) => item.chinelada).length,
     scoredUsers: data.palpites.filter((item) => (item.pontos ?? 0) > 0).length,
     averagePoints: data.palpites.length ? totalPoints / data.palpites.length : 0,
     scoreBars,
     resultPie: [...resultCount.entries()].map(([label, count]) => ({ label, count })),
     outcomeCards,
-    outcomeBars: outcomeCards.map((item) => {
-      const meta = OUTCOME_CARDS.find((card) => card.outcome === item.outcome)!;
-      return {
-        ...item,
-        label: meta.label,
-        color: meta.color,
-      };
-    }),
     rows: data.jogo.encerrado
       ? [...data.palpites].sort(
           (a, b) =>
