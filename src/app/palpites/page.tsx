@@ -1082,10 +1082,8 @@ function OpenMatchCard({
           </div>
 
           {game.iniciado ? (
-            <span className="text-xs font-bold text-muted-foreground">
-              {game.palpite
-                ? `Seu palpite: ${game.palpite.gols1} x ${game.palpite.gols2}`
-                : "Você não palpitou"}
+            <span className="num text-xs font-bold text-live">
+              Parcial: {game.gols1 ?? 0} x {game.gols2 ?? 0}
             </span>
           ) : (
             <Button
