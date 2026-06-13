@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Check, Eye, EyeOff, LogOut, Save, ShieldCheck, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { Check, Eye, EyeOff, LogOut, Save, Settings, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
@@ -11,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { canManageUsers } from "@/lib/admin-users";
 import {
-  createUsuario,
   getCurrentUsuario,
   updateCurrentUserPassword,
   updateCurrentUsuario,
@@ -36,16 +36,6 @@ export default function ConfiguracoesPage() {
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserName, setNewUserName] = useState("");
-  const [newUserPhone, setNewUserPhone] = useState("");
-  const [userCreating, setUserCreating] = useState(false);
-  const [userCreationError, setUserCreationError] = useState<string | null>(null);
-  const [createdUser, setCreatedUser] = useState<{
-    email: string;
-    temporaryPassword: string;
-    emailConfirmationRequired: boolean;
-  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -145,36 +135,6 @@ export default function ConfiguracoesPage() {
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
-  }
-
-  async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setUserCreating(true);
-    setUserCreationError(null);
-    setCreatedUser(null);
-
-    try {
-      const result = await createUsuario({
-        email: newUserEmail.trim(),
-        nome_completo: newUserName.trim(),
-        telefone: newUserPhone.trim(),
-      });
-
-      setCreatedUser({
-        email: result.usuario.email,
-        temporaryPassword: result.temporary_password,
-        emailConfirmationRequired: result.email_confirmation_required,
-      });
-      setNewUserEmail("");
-      setNewUserName("");
-      setNewUserPhone("");
-    } catch (error) {
-      setUserCreationError(
-        error instanceof Error ? error.message : "Não foi possível adicionar o usuário.",
-      );
-    } finally {
-      setUserCreating(false);
-    }
   }
 
   if (!usuario && !profileError) {
@@ -362,93 +322,23 @@ export default function ConfiguracoesPage() {
       </div>
 
       {canManageUsers(usuario.email) && (
-        <form
-          onSubmit={handleCreateUser}
-          className="mt-5 rounded-xl border border-primary/30 bg-card p-4 sm:p-6"
-        >
+        <section className="mt-5 rounded-xl border border-primary/30 bg-card p-4 sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-              <UserPlus className="h-5 w-5" />
+              <Settings className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-display text-lg font-black">Adicionar usuário</h3>
+              <h3 className="font-display text-lg font-black">Área administrativa</h3>
               <p className="text-xs text-muted-foreground">
-                O novo participante começa com pontos e chineladas zerados.
+                Adicione usuários e acompanhe os bug reports enviados.
               </p>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="new-user-email">E-mail</Label>
-              <Input
-                id="new-user-email"
-                type="email"
-                value={newUserEmail}
-                onChange={(event) => setNewUserEmail(event.target.value)}
-                autoComplete="off"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-user-name">Nome completo</Label>
-              <Input
-                id="new-user-name"
-                value={newUserName}
-                onChange={(event) => setNewUserName(event.target.value)}
-                autoComplete="off"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-user-phone">Telefone</Label>
-              <Input
-                id="new-user-phone"
-                value={newUserPhone}
-                onChange={(event) => setNewUserPhone(event.target.value)}
-                type="tel"
-                inputMode="tel"
-                placeholder="+5581979142974"
-                autoComplete="off"
-                required
-              />
-            </div>
-          </div>
-
-          {userCreationError && (
-            <p className="mt-4 text-sm text-destructive" role="alert">
-              {userCreationError}
-            </p>
-          )}
-
-          {createdUser && (
-            <div className="mt-4 rounded-lg border border-success/30 bg-success/10 p-4 text-sm">
-              <p className="flex items-center gap-2 font-semibold text-success">
-                <Check className="h-4 w-4" />
-                Usuário {createdUser.email} criado.
-              </p>
-              <p className="mt-2 text-muted-foreground">
-                Senha inicial:{" "}
-                <strong className="select-all font-mono text-foreground">
-                  {createdUser.temporaryPassword}
-                </strong>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                A senha inicial é a parte do e-mail antes do @.
-              </p>
-              {createdUser.emailConfirmationRequired && (
-                <p className="mt-2 text-xs font-medium text-foreground">
-                  O participante precisa confirmar o e-mail antes do primeiro acesso.
-                </p>
-              )}
-            </div>
-          )}
-
-          <Button type="submit" disabled={userCreating} className="mt-5 w-full sm:w-auto">
-            <UserPlus className="h-4 w-4" />
-            {userCreating ? "Adicionando..." : "Adicionar usuário"}
+          <Button asChild className="w-full sm:w-auto">
+            <Link href="/admin">Abrir administração</Link>
           </Button>
-        </form>
+        </section>
       )}
     </div>
   );

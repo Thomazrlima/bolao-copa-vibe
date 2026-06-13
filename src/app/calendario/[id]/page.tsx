@@ -153,6 +153,7 @@ export default function JogoDetalhePage() {
   }
 
   const { jogo } = data;
+  const videoTabLabel = getVideoTabLabel(jogo, isLive);
 
   return (
     <>
@@ -225,7 +226,7 @@ export default function JogoDetalhePage() {
               />
             )}
             <Play className="relative z-10 h-4 w-4" />
-            <span className="relative z-10">Transmissão</span>
+            <span className="relative z-10">{videoTabLabel}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -234,7 +235,12 @@ export default function JogoDetalhePage() {
         </TabsContent>
 
         <TabsContent value="transmissao" className="mt-6">
-          <TransmissaoTab data={data} isActive={tab === "transmissao"} isLive={isLive} />
+          <TransmissaoTab
+            data={data}
+            isActive={tab === "transmissao"}
+            isLive={isLive}
+            label={videoTabLabel}
+          />
         </TabsContent>
       </Tabs>
     </>
@@ -343,10 +349,12 @@ function TransmissaoTab({
   data,
   isActive,
   isLive,
+  label,
 }: {
   data: JogoPalpitesResponse;
   isActive: boolean;
   isLive: boolean;
+  label: string;
 }) {
   const youtubeUrl = normalizeYoutubeUrl(data.jogo.transmissao_url);
   const thumbnailUrl = youtubeUrl ? getYoutubeThumbnailUrl(youtubeUrl) : null;
@@ -355,7 +363,7 @@ function TransmissaoTab({
     <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
       <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h3 className="font-display text-lg font-black">Transmissão</h3>
+          <h3 className="font-display text-lg font-black">{label}</h3>
           <span
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider",
@@ -371,19 +379,19 @@ function TransmissaoTab({
             target="_blank"
             rel="noreferrer"
             className="group relative block aspect-video overflow-hidden bg-background"
-            aria-label={`Abrir transmissão de ${data.jogo.time1} x ${data.jogo.time2} no YouTube`}
+            aria-label={`Abrir ${label.toLowerCase()} de ${data.jogo.time1} x ${data.jogo.time2} no YouTube`}
           >
             {thumbnailUrl ? (
               <img
                 src={thumbnailUrl}
-                alt={`Thumbnail da transmissão de ${data.jogo.time1} x ${data.jogo.time2}`}
+                alt={`Thumbnail de ${label.toLowerCase()} de ${data.jogo.time1} x ${data.jogo.time2}`}
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               />
             ) : (
               <div className="grid h-full place-items-center bg-background/60 p-8 text-center">
                 <div>
                   <Play className="mx-auto mb-3 h-10 w-10 text-primary" />
-                  <p className="font-semibold">Abrir transmissão no YouTube</p>
+                  <p className="font-semibold">Abrir {label.toLowerCase()} no YouTube</p>
                 </div>
               </div>
             )}
@@ -400,7 +408,7 @@ function TransmissaoTab({
           <div className="grid aspect-video place-items-center bg-background/60 p-8 text-center">
             <div>
               <Play className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-              <p className="font-semibold">Link da transmissão ainda não cadastrado.</p>
+              <p className="font-semibold">Link de {label.toLowerCase()} ainda não cadastrado.</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Preencha `transmissao_url` em `public.jogos` para exibir a thumb do YouTube.
               </p>
@@ -412,6 +420,12 @@ function TransmissaoTab({
       <ChatPanel jogoId={data.jogo.id} isActive={isActive} />
     </div>
   );
+}
+
+function getVideoTabLabel(jogo: JogoPalpitesResponse["jogo"], isLive: boolean) {
+  const hasScore = jogo.gols1 != null && jogo.gols2 != null;
+  const isFinished = jogo.encerrado || jogo.placar_status === "finished" || (!isLive && hasScore);
+  return isFinished ? "Melhores momentos" : "Transmissão";
 }
 
 function ChatPanel({ jogoId, isActive }: { jogoId: string; isActive: boolean }) {
