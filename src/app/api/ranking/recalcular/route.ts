@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { canManageUsers } from "@/lib/admin-users";
-import { recalcularRankingCompleto, ServiceError } from "@/lib/server/bolao-service";
-import { createAdminClient, hasAdminCredentials } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST() {
@@ -17,21 +15,21 @@ export async function POST() {
     return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
   }
 
-  if (!hasAdminCredentials()) {
+  const { data, error } = await supabase.rpc("recalcular_ranking_completo_admin");
+
+  if (error) {
     return NextResponse.json(
-      { error: "A credencial administrativa do Supabase não está configurada." },
-      { status: 503 },
+      { error: error.message ?? "Não foi possível recalcular o ranking." },
+      { status: 500 },
     );
   }
 
-  try {
-    const resultado = await recalcularRankingCompleto(createAdminClient());
-    return NextResponse.json({ resultado });
-  } catch (error) {
-    const serviceError = error instanceof ServiceError ? error : null;
-    return NextResponse.json(
-      { error: serviceError?.message ?? "Não foi possível recalcular o ranking." },
-      { status: serviceError?.status ?? 500 },
-    );
-  }
+  const row = Array.isArray(data) ? data[0] : data;
+
+  return NextResponse.json({
+    resultado: {
+      jogos_recalculados: Number(row?.jogos_recalculados ?? 0),
+      usuarios_atualizados: Number(row?.usuarios_atualizados ?? 0),
+    },
+  });
 }

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { canManageUsers } from "@/lib/admin-users";
+import { CAMPEAO_BOLAO_QUESTION_ID, ESPECIAIS } from "@/lib/especiais";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { createUsuario, getCurrentUsuario, type Usuario } from "@/lib/queries";
 
@@ -80,6 +81,17 @@ type Highlight = {
   url: string;
 };
 
+type SpecialParticipant = {
+  id: string;
+  nome_completo: string;
+};
+
+type SpecialCorrectAnswer = {
+  pergunta_id: string;
+  resposta: string;
+  atualizado_em: string;
+};
+
 type AdminOverview = {
   generated_at: string;
   pending_users: PendingUser[];
@@ -107,6 +119,11 @@ export function AdminClient() {
   const [highlights, setHighlights] = useState<Highlight[]>(defaultHighlights);
   const [highlightsSaving, setHighlightsSaving] = useState(false);
   const [highlightsMessage, setHighlightsMessage] = useState<string | null>(null);
+  const [specialAnswers, setSpecialAnswers] = useState<Record<string, string>>({});
+  const [specialParticipants, setSpecialParticipants] = useState<SpecialParticipant[]>([]);
+  const [specialsLoading, setSpecialsLoading] = useState(false);
+  const [specialsSaving, setSpecialsSaving] = useState(false);
+  const [specialsMessage, setSpecialsMessage] = useState<string | null>(null);
   const [reports, setReports] = useState<BugReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
@@ -164,6 +181,37 @@ export function AdminClient() {
     }
   }, []);
 
+  const loadSpecialAnswers = useCallback(async () => {
+    setSpecialsLoading(true);
+    setSpecialsMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/especiais", { cache: "no-store" });
+      const body = (await response.json().catch(() => ({}))) as {
+        respostas?: SpecialCorrectAnswer[];
+        participantes?: SpecialParticipant[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível carregar os especiais.");
+      }
+
+      setSpecialParticipants(body.participantes ?? []);
+      setSpecialAnswers(
+        Object.fromEntries(
+          (body.respostas ?? []).map((answer) => [answer.pergunta_id, answer.resposta]),
+        ),
+      );
+    } catch (error) {
+      setSpecialsMessage(
+        error instanceof Error ? error.message : "Não foi possível carregar os especiais.",
+      );
+    } finally {
+      setSpecialsLoading(false);
+    }
+  }, []);
+
   const refreshOverview = useCallback(
     () => loadOverview({ syncHighlights: false }),
     [loadOverview],
@@ -206,7 +254,7 @@ export function AdminClient() {
         setUsuario(currentUser);
 
         if (currentUser && canManageUsers(currentUser.email)) {
-          await Promise.all([loadOverview(), loadReports()]);
+          await Promise.all([loadOverview(), loadReports(), loadSpecialAnswers()]);
         }
       } catch (error) {
         if (!active) return;
@@ -221,7 +269,7 @@ export function AdminClient() {
     return () => {
       active = false;
     };
-  }, [loadOverview, loadReports]);
+  }, [loadOverview, loadReports, loadSpecialAnswers]);
 
   const realtimeEnabled = Boolean(usuario && canManageUsers(usuario.email));
 
@@ -298,6 +346,54 @@ export function AdminClient() {
     }
   }
 
+  async function handleSaveSpecialAnswers(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSpecialsSaving(true);
+    setSpecialsMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/especiais", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          respostas: ESPECIAIS.map((question) => ({
+            pergunta_id: question.id,
+            resposta: specialAnswers[question.id] || null,
+          })),
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        respostas?: SpecialCorrectAnswer[];
+        ranking?: {
+          jogos_recalculados: number;
+          usuarios_atualizados: number;
+        };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível salvar as respostas corretas.");
+      }
+
+      setSpecialAnswers(
+        Object.fromEntries(
+          (body.respostas ?? []).map((answer) => [answer.pergunta_id, answer.resposta]),
+        ),
+      );
+      setSpecialsMessage(
+        `Respostas corretas atualizadas. Ranking recalculado para ${
+          body.ranking?.usuarios_atualizados ?? 0
+        } participantes.`,
+      );
+    } catch (error) {
+      setSpecialsMessage(
+        error instanceof Error ? error.message : "Não foi possível salvar as respostas corretas.",
+      );
+    } finally {
+      setSpecialsSaving(false);
+    }
+  }
+
   function updateHighlight(slot: number, field: "jogo_id" | "url", value: string) {
     setHighlights((current) =>
       current.map((highlight) =>
@@ -318,6 +414,20 @@ export function AdminClient() {
       ),
     );
     setHighlightsMessage(null);
+  }
+
+  function updateSpecialAnswer(questionId: string, answer: string) {
+    setSpecialAnswers((current) => ({ ...current, [questionId]: answer }));
+    setSpecialsMessage(null);
+  }
+
+  function clearSpecialAnswer(questionId: string) {
+    setSpecialAnswers((current) => {
+      const next = { ...current };
+      delete next[questionId];
+      return next;
+    });
+    setSpecialsMessage(null);
   }
 
   if (loading) {
@@ -360,7 +470,7 @@ export function AdminClient() {
       </header>
 
       <Tabs defaultValue="pending">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-5">
           <TabsTrigger value="pending" className="gap-2">
             <ClockAlert className="h-4 w-4" />
             Pendências
@@ -368,6 +478,10 @@ export function AdminClient() {
           <TabsTrigger value="transmissions" className="gap-2">
             <Radio className="h-4 w-4" />
             Transmissões
+          </TabsTrigger>
+          <TabsTrigger value="specials" className="gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Especiais
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-2">
             <Users className="h-4 w-4" />
@@ -463,6 +577,20 @@ export function AdminClient() {
               </Button>
             </div>
           </form>
+        </TabsContent>
+
+        <TabsContent value="specials" className="mt-5">
+          <SpecialAnswersSection
+            answers={specialAnswers}
+            participants={specialParticipants}
+            loading={specialsLoading}
+            saving={specialsSaving}
+            message={specialsMessage}
+            onRefresh={() => void loadSpecialAnswers()}
+            onSave={handleSaveSpecialAnswers}
+            onChange={updateSpecialAnswer}
+            onClear={clearSpecialAnswer}
+          />
         </TabsContent>
 
         <TabsContent value="users" className="mt-5">
@@ -650,6 +778,147 @@ function PendingReport({
         ) : null}
       </div>
     </section>
+  );
+}
+
+function SpecialAnswersSection({
+  answers,
+  participants,
+  loading,
+  saving,
+  message,
+  onRefresh,
+  onSave,
+  onChange,
+  onClear,
+}: {
+  answers: Record<string, string>;
+  participants: SpecialParticipant[];
+  loading: boolean;
+  saving: boolean;
+  message: string | null;
+  onRefresh: () => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onChange: (questionId: string, answer: string) => void;
+  onClear: (questionId: string) => void;
+}) {
+  const answeredCount = ESPECIAIS.filter((question) => answers[question.id]).length;
+
+  return (
+    <form onSubmit={onSave} className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <SectionHeader
+          icon={CheckCircle2}
+          title="Respostas corretas"
+          description="Marque manualmente o gabarito dos palpites especiais ao longo da Copa."
+          className="mb-0"
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onRefresh}
+          disabled={loading}
+          className="w-full sm:w-auto"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Atualizar
+        </Button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <Metric label="Perguntas com resposta" value={answeredCount} />
+        <Metric label="Perguntas totais" value={ESPECIAIS.length} />
+        <Metric label="Participantes disponíveis" value={participants.length} />
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {ESPECIAIS.map((question, index) => {
+          const answer = answers[question.id] ?? "";
+          const isBolaoChampion = question.id === CAMPEAO_BOLAO_QUESTION_ID;
+          const options = isBolaoChampion
+            ? participants.map((participant) => ({
+                value: participant.id,
+                label: participant.nome_completo,
+              }))
+            : question.options.map((option) => ({ value: option, label: option }));
+
+          return (
+            <article
+              key={question.id}
+              className="rounded-lg border border-border bg-background/50 p-4"
+            >
+              <div className="mb-4 flex items-start gap-3">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/12 font-display text-xs font-black text-primary">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-display text-sm font-black leading-snug">
+                    {question.question}
+                  </h4>
+                  {answer ? (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      Atual: {formatSpecialAnswer(answer, participants)}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">Sem resposta correta ainda</p>
+                  )}
+                </div>
+                {answer ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : null}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Select
+                  value={answer}
+                  onValueChange={(value) => onChange(question.id, value)}
+                  disabled={loading || saving || options.length === 0}
+                >
+                  <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold">
+                    <SelectValue placeholder="Selecione a resposta correta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => onClear(question.id)}
+                  disabled={loading || saving || !answer}
+                  className="sm:w-24"
+                >
+                  Limpar
+                </Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {message ? (
+        <p className="mt-4 rounded-lg border border-border bg-background/50 p-3 text-sm">
+          {message}
+        </p>
+      ) : null}
+
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <Button type="submit" disabled={loading || saving}>
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
+          {saving ? "Salvando..." : "Salvar respostas corretas"}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -931,6 +1200,10 @@ function formatDateTime(value: string) {
 
 function formatGameOption(game: AdminGame) {
   return `${game.time1} x ${game.time2} · ${formatDateTime(game.data)}`;
+}
+
+function formatSpecialAnswer(answer: string, participants: SpecialParticipant[]) {
+  return participants.find((participant) => participant.id === answer)?.nome_completo ?? answer;
 }
 
 function defaultHighlights(): Highlight[] {

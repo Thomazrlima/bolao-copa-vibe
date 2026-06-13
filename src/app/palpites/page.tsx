@@ -561,7 +561,7 @@ function PalpitesFilters({
             <span className="min-w-0 truncate">{formatDateRangeFilter(filters)}</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto p-0">
+        <PopoverContent align="start" className="!w-fit min-w-0 overflow-hidden rounded-xl p-0">
           <Calendar
             mode="range"
             selected={selectedRange}
@@ -583,9 +583,6 @@ function PalpitesFilters({
               });
             }}
           />
-          <div className="border-t border-border px-3 py-2 text-center text-xs text-muted-foreground">
-            Selecione um dia ou clique em duas datas para definir um período.
-          </div>
           {hasDateFilter && (
             <div className="border-t border-border p-2">
               <Button

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { canManageUsers } from "@/lib/admin-users";
-import { createAdminClient, hasAdminCredentials } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 type GameRow = {
@@ -20,45 +19,51 @@ type UserRow = {
   email: string;
 };
 
+type GuessRow = {
+  user_id: string;
+  jogo_id: string;
+};
+
+type HighlightRow = {
+  slot: number;
+  jogo_id: string | null;
+};
+
+type AdminSyncStatus = {
+  bloqueado_ate: string | null;
+  ultima_tentativa: string | null;
+  ultimo_sucesso: string | null;
+  ultimo_erro: string | null;
+  jogos_elegiveis: number;
+  jogos_sincronizados: number;
+  duracao_ms: number | null;
+};
+
+type OverviewRpcData = {
+  users?: UserRow[];
+  games?: GameRow[];
+  highlights?: HighlightRow[];
+  sync_status?: AdminSyncStatus | null;
+  guesses?: GuessRow[];
+};
+
 export async function GET() {
   const authResult = await requireAdmin();
   if (authResult instanceof NextResponse) return authResult;
 
-  if (!hasAdminCredentials()) {
-    return NextResponse.json(
-      { error: "A credencial administrativa do Supabase não está configurada." },
-      { status: 503 },
-    );
-  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_overview_bolao");
 
-  const admin = createAdminClient();
-  const [usersResult, gamesResult, highlightsResult, syncResult] = await Promise.all([
-    admin.from("usuarios").select("id,nome_completo,email").order("nome_completo"),
-    admin
-      .from("jogos")
-      .select("id,fase_id,time1,time2,data,encerrado,transmissao_url")
-      .order("data"),
-    admin.from("transmissao_destaques").select("slot,jogo_id").order("slot"),
-    admin
-      .from("sync_jogos_estado")
-      .select(
-        "bloqueado_ate,ultima_tentativa,ultimo_sucesso,ultimo_erro,jogos_elegiveis,jogos_sincronizados,duracao_ms",
-      )
-      .eq("id", true)
-      .maybeSingle(),
-  ]);
-
-  const firstError =
-    usersResult.error ?? gamesResult.error ?? highlightsResult.error ?? syncResult.error;
-  if (firstError) {
+  if (error) {
     return NextResponse.json(
-      { error: `Não foi possível carregar a administração: ${firstError.message}` },
+      { error: `Não foi possível carregar a administração: ${error.message}` },
       { status: 500 },
     );
   }
 
-  const users = (usersResult.data ?? []) as UserRow[];
-  const games = (gamesResult.data ?? []) as GameRow[];
+  const overview = (data ?? {}) as OverviewRpcData;
+  const users = overview.users ?? [];
+  const games = overview.games ?? [];
   const now = nowAsStoredBrasiliaMs();
   const deadline = now + 24 * 60 * 60 * 1000;
   const urgentGames = games.filter((game) => {
@@ -66,21 +71,13 @@ export async function GET() {
     return !game.encerrado && startsAt > now && startsAt <= deadline;
   });
 
-  const urgentGameIds = urgentGames.map((game) => game.id);
-  const guessesResult = urgentGameIds.length
-    ? await admin.from("palpites").select("user_id,jogo_id").in("jogo_id", urgentGameIds)
-    : { data: [], error: null };
-
-  if (guessesResult.error) {
-    return NextResponse.json(
-      { error: `Não foi possível carregar os palpites: ${guessesResult.error.message}` },
-      { status: 500 },
-    );
-  }
-
+  const urgentGameIds = new Set(urgentGames.map((game) => game.id));
   const guessed = new Set(
-    (guessesResult.data ?? []).map((guess) => `${guess.user_id}:${guess.jogo_id}`),
+    (overview.guesses ?? [])
+      .filter((guess) => urgentGameIds.has(guess.jogo_id))
+      .map((guess) => `${guess.user_id}:${guess.jogo_id}`),
   );
+
   const pendingUsers = users
     .map((user) => ({
       ...user,
@@ -89,7 +86,7 @@ export async function GET() {
     .filter((user) => user.jogos_pendentes.length > 0);
 
   const highlightBySlot = new Map(
-    (highlightsResult.data ?? []).map((highlight) => [highlight.slot, highlight.jogo_id]),
+    (overview.highlights ?? []).map((highlight) => [highlight.slot, highlight.jogo_id]),
   );
 
   return NextResponse.json({
@@ -97,7 +94,7 @@ export async function GET() {
     pending_users: pendingUsers,
     urgent_games: urgentGames,
     games,
-    sync_status: syncResult.data ?? null,
+    sync_status: overview.sync_status ?? null,
     highlights: [1, 2].map((slot) => {
       const jogoId = highlightBySlot.get(slot) ?? null;
       const game = games.find((item) => item.id === jogoId) ?? null;
