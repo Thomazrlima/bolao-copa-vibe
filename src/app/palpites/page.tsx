@@ -1266,11 +1266,7 @@ function GeneralDashboard({ data }: { data: PalpitesDashboardResponse }) {
 
       <DashboardCard
         title="Placares mais apostados"
-        description={
-          data.geral.jogo_popular
-            ? `${data.geral.jogo_popular.time1} x ${data.geral.jogo_popular.time2}`
-            : "Próximo jogo aberto"
-        }
+        description="Considerando todos os palpites registrados"
       >
         {data.geral.palpites_populares.length ? (
           <div className="space-y-3">
@@ -1293,7 +1289,7 @@ function GeneralDashboard({ data }: { data: PalpitesDashboardResponse }) {
             ))}
           </div>
         ) : (
-          <EmptyState message="Ainda não há palpites para o próximo jogo." />
+          <EmptyState message="Ainda não há palpites registrados." />
         )}
       </DashboardCard>
     </div>

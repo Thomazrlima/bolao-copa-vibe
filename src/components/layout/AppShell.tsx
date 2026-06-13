@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Trophy, LayoutGrid, CalendarDays, LogIn, ScrollText, Goal } from "lucide-react";
+import { Bug, Trophy, LayoutGrid, CalendarDays, LogIn, ScrollText, Goal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { getDisplayName } from "@/lib/display-name";
@@ -18,6 +18,20 @@ const TABS = [
   { to: "/grupos", label: "Copa", icon: LayoutGrid },
   { to: "/calendario", label: "Calendário", icon: CalendarDays },
   { to: "/regras", label: "Regras", icon: ScrollText },
+];
+
+const FOOTER_NAMES = [
+  "Bob Esponja",
+  "Rose Paul",
+  "Marcão",
+  "Renardo Ferrari",
+  "Grande Bura",
+  "Joãozinho",
+  "Rod Sampa",
+  "Henrico Leão",
+  "Sofia Pinto",
+  "Gael Leag",
+  "Ono Cloro",
 ];
 
 type Usuario = {
@@ -49,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname, pendingPath]);
 
   return (
-    <div className="app-shell min-h-screen text-foreground">
+    <div className="app-shell flex min-h-screen flex-col text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
         <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-2.5 sm:px-6 lg:grid-cols-[minmax(150px,1fr)_minmax(520px,580px)_minmax(150px,1fr)] lg:gap-5 lg:py-3">
           <Link
@@ -98,10 +112,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         initial={reduceMotion ? false : { opacity: 0, x: direction * 16 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
-        className="mx-auto max-w-7xl px-3 pb-28 pt-5 sm:px-6 lg:py-8"
+        className="mx-auto w-full max-w-7xl flex-1 px-3 pb-12 pt-5 sm:px-6 lg:py-8"
       >
         {children}
       </motion.main>
+
+      <AppFooter />
 
       <MobileNavigation
         activePath={activePath}
@@ -110,6 +126,51 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setPendingPath={setPendingPath}
       />
     </div>
+  );
+}
+
+function AppFooter() {
+  const reduceMotion = useReducedMotion();
+  const [nameIndex, setNameIndex] = useState(0);
+  const currentName = FOOTER_NAMES[nameIndex];
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNameIndex((current) => (current + 1) % FOOTER_NAMES.length);
+    }, 2400);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <footer className="mx-auto mt-auto w-full max-w-7xl px-3 pb-28 sm:px-6 lg:pb-8">
+      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/70 px-4 py-4 text-sm text-muted-foreground shadow-[0_16px_40px_rgba(0,0,0,0.18)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+        <p className="flex flex-wrap items-center gap-x-1">
+          <span>© 2026</span>
+          <span className="relative inline-grid h-5 min-w-[112px] overflow-hidden text-center align-middle">
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={currentName}
+                initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -14 }}
+                transition={{ duration: reduceMotion ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute inset-0 font-semibold text-primary"
+              >
+                {currentName}
+              </motion.span>
+            </AnimatePresence>
+          </span>
+          <span className="font-semibold text-foreground">All rights reserved.</span>
+        </p>
+        <Button asChild size="sm" className="w-full justify-center sm:w-auto">
+          <Link href="/bug-report">
+            <Bug className="h-3.5 w-3.5" />
+            Reportar bug
+          </Link>
+        </Button>
+      </div>
+    </footer>
   );
 }
 

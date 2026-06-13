@@ -130,9 +130,7 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
   const roundAccuracy = buildRoundAccuracy(games, finishedGuesses, userId, phaseById);
   const pointsEvolution = buildPointsEvolution(myFinished);
   const popularGame = games.find((game) => !game.encerrado && new Date(game.data).getTime() > now);
-  const popularGuesses = popularGame
-    ? buildPopularGuesses(guesses.filter((guess) => guess.jogo_id === popularGame.id))
-    : [];
+  const popularGuesses = buildPopularGuesses(guesses);
 
   return {
     jogos: mappedGames,
