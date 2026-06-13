@@ -552,11 +552,9 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-border bg-background/45 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Cravaram o placar
+              Mais comum
             </p>
-            <p className="num mt-2 font-display text-3xl font-black text-primary">
-              {data.exactScoreHits}
-            </p>
+            <p className="num mt-2 font-display text-3xl font-black">{data.mostPopularScore}</p>
           </div>
           <div className="rounded-xl border border-border bg-background/45 p-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
