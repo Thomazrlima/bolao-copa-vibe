@@ -3,14 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Bug, Trophy, LayoutGrid, CalendarDays, LogIn, ScrollText, Goal } from "lucide-react";
+import {
+  Bug,
+  Trophy,
+  LayoutGrid,
+  CalendarDays,
+  LogIn,
+  ScrollText,
+  Goal,
+  Radio,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { getDisplayName } from "@/lib/display-name";
 import { USER_PROFILE_UPDATED_EVENT } from "@/lib/avatar-storage";
 import { createClient } from "@/lib/supabase/client";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const TABS = [
   { to: "/ranking", label: "Ranking", icon: Trophy },
@@ -38,6 +48,16 @@ type Usuario = {
   id: string;
   nome_completo: string;
   avatar_url: string | null;
+};
+
+type LiveGame = {
+  id: string;
+  time1: string;
+  time2: string;
+  gols1: number | null;
+  gols2: number | null;
+  encerrado: boolean;
+  placar_status: "upcoming" | "live" | "finished" | null;
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -94,6 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <HeaderAuth />
           </div>
         </div>
+        <LiveScoreTicker />
         <AnimatePresence>
           {pendingPath && (
             <motion.div
@@ -127,6 +148,113 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
     </div>
   );
+}
+
+function LiveScoreTicker() {
+  const reduceMotion = useReducedMotion();
+  const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
+
+  const loadLiveGames = useCallback(async () => {
+    try {
+      const response = await fetch("/api/jogos", { cache: "no-store" });
+      if (!response.ok) return;
+
+      const body = (await response.json()) as { jogos?: LiveGame[] };
+      setLiveGames(
+        (body.jogos ?? []).filter((game) => game.placar_status === "live" && !game.encerrado),
+      );
+    } catch {
+      // Keep the latest score visible through brief connection failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLiveGames();
+  }, [loadLiveGames]);
+
+  useRealtimeRefresh({
+    channelName: "header-live-scores",
+    signals: ["jogos"],
+    onRefresh: loadLiveGames,
+    fallbackIntervalMs: 60_000,
+  });
+
+  return (
+    <AnimatePresence initial={false}>
+      {liveGames.length > 0 ? (
+        <motion.div
+          key="live-score-ticker"
+          initial={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0, y: -12 }}
+          animate={{ height: "auto", opacity: 1, y: 0 }}
+          exit={
+            reduceMotion
+              ? { opacity: 0 }
+              : { height: 0, opacity: 0, y: -12, transition: { duration: 0.32 } }
+          }
+          transition={{ duration: reduceMotion ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="overflow-hidden bg-live text-white shadow-[0_8px_24px_rgba(170,20,30,0.24)]"
+          role="status"
+          aria-live="polite"
+          aria-label={liveGames.map(liveGameLabel).join(". ")}
+        >
+          <div className="relative flex min-h-10 items-center overflow-hidden">
+            <div className="absolute inset-y-0 left-0 z-10 flex items-center gap-1.5 bg-live px-3 shadow-[10px_0_18px_var(--live)] sm:px-5">
+              <span className="relative flex h-2 w-2" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-70" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[0.16em] sm:text-xs">
+                Ao vivo
+              </span>
+            </div>
+
+            <div className="live-score-marquee ml-[88px] min-w-0 flex-1 sm:ml-[108px]">
+              <div className="live-score-track">
+                <LiveScoreGroup games={liveGames} />
+                <LiveScoreGroup games={liveGames} hidden />
+              </div>
+            </div>
+
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-live to-transparent"
+              aria-hidden
+            />
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function LiveScoreGroup({ games, hidden = false }: { games: LiveGame[]; hidden?: boolean }) {
+  return (
+    <div className="flex min-w-full shrink-0 items-center" aria-hidden={hidden || undefined}>
+      {games.map((game) => (
+        <Link
+          key={`${hidden ? "copy-" : ""}${game.id}`}
+          href={`/calendario/${game.id}`}
+          tabIndex={hidden ? -1 : undefined}
+          className="group flex h-10 shrink-0 items-center gap-2 px-5 text-xs font-bold text-white transition-colors hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white sm:gap-3 sm:px-8 sm:text-sm"
+        >
+          <Radio className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+          <span>{game.time1}</span>
+          <strong className="num rounded-md bg-black/20 px-2 py-0.5 font-display text-sm font-black tracking-wide sm:text-base">
+            {formatLiveScore(game.gols1)} × {formatLiveScore(game.gols2)}
+          </strong>
+          <span>{game.time2}</span>
+          <span className="ml-2 h-4 w-px bg-white/35" aria-hidden />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function formatLiveScore(score: number | null) {
+  return score ?? "–";
+}
+
+function liveGameLabel(game: LiveGame) {
+  return `${game.time1} ${formatLiveScore(game.gols1)} a ${formatLiveScore(game.gols2)} ${game.time2}`;
 }
 
 function AppFooter() {

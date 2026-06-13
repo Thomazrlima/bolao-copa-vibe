@@ -153,6 +153,35 @@
   background-attachment: fixed;
 }
 
+.live-score-marquee {
+  overflow: hidden;
+}
+
+.live-score-track {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  animation: live-score-scroll 22s linear infinite;
+  will-change: transform;
+}
+
+.live-score-marquee:hover .live-score-track,
+.live-score-marquee:focus-within .live-score-track {
+  animation-play-state: paused;
+}
+
+@keyframes live-score-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-score-track {
+    animation: none;
+  }
+}
+
 .relegation-alert,
 .relegation-alert-strong {
   position: relative;
@@ -198,4 +227,3 @@
     0 0 0 1px color-mix(in oklab, var(--primary) 60%, transparent),
     0 8px 30px -10px color-mix(in oklab, var(--primary) 35%, transparent);
 }
-
