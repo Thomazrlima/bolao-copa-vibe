@@ -20,6 +20,7 @@ import { teamCodeFromName } from "@/data/iso2";
 import { getDisplayName } from "@/lib/display-name";
 import { USER_PROFILE_UPDATED_EVENT } from "@/lib/avatar-storage";
 import { createClient } from "@/lib/supabase/client";
+import { useBrazilGoalCelebration } from "@/hooks/use-brazil-goal-celebration";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -210,6 +211,11 @@ function LiveScoreTicker({
     signals: ["jogos"],
     onRefresh: loadLiveGames,
     fallbackIntervalMs: 60_000,
+  });
+
+  useBrazilGoalCelebration(liveGames, {
+    reduceMotion,
+    previewConfetti: FORCE_BRAZIL_LIVE_THEME,
   });
 
   const brazilThemeActive = FORCE_BRAZIL_LIVE_THEME || liveGames.some((game) => isBrazilGame(game));
