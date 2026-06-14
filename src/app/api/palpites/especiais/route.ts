@@ -4,6 +4,8 @@ import { z } from "zod";
 import { CAMPEAO_BOLAO_QUESTION_ID, especiaisAreOpen, getEspecialQuestion } from "@/lib/especiais";
 import { createClient } from "@/lib/supabase/server";
 
+const CORRECT_ANSWERS_TABLE = "palpites_especiais_respostas_corretas";
+
 const answerSchema = z.object({
   pergunta_id: z.string().trim().min(1),
   resposta: z.string().trim().min(1),
@@ -17,16 +19,23 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
-  const { data, error } = await supabase
-    .from("palpites_especiais")
-    .select("pergunta_id,resposta,atualizado_em")
-    .eq("user_id", auth.user.id);
+  const [answersResult, correctAnswersResult] = await Promise.all([
+    supabase
+      .from("palpites_especiais")
+      .select("pergunta_id,resposta,atualizado_em")
+      .eq("user_id", auth.user.id),
+    supabase.from(CORRECT_ANSWERS_TABLE).select("pergunta_id,resposta,atualizado_em"),
+  ]);
 
+  const error = answersResult.error ?? correctAnswersResult.error;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ respostas: data ?? [] });
+  return NextResponse.json({
+    respostas: answersResult.data ?? [],
+    corretas: correctAnswersResult.data ?? [],
+  });
 }
 
 export async function PUT(request: Request) {

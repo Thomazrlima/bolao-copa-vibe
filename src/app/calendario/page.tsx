@@ -53,7 +53,7 @@ type GrupoRow = {
   time: string;
 };
 
-type StatusFilter = "all" | "today" | "live" | "finished";
+type StatusFilter = "all" | "today" | "live" | "upcoming" | "finished";
 type MatchState = "finished" | "live" | "today" | "future";
 
 const FASE_LABEL: Record<number, string> = {
@@ -74,6 +74,7 @@ export default function CalendarioPage() {
   const [grupos, setGrupos] = useState<GrupoRow[]>([]);
   const [status, setStatus] = useState<StatusFilter>("today");
   const [group, setGroup] = useState("all");
+  const [team, setTeam] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -134,6 +135,13 @@ export default function CalendarioPage() {
   });
 
   const groupByTeam = useMemo(() => new Map(grupos.map((row) => [row.time, row.grupo])), [grupos]);
+  const teamOptions = useMemo(
+    () =>
+      [...new Set(jogos.flatMap((jogo) => [jogo.time1, jogo.time2]))].sort((a, b) =>
+        a.localeCompare(b, "pt-BR"),
+      ),
+    [jogos],
+  );
   const todayKey = brasiliaTodayKey();
 
   const stats = useMemo(() => {
@@ -152,6 +160,7 @@ export default function CalendarioPage() {
       const state = matchState(jogo);
       if (status === "today" && brasiliaDateKey(jogo.data) !== todayKey) return false;
       if (status === "live" && state !== "live") return false;
+      if (status === "upcoming" && !isNotStarted(jogo)) return false;
       if (status === "finished" && state !== "finished") return false;
       if (
         group !== "all" &&
@@ -161,9 +170,10 @@ export default function CalendarioPage() {
       ) {
         return false;
       }
+      if (team !== "all" && jogo.time1 !== team && jogo.time2 !== team) return false;
       return true;
     });
-  }, [group, groupByTeam, jogos, nowTick, status, todayKey]);
+  }, [group, groupByTeam, jogos, nowTick, status, team, todayKey]);
 
   const dates = useMemo(() => {
     const dateMap = new Map<string, Jogo[]>();
@@ -188,7 +198,15 @@ export default function CalendarioPage() {
   return (
     <>
       <CalendarHero stats={stats} />
-      <CalendarFilters status={status} group={group} onStatus={setStatus} onGroup={setGroup} />
+      <CalendarFilters
+        status={status}
+        group={group}
+        team={team}
+        teams={teamOptions}
+        onStatus={setStatus}
+        onGroup={setGroup}
+        onTeam={setTeam}
+      />
 
       {error && (
         <div className="mb-5 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -201,8 +219,14 @@ export default function CalendarioPage() {
       ) : (
         <div>
           <SectionHeader
-            eyebrow={group === "all" ? "Agenda completa" : `Grupo ${group}`}
-            title={filterTitle(status, group)}
+            eyebrow={
+              group === "all"
+                ? team === "all"
+                  ? "Agenda completa"
+                  : "Filtro por time"
+                : `Grupo ${group}`
+            }
+            title={filterTitle(status, group, team)}
             description={`${filtered.length} jogo${filtered.length === 1 ? "" : "s"} encontrado${filtered.length === 1 ? "" : "s"} · horários de Brasília`}
           >
             <StatusLegend />
@@ -282,26 +306,33 @@ function HeroStat({ value, label, live }: { value: number; label: string; live?:
 function CalendarFilters({
   status,
   group,
+  team,
+  teams,
   onStatus,
   onGroup,
+  onTeam,
 }: {
   status: StatusFilter;
   group: string;
+  team: string;
+  teams: string[];
   onStatus: (status: StatusFilter) => void;
   onGroup: (group: string) => void;
+  onTeam: (team: string) => void;
 }) {
   const reduceMotion = useReducedMotion();
   const filters: Array<{ value: StatusFilter; label: string; icon: typeof CalendarDays }> = [
     { value: "today", label: "Hoje", icon: Clock3 },
     { value: "all", label: "Todos", icon: CalendarDays },
     { value: "live", label: "Ao vivo", icon: Radio },
+    { value: "upcoming", label: "Não iniciados", icon: CircleDot },
     { value: "finished", label: "Encerrados", icon: CheckCircle2 },
   ];
 
   return (
     <div className="sticky top-[59px] z-30 -mx-3 mb-6 border-y border-border/70 bg-background/90 px-3 py-2 backdrop-blur-xl sm:top-[65px] sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:rounded-2xl lg:border lg:bg-card/85 lg:p-1.5">
       <div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="grid flex-1 grid-cols-4 gap-1">
+        <div className="grid flex-1 grid-cols-2 gap-1 sm:grid-cols-5">
           {filters.map(({ value, label, icon: Icon }) => {
             const active = status === value;
             return (
@@ -342,6 +373,20 @@ function CalendarFilters({
             {GROUPS.map((item) => (
               <SelectItem key={item} value={item}>
                 Grupo {item}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={team} onValueChange={onTeam}>
+          <SelectTrigger className="h-10 w-full rounded-xl border-border bg-background/60 font-bold sm:w-[220px]">
+            <SelectValue placeholder="Todos os times" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os times</SelectItem>
+            {teams.map((item) => (
+              <SelectItem key={item} value={item}>
+                {item}
               </SelectItem>
             ))}
           </SelectContent>
@@ -580,6 +625,12 @@ function matchState(jogo: Jogo): MatchState {
   return "future";
 }
 
+function isNotStarted(jogo: Jogo) {
+  return (
+    !jogo.encerrado && jogo.placar_status !== "live" && new Date(jogo.data).getTime() > Date.now()
+  );
+}
+
 function stateLabel(state: MatchState, iso: string) {
   if (state === "finished") return "Partida encerrada";
   if (state === "live") return "Partida em andamento";
@@ -587,10 +638,12 @@ function stateLabel(state: MatchState, iso: string) {
   return `Próximo jogo · ${formatShortDate(iso)}`;
 }
 
-function filterTitle(status: StatusFilter, group: string) {
+function filterTitle(status: StatusFilter, group: string, team: string) {
+  if (team !== "all") return `Jogos do ${team}`;
   if (group !== "all") return `Jogos do Grupo ${group}`;
   if (status === "today") return "Jogos de hoje";
   if (status === "live") return "Acontecendo agora";
+  if (status === "upcoming") return "Jogos não iniciados";
   if (status === "finished") return "Jogos encerrados";
   return "Calendário da Copa";
 }

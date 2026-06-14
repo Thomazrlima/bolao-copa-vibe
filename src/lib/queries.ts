@@ -143,6 +143,12 @@ export type EspecialResposta = {
   atualizado_em: string;
 };
 
+export type EspecialRespostaCorreta = {
+  pergunta_id: string;
+  resposta: string;
+  atualizado_em: string;
+};
+
 type ApiErrorBody = {
   error?: string;
 };
@@ -247,8 +253,10 @@ export async function savePalpite(jogoId: string, palpite: { gols1: number; gols
 }
 
 export async function getPalpitesEspeciais() {
-  const body = await requestJson<{ respostas: EspecialResposta[] }>("/api/palpites/especiais");
-  return body.respostas;
+  return requestJson<{
+    respostas: EspecialResposta[];
+    corretas: EspecialRespostaCorreta[];
+  }>("/api/palpites/especiais");
 }
 
 export async function savePalpiteEspecial(perguntaId: string, resposta: string) {

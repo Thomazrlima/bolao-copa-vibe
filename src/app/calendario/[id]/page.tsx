@@ -646,7 +646,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="font-display text-lg font-black">Placares mais apostados</h3>
+            <h3 className="font-display text-lg font-black">Placares mais palpitados</h3>
             <p className="text-xs text-muted-foreground">
               Compare a sabedoria coletiva com o placar final do jogo.
             </p>

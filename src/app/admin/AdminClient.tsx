@@ -506,7 +506,7 @@ export function AdminClient() {
         <TabsContent value="transmissions" className="mt-5">
           <form
             onSubmit={handleSaveHighlights}
-            className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6"
+            className="min-w-0 overflow-hidden rounded-xl border border-primary/30 bg-card p-4 sm:p-6"
           >
             <SectionHeader
               icon={Radio}
@@ -514,11 +514,11 @@ export function AdminClient() {
               description="Escolha os dois jogos e edite os links exibidos nas páginas de transmissão e melhores momentos."
             />
 
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid min-w-0 gap-5 lg:grid-cols-2">
               {highlights.map((highlight) => (
                 <div
                   key={highlight.slot}
-                  className="rounded-lg border border-border bg-background/50 p-4"
+                  className="min-w-0 rounded-lg border border-border bg-background/50 p-3 sm:p-4"
                 >
                   <p className="mb-4 text-xs font-black uppercase tracking-[0.16em] text-primary">
                     Jogo {highlight.slot}
@@ -529,10 +529,10 @@ export function AdminClient() {
                       value={highlight.jogo_id ?? ""}
                       onValueChange={(value) => selectHighlightGame(highlight.slot, value)}
                     >
-                      <SelectTrigger id={`highlight-game-${highlight.slot}`}>
+                      <SelectTrigger id={`highlight-game-${highlight.slot}`} className="min-w-0">
                         <SelectValue placeholder="Selecione um jogo" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-w-[calc(100vw-2rem)]">
                         {(overview?.games ?? []).map((game) => (
                           <SelectItem key={game.id} value={game.id}>
                             {formatGameOption(game)}
@@ -552,6 +552,7 @@ export function AdminClient() {
                       }
                       placeholder="https://www.youtube.com/watch?v=..."
                       required
+                      className="min-w-0"
                     />
                   </div>
                 </div>
@@ -566,11 +567,15 @@ export function AdminClient() {
             ) : null}
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <Button type="submit" disabled={highlightsSaving || overviewLoading}>
+              <Button
+                type="submit"
+                disabled={highlightsSaving || overviewLoading}
+                className="w-full sm:w-auto"
+              >
                 {highlightsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {highlightsSaving ? "Salvando..." : "Salvar transmissões"}
               </Button>
-              <Button asChild type="button" variant="secondary">
+              <Button asChild type="button" variant="secondary" className="w-full sm:w-auto">
                 <Link href="/transmissao">
                   Visualizar página
                   <ExternalLink className="h-4 w-4" />
@@ -911,11 +916,7 @@ function SpecialAnswersSection({
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <Button type="submit" disabled={loading || saving}>
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Check className="h-4 w-4" />
-          )}
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           {saving ? "Salvando..." : "Salvar respostas corretas"}
         </Button>
       </div>

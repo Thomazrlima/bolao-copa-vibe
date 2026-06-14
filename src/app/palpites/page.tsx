@@ -34,6 +34,7 @@ import {
   Trophy,
   Users,
   WandSparkles,
+  XCircle,
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
@@ -104,6 +105,8 @@ type PalpiteFilters = {
   dateTo: string;
   round: string;
   group: string;
+  team: string;
+  timing: "all" | "not-started";
 };
 
 const OUTCOME_META: Record<
@@ -150,6 +153,8 @@ const EMPTY_PALPITE_FILTERS: PalpiteFilters = {
   dateTo: "",
   round: "all",
   group: "all",
+  team: "all",
+  timing: "all",
 };
 
 const accuracyChartConfig = {
@@ -177,6 +182,7 @@ export default function PalpitesPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [recentlySaved, setRecentlySaved] = useState<string | null>(null);
   const [specialAnswers, setSpecialAnswers] = useState<Record<string, string>>({});
+  const [correctSpecialAnswers, setCorrectSpecialAnswers] = useState<Record<string, string>>({});
   const [savedSpecialIds, setSavedSpecialIds] = useState<Set<string>>(new Set());
   const [savingSpecialId, setSavingSpecialId] = useState<string | null>(null);
   const [recentlySavedSpecialId, setRecentlySavedSpecialId] = useState<string | null>(null);
@@ -223,10 +229,23 @@ export default function PalpitesPage() {
         if (specialResponses) {
           setSpecialAnswers(
             Object.fromEntries(
-              specialResponses.map((response) => [response.pergunta_id, response.resposta]),
+              specialResponses.respostas.map((response) => [
+                response.pergunta_id,
+                response.resposta,
+              ]),
             ),
           );
-          setSavedSpecialIds(new Set(specialResponses.map((response) => response.pergunta_id)));
+          setSavedSpecialIds(
+            new Set(specialResponses.respostas.map((response) => response.pergunta_id)),
+          );
+          setCorrectSpecialAnswers(
+            Object.fromEntries(
+              specialResponses.corretas.map((response) => [
+                response.pergunta_id,
+                response.resposta,
+              ]),
+            ),
+          );
         }
         setUnauthenticated(false);
       } catch (loadError) {
@@ -493,6 +512,7 @@ export default function PalpitesPage() {
         <TabsContent value="specials" className="mt-6">
           <SpecialsSection
             answers={specialAnswers}
+            correctAnswers={correctSpecialAnswers}
             participants={participants}
             savedIds={savedSpecialIds}
             savingId={savingSpecialId}
@@ -551,7 +571,7 @@ function PalpitesFilters({
   onChange,
 }: {
   filters: PalpiteFilters;
-  options: { dates: string[]; rounds: number[]; groups: string[] };
+  options: { dates: string[]; rounds: number[]; groups: string[]; teams: string[] };
   minDate: string;
   maxDate: string;
   onChange: (partial: Partial<PalpiteFilters>) => void;
@@ -566,7 +586,7 @@ function PalpitesFilters({
   const hasDateFilter = Boolean(filters.dateFrom);
 
   return (
-    <div className="mb-4 grid gap-2 rounded-xl border border-border bg-card/70 p-2 sm:grid-cols-3">
+    <div className="mb-4 grid gap-2 rounded-xl border border-border bg-card/70 p-2 sm:grid-cols-2 lg:grid-cols-5">
       <Popover open={dateOpen} onOpenChange={setDateOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -646,12 +666,40 @@ function PalpitesFilters({
           ))}
         </SelectContent>
       </Select>
+
+      <Select value={filters.team} onValueChange={(team) => onChange({ team })}>
+        <SelectTrigger className="h-10 rounded-lg bg-background/55 font-bold">
+          <SelectValue placeholder="Todos os times" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os times</SelectItem>
+          {options.teams.map((team) => (
+            <SelectItem key={team} value={team}>
+              {team}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={filters.timing}
+        onValueChange={(timing) => onChange({ timing: timing as PalpiteFilters["timing"] })}
+      >
+        <SelectTrigger className="h-10 rounded-lg bg-background/55 font-bold">
+          <SelectValue placeholder="Todos os jogos" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os jogos</SelectItem>
+          <SelectItem value="not-started">Não iniciados</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
 
 function SpecialsSection({
   answers,
+  correctAnswers,
   participants,
   savedIds,
   savingId,
@@ -660,6 +708,7 @@ function SpecialsSection({
   onSave,
 }: {
   answers: Record<string, string>;
+  correctAnswers: Record<string, string>;
   participants: RankingUsuario[];
   savedIds: Set<string>;
   savingId: string | null;
@@ -735,6 +784,14 @@ function SpecialsSection({
               participants={participants}
               disabled={!open}
               onValueChange={(participantId) => onSelect(championQuestion.id, participantId)}
+            />
+
+            <SpecialResultSummary
+              questionId={championQuestion.id}
+              answer={answers[championQuestion.id]}
+              correctAnswer={correctAnswers[championQuestion.id]}
+              participants={participants}
+              className="mt-3 border-primary/20 bg-primary/10"
             />
 
             <div className="mt-4 flex flex-col gap-3 border-t border-primary/20 pt-3 sm:flex-row sm:items-center sm:justify-between">
@@ -833,6 +890,14 @@ function SpecialsSection({
                   </SelectContent>
                 </Select>
 
+                <SpecialResultSummary
+                  questionId={question.id}
+                  answer={answer}
+                  correctAnswer={correctAnswers[question.id]}
+                  participants={participants}
+                  className="mt-3"
+                />
+
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
                   <span className="min-w-0 truncate text-xs text-muted-foreground">
                     {answer ? `Sua escolha: ${answer}` : "Nenhuma opção selecionada"}
@@ -874,6 +939,73 @@ function SpecialsSection({
         })}
       </div>
     </>
+  );
+}
+
+function SpecialResultSummary({
+  questionId,
+  answer,
+  correctAnswer,
+  participants,
+  className,
+}: {
+  questionId: string;
+  answer?: string;
+  correctAnswer?: string;
+  participants: RankingUsuario[];
+  className?: string;
+}) {
+  if (!correctAnswer) return null;
+
+  const correct = answer ? answer === correctAnswer : null;
+  const resultLabel = formatSpecialResultAnswer(questionId, correctAnswer, participants);
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-background/45 px-3 py-2.5 text-xs",
+        className,
+      )}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span className="min-w-0 text-muted-foreground">
+          Resultado: <strong className="text-foreground">{resultLabel}</strong>
+        </span>
+        <span
+          className={cn(
+            "inline-flex w-fit items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wider",
+            correct === true && "border-success/35 bg-success/10 text-success",
+            correct === false && "border-destructive/35 bg-destructive/10 text-destructive",
+            correct === null && "border-border bg-secondary text-muted-foreground",
+          )}
+        >
+          {correct === true ? (
+            <>
+              <CheckCircle2 className="h-3 w-3" />
+              Você acertou
+            </>
+          ) : correct === false ? (
+            <>
+              <XCircle className="h-3 w-3" />
+              Você errou
+            </>
+          ) : (
+            "Sem palpite"
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function formatSpecialResultAnswer(
+  questionId: string,
+  answer: string,
+  participants: RankingUsuario[],
+) {
+  if (questionId !== CAMPEAO_BOLAO_QUESTION_ID) return answer;
+  return (
+    participants.find((participant) => participant.id === answer)?.nome_completo ?? "Participante"
   );
 }
 
@@ -1081,23 +1213,22 @@ function OpenMatchCard({
 
   return (
     <article
-      role={isLive ? "link" : undefined}
-      tabIndex={isLive ? 0 : undefined}
-      aria-label={isLive ? `Acompanhar ${game.time1} x ${game.time2} ao vivo` : undefined}
+      role="link"
+      tabIndex={0}
+      aria-label={`Abrir detalhes de ${game.time1} x ${game.time2}`}
       onClick={(event) => {
-        if (!isLive) return;
         if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
         router.push(`/calendario/${game.id}`);
       }}
       onKeyDown={(event) => {
-        if (!isLive || (event.key !== "Enter" && event.key !== " ")) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
         router.push(`/calendario/${game.id}`);
       }}
       className={cn(
-        "overflow-hidden rounded-xl border bg-card transition-colors",
+        "cursor-pointer overflow-hidden rounded-xl border bg-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         isLive
-          ? "cursor-pointer border-live/60 bg-gradient-to-br from-live/[0.1] to-card hover:border-live focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live"
+          ? "border-live/60 bg-gradient-to-br from-live/[0.1] to-card hover:border-live focus-visible:ring-live"
           : game.iniciado
             ? "border-border opacity-80"
             : urgencyMeta
@@ -1200,11 +1331,23 @@ function OpenMatchCard({
 }
 
 function HistoryMatchCard({ game }: { game: DashboardGame }) {
+  const router = useRouter();
   const outcome = game.outcome ?? "miss";
   const meta = OUTCOME_META[outcome];
 
   return (
-    <article className="rounded-xl border border-border bg-card p-4">
+    <article
+      role="link"
+      tabIndex={0}
+      aria-label={`Abrir detalhes de ${game.time1} x ${game.time2}`}
+      onClick={() => router.push(`/calendario/${game.id}`)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        router.push(`/calendario/${game.id}`);
+      }}
+      className="cursor-pointer rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
@@ -1240,17 +1383,19 @@ function HistoryMatchCard({ game }: { game: DashboardGame }) {
         <span className="num font-display font-black">
           {game.palpite?.gols1} x {game.palpite?.gols2}
         </span>
-        <span
-          className={cn(
-            "num text-sm font-black",
-            game.pontos ? "text-success" : "text-muted-foreground",
-          )}
-        >
+        <span className={cn("num text-sm font-black", outcomePointsTextClass(outcome))}>
           +{game.pontos ?? meta.points} pts
         </span>
       </div>
     </article>
   );
+}
+
+function outcomePointsTextClass(outcome: GuessOutcome) {
+  if (outcome === "miss") return "text-destructive";
+  if (outcome === "strong") return "text-warning";
+  if (outcome === "result") return "text-success";
+  return "text-muted-foreground";
 }
 
 function Dashboard({ data }: { data: PalpitesDashboardResponse }) {
@@ -1371,7 +1516,7 @@ function GeneralDashboard({ data }: { data: PalpitesDashboardResponse }) {
       </div>
 
       <DashboardCard
-        title="Placares mais apostados"
+        title="Placares mais palpitados"
         description="Considerando todos os palpites registrados"
       >
         {data.geral.palpites_populares.length ? (
@@ -1633,6 +1778,9 @@ function buildPalpiteFilterOptions(games: DashboardGame[]) {
     groups: [...new Set(games.map((game) => game.grupo).filter(Boolean) as string[])].sort((a, b) =>
       a.localeCompare(b, "pt-BR"),
     ),
+    teams: [...new Set(games.flatMap((game) => [game.time1, game.time2]))].sort((a, b) =>
+      a.localeCompare(b, "pt-BR"),
+    ),
   };
 }
 
@@ -1643,6 +1791,10 @@ function filterDashboardGames(games: DashboardGame[], filters: PalpiteFilters) {
     if (filters.dateTo && gameDate > filters.dateTo) return false;
     if (filters.round !== "all" && String(game.rodada ?? "") !== filters.round) return false;
     if (filters.group !== "all" && game.grupo !== filters.group) return false;
+    if (filters.team !== "all" && game.time1 !== filters.team && game.time2 !== filters.team) {
+      return false;
+    }
+    if (filters.timing === "not-started" && game.iniciado) return false;
     return true;
   });
 }
