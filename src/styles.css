@@ -322,9 +322,10 @@
   will-change: transform;
 }
 
-.live-score-marquee:hover .live-score-track,
-.live-score-marquee:focus-within .live-score-track {
-  animation-play-state: paused;
+@media (hover: hover) {
+  .live-score-marquee:hover .live-score-track {
+    animation-play-state: paused;
+  }
 }
 
 @keyframes live-score-scroll {

@@ -331,9 +331,43 @@ function ScoreTooltip({
 }
 
 function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
-  const [hoveredScore, setHoveredScore] = useState<string | null>(null);
-  const rows = hoveredScore
-    ? data.rows.filter((row) => `${row.palpite.gols1} x ${row.palpite.gols2}` === hoveredScore)
+  type DashboardFilter = { type: "score"; value: string } | { type: "result"; value: string };
+
+  const [hoveredFilter, setHoveredFilter] = useState<DashboardFilter | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<DashboardFilter | null>(null);
+  const activeFilter = hoveredFilter ?? selectedFilter;
+  const selectFilter = (filter: DashboardFilter) => {
+    setHoveredFilter(null);
+    setSelectedFilter((current) =>
+      current?.type === filter.type && current.value === filter.value ? null : filter,
+    );
+  };
+  const handleChartHover = (state: { activeTooltipIndex?: number }) => {
+    const index = state.activeTooltipIndex;
+    const score = typeof index === "number" ? data.scoreBars[index]?.score : null;
+    setHoveredFilter(score ? { type: "score", value: score } : null);
+  };
+  const handleChartClick = (state: { activeTooltipIndex?: number }) => {
+    const index = state.activeTooltipIndex;
+    const score = typeof index === "number" ? data.scoreBars[index]?.score : null;
+    if (score) selectFilter({ type: "score", value: score });
+  };
+  const getPredictedResult = (row: (typeof data.rows)[number]) =>
+    row.palpite.gols1 > row.palpite.gols2
+      ? data.resultPie[0]?.label
+      : row.palpite.gols1 < row.palpite.gols2
+        ? data.resultPie[2]?.label
+        : "Empate";
+  const filteredRows = activeFilter
+    ? data.rows.filter((row) =>
+        activeFilter.type === "score"
+          ? `${row.palpite.gols1} x ${row.palpite.gols2}` === activeFilter.value
+          : getPredictedResult(row) === activeFilter.value,
+      )
+    : data.rows;
+  const filteredUserIds = new Set(filteredRows.map((row) => row.user_id));
+  const rows = activeFilter
+    ? [...filteredRows, ...data.rows.filter((row) => !filteredUserIds.has(row.user_id))]
     : data.rows;
 
   return (
@@ -341,11 +375,19 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
         <h3 className="mb-4 font-display text-lg font-black">Distribuição dos palpites</h3>
         <div
-          className="h-[280px] min-w-0 max-w-full overflow-hidden"
-          onMouseLeave={() => setHoveredScore(null)}
+          className="h-[280px] min-w-0 max-w-full cursor-pointer overflow-hidden"
+          onMouseLeave={() => setHoveredFilter(null)}
         >
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.scoreBars} margin={{ left: -18, right: 8, top: 12 }}>
+            <BarChart
+              data={data.scoreBars}
+              margin={{ left: -18, right: 8, top: 12 }}
+              throttleDelay={0}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={handleChartHover}
+              onMouseMove={handleChartHover}
+              onClick={handleChartClick}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="score" tickLine={false} axisLine={false} fontSize={11} />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
@@ -357,13 +399,11 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                 {data.scoreBars.map((item) => (
                   <Cell
                     key={item.score}
+                    style={{ cursor: "pointer" }}
                     fill={
-                      hoveredScore && hoveredScore !== item.score
+                      activeFilter?.type === "score" && activeFilter.value !== item.score
                         ? "color-mix(in oklab, var(--primary) 24%, transparent)"
                         : "var(--primary)"
-                    }
-                    onMouseEnter={() =>
-                      setHoveredScore((current) => (current === item.score ? current : item.score))
                     }
                   />
                 ))}
@@ -376,8 +416,12 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
         <h3 className="mb-4 font-display text-lg font-black">Resultado previsto</h3>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center lg:block">
-          <ChartContainer config={resultChartConfig} className="mx-auto h-[210px] max-w-[300px]">
-            <PieChart>
+          <ChartContainer
+            config={resultChartConfig}
+            className="mx-auto h-[210px] max-w-[300px] cursor-pointer"
+            onMouseLeave={() => setHoveredFilter(null)}
+          >
+            <PieChart style={{ cursor: "pointer" }}>
               <ChartTooltip content={<ChartTooltipContent hideLabel />} />
               <Pie
                 data={data.resultPie}
@@ -386,29 +430,63 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                 innerRadius={58}
                 outerRadius={94}
                 paddingAngle={3}
+                onMouseEnter={(_, index) => {
+                  const result = data.resultPie[index]?.label;
+                  if (result) setHoveredFilter({ type: "result", value: result });
+                }}
+                onClick={(_, index) => {
+                  const result = data.resultPie[index]?.label;
+                  if (result) selectFilter({ type: "result", value: result });
+                }}
               >
                 {data.resultPie.map((item, index) => (
-                  <Cell key={item.label} fill={COLORS[index % COLORS.length]} />
+                  <Cell
+                    key={item.label}
+                    style={{ cursor: "pointer" }}
+                    fill={COLORS[index % COLORS.length]}
+                    opacity={
+                      activeFilter?.type === "result" && activeFilter.value !== item.label
+                        ? 0.35
+                        : 1
+                    }
+                  />
                 ))}
               </Pie>
             </PieChart>
           </ChartContainer>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-1 lg:grid-cols-3">
-            {data.resultPie.map((item, index) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/45 p-2"
-              >
-                <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </div>
-                <p className="num font-display text-lg font-black">{item.count}</p>
-              </div>
-            ))}
+            {data.resultPie.map((item, index) => {
+              const isActive = activeFilter?.type === "result" && activeFilter.value === item.label;
+              const isSelected =
+                selectedFilter?.type === "result" && selectedFilter.value === item.label;
+
+              return (
+                <button
+                  type="button"
+                  key={item.label}
+                  onMouseEnter={() => setHoveredFilter({ type: "result", value: item.label })}
+                  onMouseLeave={() => setHoveredFilter(null)}
+                  onFocus={() => setHoveredFilter({ type: "result", value: item.label })}
+                  onBlur={() => setHoveredFilter(null)}
+                  onClick={() => selectFilter({ type: "result", value: item.label })}
+                  aria-pressed={isSelected}
+                  className={cn(
+                    "flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-background/45 p-2 text-left transition-[opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    activeFilter?.type === "result" && !isActive && "opacity-45",
+                    isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-card",
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </span>
+                  <span className="num font-display text-lg font-black">{item.count}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -416,36 +494,50 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 lg:col-span-2">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <h3 className="font-display text-lg font-black">Todos os palpites</h3>
-          {hoveredScore ? (
-            <span className="num text-xs font-bold text-primary">
-              Filtrando placar {hoveredScore} ({rows.length})
-            </span>
-          ) : null}
+          <span
+            className={cn("num text-xs font-bold text-primary", !activeFilter && "invisible")}
+            aria-hidden={!activeFilter}
+          >
+            Filtrando{" "}
+            {activeFilter?.type === "score"
+              ? `placar ${activeFilter.value}`
+              : `resultado ${activeFilter?.value ?? "Empate"}`}{" "}
+            ({filteredRows.length}){selectedFilter && !hoveredFilter ? " · fixado" : ""}
+          </span>
         </div>
         {rows.length ? (
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {rows.map((row) => (
-              <Link
-                key={row.user_id}
-                href={`/perfil/${row.user_id}`}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <UserAvatar
-                    name={row.nome_completo}
-                    avatarPath={row.avatar_url}
-                    className="h-8 w-8 bg-primary/15"
-                    fallbackClassName="bg-primary/15 text-xs font-black text-primary"
-                  />
-                  <BrazilThemedName className="truncate text-sm font-semibold">
-                    {row.nome_completo}
-                  </BrazilThemedName>
-                </span>
-                <span className="num font-display text-lg font-black">
-                  {row.palpite.gols1} x {row.palpite.gols2}
-                </span>
-              </Link>
-            ))}
+            {rows.map((row) => {
+              const isHidden = activeFilter !== null && !filteredUserIds.has(row.user_id);
+
+              return (
+                <Link
+                  key={row.user_id}
+                  href={`/perfil/${row.user_id}`}
+                  tabIndex={isHidden ? -1 : undefined}
+                  aria-hidden={isHidden}
+                  className={cn(
+                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3",
+                    isHidden && "invisible pointer-events-none",
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <UserAvatar
+                      name={row.nome_completo}
+                      avatarPath={row.avatar_url}
+                      className="h-8 w-8 bg-primary/15"
+                      fallbackClassName="bg-primary/15 text-xs font-black text-primary"
+                    />
+                    <BrazilThemedName className="truncate text-sm font-semibold">
+                      {row.nome_completo}
+                    </BrazilThemedName>
+                  </span>
+                  <span className="num font-display text-lg font-black">
+                    {row.palpite.gols1} x {row.palpite.gols2}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Nenhum palpite registrado para este jogo.</p>
@@ -456,10 +548,30 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
 }
 
 function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
-  const [hoveredOutcome, setHoveredOutcome] = useState<GuessOutcome | null>(null);
-  const rows = hoveredOutcome
-    ? data.rows.filter((row) => (row.outcome ?? "miss") === hoveredOutcome)
+  type DashboardFilter =
+    | { type: "outcome"; value: GuessOutcome }
+    | { type: "score"; value: string };
+
+  const [hoveredFilter, setHoveredFilter] = useState<DashboardFilter | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<DashboardFilter | null>(null);
+  const activeFilter = hoveredFilter ?? selectedFilter;
+  const filteredRows = activeFilter
+    ? data.rows.filter((row) =>
+        activeFilter.type === "outcome"
+          ? (row.outcome ?? "miss") === activeFilter.value
+          : `${row.palpite.gols1} x ${row.palpite.gols2}` === activeFilter.value,
+      )
     : data.rows;
+  const filteredUserIds = new Set(filteredRows.map((row) => row.user_id));
+  const rows = activeFilter
+    ? [...filteredRows, ...data.rows.filter((row) => !filteredUserIds.has(row.user_id))]
+    : data.rows;
+  const selectFilter = (filter: DashboardFilter) => {
+    setHoveredFilter(null);
+    setSelectedFilter((current) =>
+      current?.type === filter.type && current.value === filter.value ? null : filter,
+    );
+  };
 
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -478,24 +590,30 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
 
         <div
           className="grid gap-2 sm:grid-cols-5 xl:grid-cols-1"
-          onMouseLeave={() => setHoveredOutcome(null)}
+          onMouseLeave={() => setHoveredFilter(null)}
         >
           {data.outcomeCards.map((item) => {
             const meta = OUTCOME_CARDS.find((card) => card.outcome === item.outcome)!;
             const Icon = meta.icon;
+            const isActive =
+              activeFilter?.type === "outcome" && activeFilter.value === item.outcome;
+            const isSelected =
+              selectedFilter?.type === "outcome" && selectedFilter.value === item.outcome;
 
             return (
-              <article
+              <button
+                type="button"
                 key={item.outcome}
-                onMouseEnter={() =>
-                  setHoveredOutcome((current) =>
-                    current === item.outcome ? current : item.outcome,
-                  )
-                }
+                onMouseEnter={() => setHoveredFilter({ type: "outcome", value: item.outcome })}
+                onFocus={() => setHoveredFilter({ type: "outcome", value: item.outcome })}
+                onBlur={() => setHoveredFilter(null)}
+                onClick={() => selectFilter({ type: "outcome", value: item.outcome })}
+                aria-pressed={isSelected}
                 className={cn(
-                  "rounded-xl border p-3 transition-opacity",
+                  "cursor-pointer rounded-xl border p-3 text-left transition-[opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   meta.className,
-                  hoveredOutcome && hoveredOutcome !== item.outcome && "opacity-45",
+                  activeFilter?.type === "outcome" && !isActive && "opacity-45",
+                  isSelected && "ring-2 ring-current ring-offset-2 ring-offset-card",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -519,7 +637,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                     style={{ width: `${item.percent}%` }}
                   />
                 </div>
-              </article>
+              </button>
             );
           })}
         </div>
@@ -551,27 +669,34 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Pontos distribuídos
             </p>
-            <p className="num mt-2 font-display text-3xl font-black">
-              {data.totalPoints}
-            </p>
+            <p className="num mt-2 font-display text-3xl font-black">{data.totalPoints}</p>
           </div>
         </div>
 
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-2" onMouseLeave={() => setHoveredFilter(null)}>
           {data.scoreBars.slice(0, 6).map((item) => {
             const percent = data.totalPalpites
               ? Math.round((item.count / data.totalPalpites) * 100)
               : 0;
             const isActual = item.score === data.actualScore;
+            const isActive = activeFilter?.type === "score" && activeFilter.value === item.score;
+            const isSelected =
+              selectedFilter?.type === "score" && selectedFilter.value === item.score;
 
             return (
-              <div
+              <button
+                type="button"
                 key={item.score}
+                onMouseEnter={() => setHoveredFilter({ type: "score", value: item.score })}
+                onFocus={() => setHoveredFilter({ type: "score", value: item.score })}
+                onBlur={() => setHoveredFilter(null)}
+                onClick={() => selectFilter({ type: "score", value: item.score })}
+                aria-pressed={isSelected}
                 className={cn(
-                  "rounded-lg border p-3",
-                  isActual
-                    ? "border-primary/45 bg-primary/10"
-                    : "border-border bg-background/45",
+                  "block w-full cursor-pointer rounded-lg border p-3 text-left transition-[opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isActual ? "border-primary/45 bg-primary/10" : "border-border bg-background/45",
+                  activeFilter?.type === "score" && !isActive && "opacity-45",
+                  isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-card",
                 )}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -589,11 +714,14 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
-                    className={cn("h-full rounded-full", isActual ? "bg-primary" : "bg-muted-foreground")}
+                    className={cn(
+                      "h-full rounded-full",
+                      isActual ? "bg-primary" : "bg-muted-foreground",
+                    )}
                     style={{ width: `${percent}%` }}
                   />
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -602,11 +730,16 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
       <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 xl:col-span-2">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <h3 className="font-display text-lg font-black">Palpites e pontos</h3>
-          {hoveredOutcome ? (
-            <span className="text-xs font-bold text-primary">
-              Filtrando {getOutcomeLabel(hoveredOutcome)} ({rows.length})
-            </span>
-          ) : null}
+          <span
+            className={cn("text-xs font-bold text-primary", !activeFilter && "invisible")}
+            aria-hidden={!activeFilter}
+          >
+            Filtrando{" "}
+            {activeFilter?.type === "outcome"
+              ? getOutcomeLabel(activeFilter.value)
+              : `placar ${activeFilter?.value ?? "0 x 0"}`}{" "}
+            ({filteredRows.length}){selectedFilter && !hoveredFilter ? " · fixado" : ""}
+          </span>
         </div>
         {rows.length ? (
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -615,12 +748,18 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                 OUTCOME_CARDS.find((item) => item.outcome === row.outcome) ??
                 OUTCOME_CARDS.find((item) => item.outcome === "miss")!;
               const Icon = meta.icon;
+              const isHidden = activeFilter !== null && !filteredUserIds.has(row.user_id);
 
               return (
                 <Link
                   key={row.user_id}
                   href={`/perfil/${row.user_id}`}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3"
+                  tabIndex={isHidden ? -1 : undefined}
+                  aria-hidden={isHidden}
+                  className={cn(
+                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3",
+                    isHidden && "invisible pointer-events-none",
+                  )}
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <UserAvatar

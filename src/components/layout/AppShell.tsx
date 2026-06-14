@@ -368,6 +368,7 @@ function LiveScoreItem({
     <Link
       href={`/calendario/${game.id}`}
       tabIndex={hidden ? -1 : undefined}
+      onClick={(event) => event.currentTarget.blur()}
       className="group relative flex h-10 shrink-0 items-center text-xs font-bold text-white hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white sm:text-sm"
     >
       <LiveScoreContent game={game} />
