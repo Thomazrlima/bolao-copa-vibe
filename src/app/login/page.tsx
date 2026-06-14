@@ -108,19 +108,25 @@ export default function LoginPage() {
     setRecovering(true);
     setRecoveryMessage(null);
 
-    const origin = window.location.origin;
-    const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmail, {
-      redirectTo: `${origin}/auth/callback?next=/redefinir-senha`,
-    });
+    try {
+      const response = await fetch("/api/auth/password-recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: recoveryEmail }),
+      });
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
 
-    setRecovering(false);
-
-    if (error) {
-      setRecoveryMessage(error.message);
-      return;
+      setRecoveryMessage(
+        body?.message ??
+          "Se este e-mail estiver cadastrado, enviaremos instruções para redefinir sua senha.",
+      );
+    } catch {
+      setRecoveryMessage(
+        "Se este e-mail estiver cadastrado, enviaremos instruções para redefinir sua senha.",
+      );
+    } finally {
+      setRecovering(false);
     }
-
-    setRecoveryMessage("Se esse e-mail estiver cadastrado, enviaremos um link de recuperação.");
   }
 
   return (

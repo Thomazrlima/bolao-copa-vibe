@@ -1,16 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, KeyRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase/client";
 
 export default function RedefinirSenhaPage() {
-  const supabase = useMemo(() => createClient(), []);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,12 +21,11 @@ export default function RedefinirSenhaPage() {
     let active = true;
 
     async function checkSession() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const response = await fetch("/api/auth/reset-password", { cache: "no-store" });
+      const body = (await response.json().catch(() => null)) as { ready?: boolean } | null;
 
       if (!active) return;
-      setHasRecoverySession(Boolean(user));
+      setHasRecoverySession(Boolean(body?.ready));
       setCheckingSession(false);
     }
 
@@ -37,7 +34,7 @@ export default function RedefinirSenhaPage() {
     return () => {
       active = false;
     };
-  }, [supabase.auth]);
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,18 +51,22 @@ export default function RedefinirSenhaPage() {
     }
 
     setSubmitting(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    const response = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
     setSubmitting(false);
 
-    if (error) {
-      setMessage(error.message);
+    if (!response.ok) {
+      setMessage(body?.error ?? "Não foi possível redefinir a senha.");
       return;
     }
 
     setPassword("");
     setConfirmPassword("");
     setSuccess(true);
-    await supabase.auth.signOut();
   }
 
   return (
