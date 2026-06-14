@@ -398,10 +398,20 @@ function LiveScoreContent({ game }: { game: LiveGame }) {
 }
 
 function LiveTeamName({ name }: { name: string }) {
-  return isBrazilTeam(name) ? (
+  const code = teamCodeFromName(name);
+  const label = isBrazilTeam(name) ? (
     <strong className="font-black drop-shadow-sm">{name}</strong>
   ) : (
     <span>{name}</span>
+  );
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {code ? (
+        <Flag code={code} name={name} size="sm" static className="shadow-sm ring-white/50" />
+      ) : null}
+      {label}
+    </span>
   );
 }
 
