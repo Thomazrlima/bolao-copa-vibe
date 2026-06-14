@@ -30,6 +30,13 @@ import { teamCodeFromName } from "@/data/iso2";
 import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
+import {
+  formatLocalDateKey,
+  formatLocalGameTime,
+  formatLocalShortDate,
+  localDateKey,
+  localTodayKey,
+} from "@/lib/local-datetime";
 
 type Jogo = {
   id: string;
@@ -142,13 +149,13 @@ export default function CalendarioPage() {
       ),
     [jogos],
   );
-  const todayKey = brasiliaTodayKey();
+  const todayKey = localTodayKey();
 
   const stats = useMemo(() => {
     void nowTick;
     return {
       finished: jogos.filter((jogo) => matchState(jogo) === "finished").length,
-      today: jogos.filter((jogo) => brasiliaDateKey(jogo.data) === todayKey).length,
+      today: jogos.filter((jogo) => localDateKey(jogo.data) === todayKey).length,
       live: jogos.filter((jogo) => matchState(jogo) === "live").length,
       total: jogos.length,
     };
@@ -158,7 +165,7 @@ export default function CalendarioPage() {
     void nowTick;
     return jogos.filter((jogo) => {
       const state = matchState(jogo);
-      if (status === "today" && brasiliaDateKey(jogo.data) !== todayKey) return false;
+      if (status === "today" && localDateKey(jogo.data) !== todayKey) return false;
       if (status === "live" && state !== "live") return false;
       if (status === "upcoming" && !isNotStarted(jogo)) return false;
       if (status === "finished" && state !== "finished") return false;
@@ -178,7 +185,7 @@ export default function CalendarioPage() {
   const dates = useMemo(() => {
     const dateMap = new Map<string, Jogo[]>();
     filtered.forEach((jogo) => {
-      const key = brasiliaDateKey(jogo.data);
+      const key = localDateKey(jogo.data);
       if (!dateMap.has(key)) dateMap.set(key, []);
       dateMap.get(key)!.push(jogo);
     });
@@ -453,7 +460,7 @@ function DateSection({
   jogos: Jogo[];
   groupByTeam: Map<string, string>;
 }) {
-  const isToday = date === brasiliaTodayKey();
+  const isToday = date === localTodayKey();
   const liveCount = jogos.filter((jogo) => matchState(jogo) === "live").length;
 
   return (
@@ -564,7 +571,7 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
                 state === "live" ? "text-live" : "text-muted-foreground",
               )}
             >
-              {formatTime(jogo.data)}
+            {formatLocalGameTime(jogo.data)}
             </span>
             {jogo.gols1 != null && jogo.gols2 != null ? (
               <div
@@ -621,7 +628,7 @@ function matchState(jogo: Jogo): MatchState {
   if (jogo.placar_status === "finished") return "finished";
   if (jogo.placar_status === "live") return "live";
   if (jogo.encerrado) return "finished";
-  if (brasiliaDateKey(jogo.data) === brasiliaTodayKey()) return "today";
+  if (localDateKey(jogo.data) === localTodayKey()) return "today";
   return "future";
 }
 
@@ -634,8 +641,8 @@ function isNotStarted(jogo: Jogo) {
 function stateLabel(state: MatchState, iso: string) {
   if (state === "finished") return "Partida encerrada";
   if (state === "live") return "Partida em andamento";
-  if (state === "today") return `Acontece hoje às ${formatTime(iso)}`;
-  return `Próximo jogo · ${formatShortDate(iso)}`;
+  if (state === "today") return `Acontece hoje às ${formatLocalGameTime(iso)}`;
+  return `Próximo jogo · ${formatLocalShortDate(iso)}`;
 }
 
 function filterTitle(status: StatusFilter, group: string, team: string) {
@@ -648,41 +655,6 @@ function filterTitle(status: StatusFilter, group: string, team: string) {
   return "Calendário da Copa";
 }
 
-function brasiliaDateKey(iso: string) {
-  return iso.slice(0, 10);
-}
-
-function brasiliaTodayKey() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
-}
-
-function formatShortDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-  });
-}
-
 function formatDate(yyyymmdd: string) {
-  const [year, month, day] = yyyymmdd.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12)).toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    timeZone: "UTC",
-  });
+  return formatLocalDateKey(yyyymmdd);
 }

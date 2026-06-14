@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { formatLocalDateKey, localDateKey, localTodayKey } from "@/lib/local-datetime";
 
 type DatedItem = {
   data: string;
@@ -23,7 +24,7 @@ export function MatchDateGroups<T extends DatedItem>({
   const groups = new Map<string, T[]>();
 
   items.forEach((item) => {
-    const date = item.data.slice(0, 10);
+    const date = localDateKey(item.data);
     const current = groups.get(date) ?? [];
     current.push(item);
     groups.set(date, current);
@@ -39,7 +40,7 @@ export function MatchDateGroups<T extends DatedItem>({
   return (
     <div className="space-y-8">
       {dates.map(({ date, items: dateItems }) => {
-        const isToday = date === brasiliaTodayKey();
+        const isToday = date === localTodayKey();
         const liveCount = dateItems.filter(isLive).length;
 
         return (
@@ -59,7 +60,7 @@ export function MatchDateGroups<T extends DatedItem>({
               </span>
               <div>
                 <h3 className="font-display text-base font-black capitalize sm:text-lg">
-                  {formatDate(date)}
+                  {formatLocalDateKey(date)}
                 </h3>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   {liveCount ? `${liveCount} ao vivo · ` : ""}
@@ -79,23 +80,4 @@ export function MatchDateGroups<T extends DatedItem>({
       })}
     </div>
   );
-}
-
-function brasiliaTodayKey() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
-function formatDate(date: string) {
-  const [year, month, day] = date.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12)).toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    timeZone: "UTC",
-  });
 }

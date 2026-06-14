@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarDays, ExternalLink, Play, Radio } from "lucide-react";
 
+import { LocalDateTime } from "@/components/common/LocalDateTime";
 import { Button } from "@/components/ui/button";
 import { RealtimeRouterRefresh } from "@/components/realtime/RealtimeRouterRefresh";
 import { createClient } from "@/lib/supabase/server";
@@ -104,7 +105,15 @@ function HighlightCard({ game }: { game: GameRow }) {
           </h3>
           <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <CalendarDays className="h-3.5 w-3.5" />
-            {formatDateTime(game.data)}
+            <LocalDateTime
+              value={game.data}
+              options={{
+                day: "2-digit",
+                month: "long",
+                hour: "2-digit",
+                minute: "2-digit",
+              }}
+            />
           </p>
         </div>
       </div>
@@ -189,12 +198,3 @@ function getYoutubeThumbnailUrl(url: string) {
   }
 }
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
-}

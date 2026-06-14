@@ -34,6 +34,7 @@ import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { getPerfil, type PerfilPalpite, type PerfilUsuario } from "@/lib/queries";
 import { RANKING_BADGES } from "@/lib/ranking-badges";
 import { cn } from "@/lib/utils";
+import { formatLocalGameDateTime } from "@/lib/local-datetime";
 import type { GuessOutcome } from "@/lib/scoring";
 
 const STAT_CARDS: Array<{
@@ -523,11 +524,10 @@ function Team({ name, right = false }: { name: string; right?: boolean }) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
+  return formatLocalGameDateTime(value, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
-  }).format(new Date(value));
+  });
 }

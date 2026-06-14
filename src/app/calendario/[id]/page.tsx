@@ -45,6 +45,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
+import {
+  formatLocalGameDateTime,
+  formatLocalTime,
+} from "@/lib/local-datetime";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -79,7 +83,7 @@ const OUTCOME_CARDS: Array<{
     label: "Chinelada",
     points: 10,
     icon: Trophy,
-    className: "border-primary/40 bg-primary/10 text-primary",
+    className: "border-primary/45 bg-primary/10 text-primary",
     barClassName: "bg-primary",
   },
   {
@@ -103,8 +107,8 @@ const OUTCOME_CARDS: Array<{
     label: "Deu sorte",
     points: 2,
     icon: Goal,
-    className: "border-border bg-background/55 text-foreground",
-    barClassName: "bg-foreground",
+    className: "border-border bg-secondary text-secondary-foreground",
+    barClassName: "bg-muted-foreground",
   },
   {
     outcome: "miss",
@@ -1164,12 +1168,11 @@ function getYoutubeVideoId(url: string) {
 }
 
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", {
+  return formatLocalGameDateTime(iso, {
     day: "2-digit",
     month: "long",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
   });
 }
 
@@ -1181,8 +1184,5 @@ function formatAveragePoints(value: number) {
 }
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatLocalTime(iso);
 }

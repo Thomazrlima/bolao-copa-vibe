@@ -34,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { canManageUsers } from "@/lib/admin-users";
 import { CAMPEAO_BOLAO_QUESTION_ID, ESPECIAIS } from "@/lib/especiais";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
+import { formatLocalDateTime, formatLocalGameDateTime } from "@/lib/local-datetime";
 import { createUsuario, getCurrentUsuario, type Usuario } from "@/lib/queries";
 
 type CreatedUser = {
@@ -949,7 +950,7 @@ function PendingUserCard({ user }: { user: PendingUser }) {
             <p className="text-sm font-bold">
               {game.time1} <span className="text-muted-foreground">x</span> {game.time2}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(game.data)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{formatGameDateTime(game.data)}</p>
           </Link>
         ))}
       </div>
@@ -1193,17 +1194,25 @@ function ReportField({
 }
 
 function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("pt-BR", {
+  return formatLocalDateTime(value, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
   });
 }
 
 function formatGameOption(game: AdminGame) {
-  return `${game.time1} x ${game.time2} · ${formatDateTime(game.data)}`;
+  return `${game.time1} x ${game.time2} · ${formatGameDateTime(game.data)}`;
+}
+
+function formatGameDateTime(value: string) {
+  return formatLocalGameDateTime(value, {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatSpecialAnswer(answer: string, participants: SpecialParticipant[]) {

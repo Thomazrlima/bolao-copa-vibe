@@ -96,6 +96,13 @@ import {
   PALPITES_UPDATED_EVENT,
   type PalpiteUrgency,
 } from "@/lib/palpite-deadlines";
+import {
+  formatLocalGameDateTime,
+  formatLocalDateKey,
+  localCalendarDate,
+  localDateKey,
+  localTodayKey,
+} from "@/lib/local-datetime";
 import { cn } from "@/lib/utils";
 
 type Score = { home: number | null; away: number | null };
@@ -285,6 +292,14 @@ export default function PalpitesPage() {
     [data],
   );
   const filterOptions = useMemo(() => buildPalpiteFilterOptions(data?.jogos ?? []), [data]);
+  const openDateBounds = useMemo(
+    () => buildDateBounds(openGames, localTodayKey(), WORLD_CUP_END_DATE_KEY),
+    [openGames],
+  );
+  const historyDateBounds = useMemo(
+    () => buildDateBounds(historyGames, HISTORY_START_DATE_KEY, localTodayKey()),
+    [historyGames],
+  );
   const filteredOpenGames = useMemo(
     () => filterDashboardGames(openGames, openFilters),
     [openFilters, openGames],
@@ -477,8 +492,8 @@ export default function PalpitesPage() {
           <PalpitesFilters
             filters={openFilters}
             options={filterOptions}
-            minDate={brasiliaTodayKey()}
-            maxDate={WORLD_CUP_END_DATE_KEY}
+            minDate={openDateBounds.min}
+            maxDate={openDateBounds.max}
             onChange={(partial) => setOpenFilters((current) => ({ ...current, ...partial }))}
           />
           {filteredOpenGames.length ? (
@@ -533,8 +548,8 @@ export default function PalpitesPage() {
           <PalpitesFilters
             filters={historyFilters}
             options={filterOptions}
-            minDate={HISTORY_START_DATE_KEY}
-            maxDate={brasiliaTodayKey()}
+            minDate={historyDateBounds.min}
+            maxDate={historyDateBounds.max}
             onChange={(partial) => setHistoryFilters((current) => ({ ...current, ...partial }))}
           />
           {filteredHistoryGames.length ? (
@@ -579,8 +594,8 @@ function PalpitesFilters({
   const [dateOpen, setDateOpen] = useState(false);
   const selectedRange: DateRange | undefined = filters.dateFrom
     ? {
-        from: calendarDate(filters.dateFrom),
-        to: filters.dateTo ? calendarDate(filters.dateTo) : undefined,
+        from: localCalendarDate(filters.dateFrom),
+        to: filters.dateTo ? localCalendarDate(filters.dateTo) : undefined,
       }
     : undefined;
   const hasDateFilter = Boolean(filters.dateFrom);
@@ -602,9 +617,9 @@ function PalpitesFilters({
           <Calendar
             mode="range"
             selected={selectedRange}
-            defaultMonth={selectedRange?.from ?? calendarDate(minDate)}
-            startMonth={calendarDate(minDate)}
-            endMonth={calendarDate(maxDate)}
+            defaultMonth={selectedRange?.from ?? localCalendarDate(minDate)}
+            startMonth={localCalendarDate(minDate)}
+            endMonth={localCalendarDate(maxDate)}
             disabled={(date) => {
               const key = dateKey(date);
               return key < minDate || key > maxDate;
@@ -1765,7 +1780,7 @@ function PageSkeleton() {
 
 function buildPalpiteFilterOptions(games: DashboardGame[]) {
   return {
-    dates: [...new Set(games.map((game) => brasiliaDateKey(game.data)))].sort((a, b) =>
+    dates: [...new Set(games.map((game) => localDateKey(game.data)))].sort((a, b) =>
       a.localeCompare(b),
     ),
     rounds: [
@@ -1784,9 +1799,20 @@ function buildPalpiteFilterOptions(games: DashboardGame[]) {
   };
 }
 
+function buildDateBounds(games: DashboardGame[], fallbackMin: string, fallbackMax: string) {
+  const dates = [...new Set(games.map((game) => localDateKey(game.data)))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  return {
+    min: dates[0] ?? fallbackMin,
+    max: dates.at(-1) ?? fallbackMax,
+  };
+}
+
 function filterDashboardGames(games: DashboardGame[], filters: PalpiteFilters) {
   return games.filter((game) => {
-    const gameDate = brasiliaDateKey(game.data);
+    const gameDate = localDateKey(game.data);
     if (filters.dateFrom && gameDate < filters.dateFrom) return false;
     if (filters.dateTo && gameDate > filters.dateTo) return false;
     if (filters.round !== "all" && String(game.rodada ?? "") !== filters.round) return false;
@@ -1810,11 +1836,10 @@ function phaseLabel(game: DashboardGame) {
 }
 
 function formatFilterDate(date: string) {
-  return new Date(`${date}T12:00:00.000Z`).toLocaleDateString("pt-BR", {
+  return formatLocalDateKey(date, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    timeZone: "UTC",
   });
 }
 
@@ -1826,19 +1851,6 @@ function formatDateRangeFilter(filters: PalpiteFilters) {
   return `${formatFilterDate(filters.dateFrom)} até ${formatFilterDate(filters.dateTo)}`;
 }
 
-function brasiliaDateKey(iso: string) {
-  return iso.slice(0, 10);
-}
-
-function brasiliaTodayKey() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
 function dateKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1846,19 +1858,13 @@ function dateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function calendarDate(key: string) {
-  const [year, month, day] = key.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", {
+  return formatLocalGameDateTime(iso, {
     weekday: "short",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
   });
 }
 
