@@ -10,8 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-import { Trophy } from "lucide-react";
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { ArrowDown, ArrowUp, Radio, Trophy } from "lucide-react";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { BrazilThemedName } from "@/components/common/BrazilThemedName";
@@ -93,6 +93,7 @@ export default function RankingPage() {
 
   const podium = useMemo(() => ranking.slice(0, 3), [ranking]);
   const rest = useMemo(() => ranking.slice(3), [ranking]);
+  const hasLiveRanking = ranking.some((participant) => participant.movimento === "partial");
   const chineladaLeaderId = useMemo(() => {
     if (ranking.length === 0) return null;
 
@@ -106,7 +107,11 @@ export default function RankingPage() {
 
   return (
     <div className="ranking-page">
-      <PageHeader title="Ranking Geral" />
+      <PageHeader
+        title="Ranking Geral"
+        subtitle={hasLiveRanking ? "Ranking parcial atualizado com os placares ao vivo" : undefined}
+        live={hasLiveRanking}
+      />
 
       {loading ? (
         <RankingSkeleton />
@@ -115,22 +120,25 @@ export default function RankingPage() {
           {error}
         </div>
       ) : (
-        <>
+        <LayoutGroup id="ranking-geral">
           <Podium ranking={podium} chineladaLeaderId={chineladaLeaderId} />
 
           <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <div className="grid grid-cols-[32px_minmax(0,1fr)_46px_52px] items-center gap-1.5 border-b border-border bg-background/40 px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[64px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-3 sm:text-xs">
+            <div className="grid grid-cols-[58px_minmax(0,1fr)_46px_52px] items-center gap-1.5 border-b border-border bg-background/40 px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[96px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-3 sm:text-xs">
               <span>#</span>
               <span>Participante</span>
               <span className="text-right">
                 <span className="sm:hidden">Chin.</span>
                 <span className="hidden sm:inline">Chineladas</span>
               </span>
-              <span className="text-right">Pts</span>
+              <span className="text-right">
+                <span className="sm:hidden">Pts</span>
+                <span className="hidden sm:inline">Pontos</span>
+              </span>
             </div>
             <ul className="divide-y divide-border">
-              {rest.map((row, i) => {
-                const pos = i + 4;
+              {rest.map((row) => {
+                const pos = row.posicao;
                 const relegated = pos >= firstRelegatedPosition;
 
                 return (
@@ -152,7 +160,7 @@ export default function RankingPage() {
               })}
             </ul>
           </div>
-        </>
+        </LayoutGroup>
       )}
     </div>
   );
@@ -171,15 +179,20 @@ function RankingRow({
   lastPlace: boolean;
   chineladaLeaderId: string | null;
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
-    <li
+    <motion.li
+      layout
+      layoutId={`ranking-participant-${row.id}`}
+      transition={{ layout: { duration: reduceMotion ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] } }}
       className={cn(
-        "grid grid-cols-[32px_minmax(0,1fr)_46px_52px] items-center gap-1.5 px-2 py-3 text-sm sm:grid-cols-[64px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-4",
+        "grid grid-cols-[58px_minmax(0,1fr)_46px_52px] items-center gap-1.5 px-2 py-3 text-sm sm:grid-cols-[96px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-4",
         relegated &&
           "relegation-alert border-destructive/25 bg-destructive/15 text-destructive-foreground first:border-t",
       )}
     >
-      <span className="flex items-center gap-1">
+      <span className="flex min-w-0 items-center gap-1.5">
         <span
           className={cn(
             "font-display text-lg font-black num",
@@ -188,6 +201,7 @@ function RankingRow({
         >
           {pos}
         </span>
+        <PositionMovement row={row} />
       </span>
       <Link
         href={profileHref(row)}
@@ -209,8 +223,8 @@ function RankingRow({
       >
         {row.chineladas}
       </span>
-      <span className="num text-right font-bold">{row.pontos}</span>
-    </li>
+      <AnimatedNumber value={row.pontos} className="num text-right font-bold" />
+    </motion.li>
   );
 }
 
@@ -218,12 +232,83 @@ function RankingSkeleton() {
   return <SpinningBallLoader label="Carregando ranking" />;
 }
 
-function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function PageHeader({
+  title,
+  subtitle,
+  live = false,
+}: {
+  title: string;
+  subtitle?: string;
+  live?: boolean;
+}) {
   return (
     <div className="mb-6 flex flex-col gap-1">
       <h2 className="font-display text-2xl font-black tracking-tight sm:text-3xl">{title}</h2>
-      {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+      {subtitle && (
+        <p
+          className={cn(
+            "flex items-center gap-1.5 text-sm text-muted-foreground",
+            live && "font-semibold text-primary",
+          )}
+        >
+          {live && <Radio className="h-3.5 w-3.5 animate-pulse" aria-hidden="true" />}
+          {subtitle}
+        </p>
+      )}
     </div>
+  );
+}
+
+function PositionMovement({ row }: { row: RankingUsuario }) {
+  if (!row.variacao || !row.movimento) return null;
+
+  const wentUp = row.variacao > 0;
+  const Icon = wentUp ? ArrowUp : ArrowDown;
+  const amount = Math.abs(row.variacao);
+  const partial = row.movimento === "partial";
+  const label = `${wentUp ? "Subiu" : "Desceu"} ${amount} ${
+    amount === 1 ? "posição" : "posições"
+  }${partial ? " na parcial ao vivo" : ""}`;
+
+  return (
+    <AnimatePresence mode="popLayout" initial={false}>
+      <motion.span
+        key={`${row.movimento}-${row.variacao}`}
+        initial={{ opacity: 0, scale: 0.7, y: wentUp ? 4 : -4 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.7 }}
+        transition={{ duration: 0.25 }}
+        className={cn(
+          "inline-flex shrink-0 items-center gap-0.5 rounded-full px-1 py-0.5 text-[10px] font-black leading-none sm:px-1.5 sm:text-xs",
+          wentUp ? "text-success" : "text-destructive",
+          partial && "border border-dashed border-current bg-background/60",
+        )}
+        title={label}
+        aria-label={label}
+      >
+        <Icon className={cn("h-3 w-3", partial && "animate-pulse")} aria-hidden="true" />
+        {amount}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+function AnimatedNumber({ value, className }: { value: number; className?: string }) {
+  return (
+    <span className={cn("relative inline-grid overflow-hidden", className)}>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={value}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={{ duration: 0.22 }}
+          className="col-start-1 row-start-1"
+        >
+          {value}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }
 
@@ -366,12 +451,15 @@ function Podium({
         {slots.map(({ row, pos }, index) => (
           <motion.div
             key={row.id}
+            layout
+            layoutId={`ranking-participant-${row.id}`}
             initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{
               duration: reduceMotion ? 0 : 0.45,
               delay: reduceMotion ? 0 : index * 0.12,
               ease: [0.22, 1, 0.36, 1],
+              layout: { duration: reduceMotion ? 0 : 0.55, ease: [0.22, 1, 0.36, 1] },
             }}
             className="group flex min-w-0 flex-col items-center text-center"
           >
@@ -447,20 +535,24 @@ function Podium({
                 positionStyles[pos],
               )}
             >
-              <span className={cn(pos === 1 ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl")}>
-                {labels[pos]}
+              <span
+                className={cn(
+                  "flex items-center justify-center gap-1",
+                  pos === 1 ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl",
+                )}
+              >
+                {labels[pos]} <PositionMovement row={row} />
               </span>
               <span className="flex items-baseline justify-center gap-1">
-                <span
+                <AnimatedNumber
+                  value={row.pontos}
                   className={cn(
                     "num leading-none",
                     pos === 1
                       ? "text-4xl text-foreground sm:text-6xl"
                       : "text-2xl text-foreground sm:text-4xl",
                   )}
-                >
-                  {row.pontos}
-                </span>
+                />
                 <span className="text-[8px] font-bold uppercase opacity-70 sm:text-[10px]">
                   pts
                 </span>

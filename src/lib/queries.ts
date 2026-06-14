@@ -19,7 +19,13 @@ export type RankingUsuario = {
   nome_completo: string;
   avatar_url: AvatarPath | null;
   pontos: number;
+  pontos_oficiais: number;
   chineladas: number;
+  chineladas_oficiais: number;
+  posicao: number;
+  posicao_base: number;
+  variacao: number;
+  movimento: "partial" | "final" | null;
 };
 
 export type PerfilPalpite = {

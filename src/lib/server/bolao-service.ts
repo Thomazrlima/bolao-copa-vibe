@@ -8,6 +8,12 @@ type RankingUsuarioRow = {
   avatar_url?: string | null;
   pontos: number;
   chineladas: number;
+  pontos_oficiais?: number;
+  chineladas_oficiais?: number;
+  posicao?: number;
+  posicao_base?: number;
+  variacao?: number;
+  movimento?: "partial" | "final" | null;
 };
 
 type UsuarioRow = RankingUsuarioRow & {
@@ -99,16 +105,29 @@ function nowAsStoredBrasiliaMs() {
 }
 
 export async function getRankingUsuarios(supabase: SupabaseClient) {
-  const { data, error } = await supabase
-    .from("ranking_usuarios")
-    .select("id,nome_completo,pontos,chineladas")
-    .order("pontos", { ascending: false })
-    .order("chineladas", { ascending: false })
-    .order("nome_completo", { ascending: true });
+  const liveResult = await supabase.rpc("obter_ranking_ao_vivo");
+  const fallbackResult = liveResult.error
+    ? await supabase
+        .from("ranking_usuarios")
+        .select("id,nome_completo,pontos,chineladas")
+        .order("pontos", { ascending: false })
+        .order("chineladas", { ascending: false })
+        .order("nome_completo", { ascending: true })
+    : null;
+  const data = liveResult.error ? fallbackResult?.data : liveResult.data;
+  const error = liveResult.error ? fallbackResult?.error : liveResult.error;
 
   assertNoError(error);
 
-  const ranking = (data ?? []) as RankingUsuarioRow[];
+  const ranking = ((data ?? []) as RankingUsuarioRow[]).map((usuario, index) => ({
+    ...usuario,
+    pontos_oficiais: usuario.pontos_oficiais ?? usuario.pontos,
+    chineladas_oficiais: usuario.chineladas_oficiais ?? usuario.chineladas,
+    posicao: usuario.posicao ?? index + 1,
+    posicao_base: usuario.posicao_base ?? index + 1,
+    variacao: usuario.variacao ?? 0,
+    movimento: usuario.movimento ?? null,
+  }));
   const avatarPaths = await getUsuarioAvatarPaths(
     supabase,
     ranking.map((usuario) => usuario.id),
