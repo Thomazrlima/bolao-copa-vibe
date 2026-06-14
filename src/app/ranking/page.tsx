@@ -490,7 +490,7 @@ function Podium({
                 </span>
               </span>
               <span className="max-w-full text-center text-[8px] font-bold uppercase leading-tight opacity-70 sm:text-[10px]">
-                {row.chineladas} chin.
+                {row.chineladas} {row.chineladas === 1 ? "chinelada" : "chineladas"}
               </span>
             </motion.div>
           </motion.div>

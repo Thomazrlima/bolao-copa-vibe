@@ -87,6 +87,14 @@ import {
   type RankingUsuario,
 } from "@/lib/queries";
 import type { GuessOutcome } from "@/lib/scoring";
+import {
+  formatPalpiteTimeRemaining,
+  getPalpiteDeadline,
+  isMockPalpiteGame,
+  nowAsStoredBrasiliaMs,
+  PALPITES_UPDATED_EVENT,
+  type PalpiteUrgency,
+} from "@/lib/palpite-deadlines";
 import { cn } from "@/lib/utils";
 
 type Score = { home: number | null; away: number | null };
@@ -175,6 +183,7 @@ export default function PalpitesPage() {
   const [participants, setParticipants] = useState<RankingUsuario[]>([]);
   const [openFilters, setOpenFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
   const [historyFilters, setHistoryFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
+  const [now, setNow] = useState(() => nowAsStoredBrasiliaMs());
   const dirtyScoresRef = useRef(new Set<string>());
 
   const load = useCallback(
@@ -236,6 +245,11 @@ export default function PalpitesPage() {
     void load({ showLoading: true, preserveDrafts: false, includeSpecials: true });
   }, [load]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(nowAsStoredBrasiliaMs()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   useRealtimeRefresh({
     channelName: "palpites-live",
     signals: ["jogos", "ranking", "palpites"],
@@ -284,6 +298,7 @@ export default function PalpitesPage() {
       await savePalpite(game.id, { gols1: score.home, gols2: score.away });
       dirtyScoresRef.current.delete(game.id);
       setRecentlySaved(game.id);
+      window.dispatchEvent(new Event(PALPITES_UPDATED_EVENT));
       setData((current) =>
         current
           ? {
@@ -458,6 +473,7 @@ export default function PalpitesPage() {
                   score={scores[game.id] ?? { home: null, away: null }}
                   saving={savingId === game.id}
                   recentlySaved={recentlySaved === game.id}
+                  now={now}
                   onChange={(side, value) => updateScore(game.id, side, value)}
                   onSave={() => persistGuess(game)}
                 />
@@ -1044,6 +1060,7 @@ function OpenMatchCard({
   score,
   saving,
   recentlySaved,
+  now,
   onChange,
   onSave,
 }: {
@@ -1051,12 +1068,16 @@ function OpenMatchCard({
   score: Score;
   saving: boolean;
   recentlySaved: boolean;
+  now: number;
   onChange: (side: keyof Score, value: string) => void;
   onSave: () => void;
 }) {
   const router = useRouter();
   const complete = score.home != null && score.away != null;
   const isLive = game.ao_vivo;
+  const isMock = isMockPalpiteGame(game.id);
+  const deadline = !game.palpite && !game.iniciado ? getPalpiteDeadline(game.data, now) : null;
+  const urgencyMeta = deadline ? PALPITE_CARD_URGENCY[deadline.urgency] : null;
 
   return (
     <article
@@ -1079,7 +1100,9 @@ function OpenMatchCard({
           ? "cursor-pointer border-live/60 bg-gradient-to-br from-live/[0.1] to-card hover:border-live focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live"
           : game.iniciado
             ? "border-border opacity-80"
-            : "border-border hover:border-primary/40",
+            : urgencyMeta
+              ? urgencyMeta.card
+              : "border-border hover:border-primary/40",
       )}
     >
       <div className="flex items-center justify-between gap-3 border-b border-border bg-background/35 px-4 py-3">
@@ -1089,7 +1112,18 @@ function OpenMatchCard({
           </p>
           <p className="mt-0.5 text-xs font-semibold">{formatDateTime(game.data)}</p>
         </div>
-        <StatusBadge status={game.ao_vivo ? "live" : "scheduled"} />
+        {urgencyMeta ? (
+          <span
+            className={cn(
+              "rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider",
+              urgencyMeta.badge,
+            )}
+          >
+            {urgencyMeta.label}
+          </span>
+        ) : (
+          <StatusBadge status={game.ao_vivo ? "live" : "scheduled"} />
+        )}
       </div>
 
       <div className="p-4">
@@ -1103,7 +1137,11 @@ function OpenMatchCard({
           <div
             className={cn(
               "flex items-center gap-1.5 text-xs font-semibold",
-              game.iniciado ? "text-muted-foreground" : "text-warning",
+              game.iniciado
+                ? "text-muted-foreground"
+                : urgencyMeta
+                  ? urgencyMeta.text
+                  : "text-warning",
             )}
           >
             {game.iniciado ? (
@@ -1111,7 +1149,11 @@ function OpenMatchCard({
             ) : (
               <Clock3 className="h-3.5 w-3.5" />
             )}
-            {game.iniciado ? "Palpite encerrado" : deadlineLabel(game.data)}
+            {game.iniciado
+              ? "Palpite encerrado"
+              : deadline
+                ? `Fecha em ${formatPalpiteTimeRemaining(deadline.remainingMs)}`
+                : deadlineLabel(game.data, now)}
           </div>
 
           {game.ao_vivo ? (
@@ -1120,6 +1162,10 @@ function OpenMatchCard({
             </span>
           ) : game.iniciado ? (
             <span className="num text-xs font-bold text-muted-foreground">Aguardando início</span>
+          ) : isMock ? (
+            <span className="rounded-md border border-primary/35 bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
+              Modo demonstração
+            </span>
           ) : (
             <Button
               type="button"
@@ -1664,33 +1710,41 @@ function formatDateTime(iso: string) {
   });
 }
 
-function deadlineLabel(iso: string) {
-  const diff = new Date(iso).getTime() - nowAsStoredBrasiliaMs();
+const PALPITE_CARD_URGENCY: Record<
+  PalpiteUrgency,
+  { label: string; card: string; badge: string; text: string }
+> = {
+  reminder: {
+    label: "Menos de 24h",
+    card: "border-primary/50 bg-gradient-to-br from-primary/[0.08] to-card hover:border-primary",
+    badge: "border-primary/40 bg-primary/15 text-primary",
+    text: "text-primary",
+  },
+  attention: {
+    label: "Menos de 6h",
+    card: "border-warning/55 bg-gradient-to-br from-warning/[0.1] to-card hover:border-warning",
+    badge: "border-warning/45 bg-warning/15 text-warning",
+    text: "text-warning",
+  },
+  critical: {
+    label: "Menos de 1h",
+    card: "border-destructive/65 bg-gradient-to-br from-destructive/[0.12] to-card hover:border-destructive",
+    badge: "border-destructive/50 bg-destructive/15 text-destructive",
+    text: "text-destructive",
+  },
+  imminent: {
+    label: "Últimos 10min",
+    card: "border-destructive bg-gradient-to-br from-destructive/[0.2] to-card shadow-[0_0_30px_color-mix(in_oklab,var(--destructive)_18%,transparent)] hover:border-destructive",
+    badge: "animate-pulse border-destructive bg-destructive text-destructive-foreground",
+    text: "text-destructive",
+  },
+};
+
+function deadlineLabel(iso: string, now = nowAsStoredBrasiliaMs()) {
+  const diff = new Date(iso).getTime() - now;
   if (diff <= 0) return "Palpite encerrado";
   const hours = Math.floor(diff / 3_600_000);
   const minutes = Math.floor((diff % 3_600_000) / 60_000);
   if (hours >= 24) return `Fecha em ${Math.floor(hours / 24)}d ${hours % 24}h`;
   return `Fecha em ${hours}h ${minutes}min`;
-}
-
-function nowAsStoredBrasiliaMs() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  })
-    .formatToParts(new Date())
-    .reduce<Record<string, string>>((acc, part) => {
-      if (part.type !== "literal") acc[part.type] = part.value;
-      return acc;
-    }, {});
-
-  return Date.parse(
-    `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`,
-  );
 }

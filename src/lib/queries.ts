@@ -1,5 +1,10 @@
 import type { GuessOutcome } from "@/lib/scoring";
 import type { RankingBadgeKey } from "@/lib/ranking-badges";
+import {
+  MOCK_PALPITE_ID_PREFIX,
+  MOCK_PENDING_GUESSES_ENABLED,
+  nowAsStoredBrasiliaMs,
+} from "@/lib/palpite-deadlines";
 
 export type AvatarPath = string;
 
@@ -230,7 +235,8 @@ export async function getPalpitesDoJogo(jogoId: string) {
 }
 
 export async function getPalpitesDashboard() {
-  return requestJson<PalpitesDashboardResponse>("/api/palpites");
+  const dashboard = await requestJson<PalpitesDashboardResponse>("/api/palpites");
+  return MOCK_PENDING_GUESSES_ENABLED ? withMockPendingGuesses(dashboard) : dashboard;
 }
 
 export async function savePalpite(jogoId: string, palpite: { gols1: number; gols2: number }) {
@@ -251,4 +257,51 @@ export async function savePalpiteEspecial(perguntaId: string, resposta: string) 
     body: JSON.stringify({ pergunta_id: perguntaId, resposta }),
   });
   return body.resposta;
+}
+
+function withMockPendingGuesses(dashboard: PalpitesDashboardResponse): PalpitesDashboardResponse {
+  const now = nowAsStoredBrasiliaMs();
+  const mockGames: PalpitesDashboardResponse["jogos"] = [
+    buildMockGame("24h", "Brasil", "Marrocos", now + 23 * 60 * 60_000),
+    buildMockGame("6h", "Argentina", "Japão", now + 5 * 60 * 60_000),
+    buildMockGame("1h", "França", "Senegal", now + 45 * 60_000),
+    buildMockGame("10min", "Portugal", "México", now + 8 * 60_000),
+  ];
+
+  return {
+    ...dashboard,
+    jogos: [...mockGames, ...dashboard.jogos],
+    resumo: {
+      ...dashboard.resumo,
+      pendentes: dashboard.resumo.pendentes + mockGames.length,
+    },
+  };
+}
+
+function buildMockGame(
+  id: string,
+  time1: string,
+  time2: string,
+  timestamp: number,
+): PalpitesDashboardResponse["jogos"][number] {
+  return {
+    id: `${MOCK_PALPITE_ID_PREFIX}${id}`,
+    fase_id: 1,
+    fase: "Demonstração",
+    grupo: "Mock",
+    rodada: null,
+    time1,
+    time2,
+    data: new Date(timestamp).toISOString(),
+    gols1: null,
+    gols2: null,
+    encerrado: false,
+    iniciado: false,
+    ao_vivo: false,
+    placar_status: "upcoming",
+    sportsdb_status: null,
+    palpite: null,
+    pontos: null,
+    outcome: null,
+  };
 }

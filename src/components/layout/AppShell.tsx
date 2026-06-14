@@ -16,9 +16,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Flag } from "@/components/common/Flag";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import {
+  notificationTone,
+  PendingGuessModal,
+  usePendingGuessNotifications,
+} from "@/components/palpites/PendingGuessNotifications";
 import { teamCodeFromName } from "@/data/iso2";
 import { getDisplayName } from "@/lib/display-name";
 import { USER_PROFILE_UPDATED_EVENT } from "@/lib/avatar-storage";
+import type { PalpiteUrgency } from "@/lib/palpite-deadlines";
 import { createClient } from "@/lib/supabase/client";
 import { useBrazilGoalCelebration } from "@/hooks/use-brazil-goal-celebration";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
@@ -79,6 +85,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const reduceMotion = useReducedMotion();
   const [brazilLiveTheme, setBrazilLiveTheme] = useState(FORCE_BRAZIL_LIVE_THEME);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const {
+    pending: pendingGuesses,
+    highestUrgency,
+    modalOpen,
+    setModalOpen,
+  } = usePendingGuessNotifications();
   const activePath = pendingPath ?? pathname;
   const currentTab = Math.max(
     0,
@@ -126,6 +138,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             pathname={pathname}
             reduceMotion={reduceMotion}
             setPendingPath={setPendingPath}
+            pendingGuessCount={pendingGuesses.length}
+            pendingGuessUrgency={highestUrgency}
           />
 
           <div className="justify-self-end">
@@ -163,7 +177,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         pathname={pathname}
         reduceMotion={reduceMotion}
         setPendingPath={setPendingPath}
+        pendingGuessCount={pendingGuesses.length}
+        pendingGuessUrgency={highestUrgency}
       />
+      <PendingGuessModal pending={pendingGuesses} open={modalOpen} onOpenChange={setModalOpen} />
     </div>
   );
 }
@@ -347,23 +364,13 @@ function LiveScoreGroup({
   return (
     <div ref={groupRef} className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
       {games.map((game) => (
-        <LiveScoreItem
-          key={`${hidden ? "copy-" : ""}${game.id}`}
-          game={game}
-          hidden={hidden}
-        />
+        <LiveScoreItem key={`${hidden ? "copy-" : ""}${game.id}`} game={game} hidden={hidden} />
       ))}
     </div>
   );
 }
 
-function LiveScoreItem({
-  game,
-  hidden,
-}: {
-  game: LiveGame;
-  hidden: boolean;
-}) {
+function LiveScoreItem({ game, hidden }: { game: LiveGame; hidden: boolean }) {
   return (
     <Link
       href={`/calendario/${game.id}`}
@@ -465,6 +472,8 @@ type NavigationProps = {
   pathname: string;
   reduceMotion: boolean | null;
   setPendingPath: (path: string) => void;
+  pendingGuessCount: number;
+  pendingGuessUrgency: PalpiteUrgency | null;
 };
 
 function DesktopNavigation(props: NavigationProps) {
@@ -488,6 +497,8 @@ function NavigationItems({
   pathname,
   reduceMotion,
   setPendingPath,
+  pendingGuessCount,
+  pendingGuessUrgency,
   desktop = false,
 }: NavigationProps & { desktop?: boolean }) {
   return (
@@ -527,8 +538,27 @@ function NavigationItems({
                 }}
               />
             )}
-            <Icon className="relative z-10 h-4 w-4 shrink-0" />
-            <span className="relative z-10 whitespace-nowrap">{label}</span>
+            <span
+              className={cn(
+                "z-10 flex items-center",
+                desktop ? "relative gap-1.5" : "flex-col gap-1",
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="whitespace-nowrap">{label}</span>
+              {to === "/palpites" && pendingGuessCount > 0 && (
+                <span
+                  className={cn(
+                    "num absolute flex h-4 min-w-4 items-center justify-center rounded-full px-1 pt-px text-center text-[9px] font-black leading-none ring-2 ring-background",
+                    desktop ? "-right-3.5 -top-1.5" : "right-2.5 top-1 z-20",
+                    notificationTone(pendingGuessUrgency),
+                  )}
+                  aria-label={`${pendingGuessCount} palpites urgentes pendentes`}
+                >
+                  {pendingGuessCount > 99 ? "99+" : pendingGuessCount}
+                </span>
+              )}
+            </span>
           </Link>
         );
       })}
