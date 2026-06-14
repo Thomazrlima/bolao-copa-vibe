@@ -1,15 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowUp, Radio, Trophy } from "lucide-react";
 
@@ -19,6 +11,7 @@ import { UserAvatar } from "@/components/common/UserAvatar";
 import { getDisplayName } from "@/lib/display-name";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { getRanking, type RankingUsuario } from "@/lib/queries";
+import { getRankingBadgeKeys, RANKING_BADGES, type RankingBadgeKey } from "@/lib/ranking-badges";
 import { cn } from "@/lib/utils";
 
 type ParticipantTitle = {
@@ -27,41 +20,6 @@ type ParticipantTitle = {
   description: string;
   tone?: "gold" | "silver" | "bronze" | "danger";
 };
-
-const PODIUM_TITLES: Record<1 | 2 | 3, ParticipantTitle[]> = {
-  1: [
-    {
-      emoji: "🔮",
-      label: "Mãe Diná",
-      description: "Líder do ranking",
-      tone: "gold",
-    },
-  ],
-  2: [
-    {
-      emoji: "👃",
-      label: "No Cangote",
-      description: "Segundo colocado",
-      tone: "silver",
-    },
-  ],
-  3: [
-    {
-      emoji: "😎",
-      label: "Pódio é Pódio",
-      description: "Terceiro colocado",
-      tone: "bronze",
-    },
-  ],
-};
-
-const LAST_PLACE_TITLE: ParticipantTitle = {
-  emoji: "🔦",
-  description: "Lanterna do ranking",
-  tone: "danger",
-};
-const LAST_PLACE_TITLES = [LAST_PLACE_TITLE];
-const NO_TITLES: ParticipantTitle[] = [];
 
 export default function RankingPage() {
   const [ranking, setRanking] = useState<RankingUsuario[]>([]);
@@ -94,14 +52,6 @@ export default function RankingPage() {
   const podium = useMemo(() => ranking.slice(0, 3), [ranking]);
   const rest = useMemo(() => ranking.slice(3), [ranking]);
   const hasLiveRanking = ranking.some((participant) => participant.movimento === "partial");
-  const chineladaLeaderId = useMemo(() => {
-    if (ranking.length === 0) return null;
-
-    const highestCount = Math.max(...ranking.map((participant) => participant.chineladas));
-    const leaders = ranking.filter((participant) => participant.chineladas === highestCount);
-
-    return leaders.length === 1 ? leaders[0].id : null;
-  }, [ranking]);
   const relegationCount = Math.min(8, rest.length);
   const firstRelegatedPosition = ranking.length - relegationCount + 1;
 
@@ -121,7 +71,7 @@ export default function RankingPage() {
         </div>
       ) : (
         <LayoutGroup id="ranking-geral">
-          <Podium ranking={podium} chineladaLeaderId={chineladaLeaderId} />
+          <Podium ranking={podium} fullRanking={ranking} />
 
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="grid grid-cols-[58px_minmax(0,1fr)_46px_52px] items-center gap-1.5 border-b border-border bg-background/40 px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[96px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-3 sm:text-xs">
@@ -152,8 +102,7 @@ export default function RankingPage() {
                       row={row}
                       pos={pos}
                       relegated={relegated}
-                      lastPlace={pos === ranking.length}
-                      chineladaLeaderId={chineladaLeaderId}
+                      badges={getRankingBadgeKeys(row.id, ranking)}
                     />
                   </Fragment>
                 );
@@ -170,14 +119,12 @@ function RankingRow({
   row,
   pos,
   relegated,
-  lastPlace,
-  chineladaLeaderId,
+  badges,
 }: {
   row: RankingUsuario;
   pos: number;
   relegated: boolean;
-  lastPlace: boolean;
-  chineladaLeaderId: string | null;
+  badges: RankingBadgeKey[];
 }) {
   const reduceMotion = useReducedMotion();
 
@@ -213,10 +160,7 @@ function RankingRow({
           avatarPath={row.avatar_url}
           className={relegated ? "bg-card text-destructive ring-destructive/60" : undefined}
         />
-        <InlineParticipantName
-          name={row.nome_completo}
-          titles={lastPlace ? LAST_PLACE_TITLES : NO_TITLES}
-        />
+        <InlineParticipantName name={row.nome_completo} titles={badges.map(toParticipantTitle)} />
       </Link>
       <span
         className={cn("num text-right font-bold", relegated ? "text-destructive" : "text-primary")}
@@ -313,47 +257,12 @@ function AnimatedNumber({ value, className }: { value: number; className?: strin
 }
 
 function InlineParticipantName({ name, titles }: { name: string; titles: ParticipantTitle[] }) {
-  const displayName = getDisplayName(name);
-  const containerRef = useRef<HTMLSpanElement>(null);
-  const nameMeasureRef = useRef<HTMLSpanElement>(null);
-  const titlesMeasureRef = useRef<HTMLSpanElement>(null);
-  const [showTitles, setShowTitles] = useState(false);
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    const nameMeasure = nameMeasureRef.current;
-    const titlesMeasure = titlesMeasureRef.current;
-
-    if (!container || !nameMeasure || !titlesMeasure || titles.length === 0) {
-      setShowTitles(false);
-      return;
-    }
-
-    const update = () => {
-      const requiredWidth = nameMeasure.scrollWidth + titlesMeasure.scrollWidth + 4;
-      setShowTitles(requiredWidth <= container.clientWidth);
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(container);
-
-    return () => observer.disconnect();
-  }, [displayName, titles]);
-
   return (
-    <span ref={containerRef} className="relative flex min-w-0 flex-1 items-center gap-1">
-      <BrazilThemedName className="min-w-0 truncate font-semibold">{displayName}</BrazilThemedName>
-      {showTitles && <ParticipantTitles titles={titles} variant="inline" />}
-
-      <span className="pointer-events-none absolute invisible whitespace-nowrap" aria-hidden>
-        <span ref={nameMeasureRef} className="font-semibold">
-          {displayName}
-        </span>
-        <span ref={titlesMeasureRef} className="inline-flex pl-1">
-          <ParticipantTitles titles={titles} variant="inline" />
-        </span>
-      </span>
+    <span className="flex min-w-0 items-center gap-2">
+      <BrazilThemedName className="min-w-0 truncate font-semibold">
+        {getDisplayName(name)}
+      </BrazilThemedName>
+      <ParticipantTitles titles={titles} variant="inline" />
     </span>
   );
 }
@@ -378,7 +287,7 @@ function ParticipantTitles({
     <span
       className={cn(
         "flex min-w-0 items-center",
-        variant === "inline" ? "shrink-0 gap-1" : "justify-center gap-1",
+        variant === "inline" ? "shrink-0 gap-1" : "flex-wrap justify-center gap-1",
       )}
     >
       {titles.map((title) => (
@@ -387,7 +296,7 @@ function ParticipantTitles({
           className={cn(
             "inline-flex min-w-0 items-center justify-center gap-1",
             title.label &&
-              "max-w-full rounded-full border px-2 py-1 text-[10px] font-bold leading-none sm:px-2.5 sm:text-[11px]",
+              "max-w-full rounded-full border px-1.5 py-1 text-[10px] font-bold leading-none sm:px-2.5 sm:text-[11px]",
             title.label && toneClasses[title.tone ?? "gold"],
           )}
           title={title.description}
@@ -401,19 +310,39 @@ function ParticipantTitles({
               {title.emoji}
             </span>
           )}
-          {title.label && <span className="truncate whitespace-nowrap">{title.label}</span>}
+          {title.label && (
+            <span
+              className={cn(
+                "truncate whitespace-nowrap",
+                variant === "inline" && "hidden sm:inline",
+              )}
+            >
+              {title.label}
+            </span>
+          )}
         </span>
       ))}
     </span>
   );
 }
 
+function toParticipantTitle(badgeKey: RankingBadgeKey): ParticipantTitle {
+  const badge = RANKING_BADGES[badgeKey];
+
+  return {
+    emoji: badge.emoji,
+    label: badge.label,
+    description: badge.description,
+    tone: badge.tone,
+  };
+}
+
 function Podium({
   ranking,
-  chineladaLeaderId,
+  fullRanking,
 }: {
   ranking: RankingUsuario[];
-  chineladaLeaderId: string | null;
+  fullRanking: RankingUsuario[];
 }) {
   const reduceMotion = useReducedMotion();
 
@@ -506,7 +435,10 @@ function Podium({
               <span className="mt-1 line-clamp-2 w-full break-words text-[10px] font-semibold leading-4 min-[380px]:text-xs sm:text-sm">
                 <BrazilThemedName>{getDisplayName(row.nome_completo)}</BrazilThemedName>
               </span>
-              <ParticipantTitles titles={PODIUM_TITLES[pos]} variant="stacked" />
+              <ParticipantTitles
+                titles={getRankingBadgeKeys(row.id, fullRanking).map(toParticipantTitle)}
+                variant="stacked"
+              />
             </Link>
             <motion.div
               animate={

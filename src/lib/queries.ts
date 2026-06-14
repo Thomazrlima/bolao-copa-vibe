@@ -1,4 +1,5 @@
 import type { GuessOutcome } from "@/lib/scoring";
+import type { RankingBadgeKey } from "@/lib/ranking-badges";
 
 export type AvatarPath = string;
 
@@ -46,7 +47,7 @@ export type PerfilPalpite = {
 export type PerfilUsuario = RankingUsuario & {
   avatar_url: AvatarPath | null;
   is_current_user: boolean;
-  badges: Array<"mae-dina" | "no-cangote" | "podio-e-podio" | "lanterna" | "chinelada">;
+  badges: RankingBadgeKey[];
   estatisticas: Record<GuessOutcome, number>;
   especiais: {
     acertos: number;

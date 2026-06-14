@@ -32,6 +32,7 @@ import {
 import { teamCodeFromName } from "@/data/iso2";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { getPerfil, type PerfilPalpite, type PerfilUsuario } from "@/lib/queries";
+import { RANKING_BADGES } from "@/lib/ranking-badges";
 import { cn } from "@/lib/utils";
 import type { GuessOutcome } from "@/lib/scoring";
 
@@ -84,39 +85,6 @@ const STAT_CARDS: Array<{
     pointsClassName: "text-destructive",
   },
 ];
-
-const PROFILE_BADGES = {
-  "mae-dina": {
-    emoji: "🔮",
-    label: "Mãe Diná",
-    description: "Líder do ranking.",
-    className: "border-primary/45 bg-primary/10 text-primary",
-  },
-  "no-cangote": {
-    emoji: "👃",
-    label: "No Cangote",
-    description: "Segundo colocado do ranking.",
-    className: "border-zinc-300/40 bg-zinc-300/10 text-zinc-200",
-  },
-  "podio-e-podio": {
-    emoji: "😎",
-    label: "Pódio é Pódio",
-    description: "Terceiro colocado do ranking.",
-    className: "border-amber-700/50 bg-amber-800/15 text-amber-500",
-  },
-  lanterna: {
-    emoji: "🔦",
-    label: "Lanterna",
-    description: "Último colocado do ranking.",
-    className: "border-destructive/45 bg-destructive/10 text-destructive",
-  },
-  chinelada: {
-    emoji: "🩴",
-    label: "Chinelo de Ouro",
-    description: "Maior número de chineladas do bolão, sem empate.",
-    className: "border-primary/45 bg-primary/10 text-primary",
-  },
-} as const;
 
 type GuessStatusFilter = "all" | "finished" | "pending";
 type GuessOutcomeFilter = "all" | GuessOutcome;
@@ -230,7 +198,7 @@ export default function PerfilPage() {
             {profile.badges.length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
                 {profile.badges.map((badgeKey) => {
-                  const badge = PROFILE_BADGES[badgeKey];
+                  const badge = RANKING_BADGES[badgeKey];
 
                   return (
                     <span

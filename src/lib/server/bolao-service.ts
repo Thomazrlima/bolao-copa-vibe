@@ -1,5 +1,6 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
+import { getRankingBadgeKeys } from "@/lib/ranking-badges";
 import { calcularPontuacaoJogo, type GuessOutcome } from "@/lib/scoring";
 
 type RankingUsuarioRow = {
@@ -22,8 +23,6 @@ type UsuarioRow = RankingUsuarioRow & {
   created_at: string;
   updated_at: string;
 };
-
-type ProfileBadgeKey = "mae-dina" | "no-cangote" | "podio-e-podio" | "lanterna" | "chinelada";
 
 type PalpiteRow = {
   user_id?: string;
@@ -558,22 +557,8 @@ function getGuessPoints(guess: PalpiteRow, calculatedPoints: number | null | und
   return guess.pontos ?? 0;
 }
 
-function getProfileBadges(userId: string, ranking: RankingUsuarioRow[]): ProfileBadgeKey[] {
-  const badges: ProfileBadgeKey[] = [];
-  const position = ranking.findIndex((row) => row.id === userId) + 1;
-
-  if (position === 1) badges.push("mae-dina");
-  if (position === 2) badges.push("no-cangote");
-  if (position === 3) badges.push("podio-e-podio");
-  if (ranking.length > 0 && position === ranking.length) badges.push("lanterna");
-
-  const highestChineladas = Math.max(...ranking.map((row) => row.chineladas));
-  const chineladaLeaders = ranking.filter((row) => row.chineladas === highestChineladas);
-  if (highestChineladas > 0 && chineladaLeaders.length === 1 && chineladaLeaders[0].id === userId) {
-    badges.push("chinelada");
-  }
-
-  return badges;
+function getProfileBadges(userId: string, ranking: RankingUsuarioRow[]) {
+  return getRankingBadgeKeys(userId, ranking);
 }
 
 async function getJogosPorIds(supabase: SupabaseClient, ids: string[]) {
