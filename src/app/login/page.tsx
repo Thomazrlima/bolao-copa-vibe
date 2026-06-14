@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LogIn, LogOut } from "lucide-react";
+import { KeyRound, LogIn, LogOut, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
@@ -23,10 +23,14 @@ export default function LoginPage() {
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
   async function loadUsuario() {
     const response = await fetch("/api/usuarios/me", { cache: "no-store" });
@@ -99,6 +103,26 @@ export default function LoginPage() {
     setSubmitting(false);
   }
 
+  async function handlePasswordRecovery(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRecovering(true);
+    setRecoveryMessage(null);
+
+    const origin = window.location.origin;
+    const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmail, {
+      redirectTo: `${origin}/auth/callback?next=/redefinir-senha`,
+    });
+
+    setRecovering(false);
+
+    if (error) {
+      setRecoveryMessage(error.message);
+      return;
+    }
+
+    setRecoveryMessage("Se esse e-mail estiver cadastrado, enviaremos um link de recuperação.");
+  }
+
   return (
     <>
       <div className="mx-auto max-w-md">
@@ -146,41 +170,92 @@ export default function LoginPage() {
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="nome.sobrenome@visagio.com"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="nome.sobrenome"
-                  required
-                />
-              </div>
-              {message && (
-                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {message}
+            <div className="space-y-5">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      setRecoveryEmail((current) => current || event.target.value);
+                    }}
+                    placeholder="nome.sobrenome@visagio.com"
+                    required
+                  />
                 </div>
-              )}
-              <Button type="submit" disabled={submitting} className="w-full gap-2">
-                <LogIn className="h-4 w-4" />
-                Entrar
-              </Button>
-            </form>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="nome.sobrenome"
+                    required
+                  />
+                </div>
+                {message && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {message}
+                  </div>
+                )}
+                <Button type="submit" disabled={submitting} className="w-full gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Entrar
+                </Button>
+              </form>
+
+              <div className="border-t border-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecoveryOpen((open) => !open);
+                    setRecoveryMessage(null);
+                    setRecoveryEmail((current) => current || email);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 text-sm font-semibold text-primary hover:underline"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Esqueci minha senha
+                </button>
+
+                {recoveryOpen && (
+                  <form onSubmit={handlePasswordRecovery} className="mt-4 space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="recovery-email">Email da conta</Label>
+                      <Input
+                        id="recovery-email"
+                        type="email"
+                        autoComplete="email"
+                        value={recoveryEmail}
+                        onChange={(event) => setRecoveryEmail(event.target.value)}
+                        placeholder="nome.sobrenome@visagio.com"
+                        required
+                      />
+                    </div>
+                    {recoveryMessage && (
+                      <div className="rounded-lg border border-border bg-background/60 px-3 py-2 text-sm text-muted-foreground">
+                        {recoveryMessage}
+                      </div>
+                    )}
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      disabled={recovering}
+                      className="w-full gap-2"
+                    >
+                      <Mail className="h-4 w-4" />
+                      {recovering ? "Enviando..." : "Enviar link de recuperação"}
+                    </Button>
+                  </form>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
