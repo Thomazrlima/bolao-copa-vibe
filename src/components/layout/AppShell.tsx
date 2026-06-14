@@ -384,34 +384,33 @@ function LiveScoreItem({ game, hidden }: { game: LiveGame; hidden: boolean }) {
 }
 
 function LiveScoreContent({ game }: { game: LiveGame }) {
+  const team1Code = teamCodeFromName(game.time1);
+  const team2Code = teamCodeFromName(game.time2);
+
   return (
     <span className="flex h-10 shrink-0 items-center gap-2 px-5 sm:gap-3 sm:px-8">
       <Radio className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+      {team1Code ? (
+        <Flag code={team1Code} name={game.time1} size="sm" static className="shadow-sm ring-white/50" />
+      ) : null}
       <LiveTeamName name={game.time1} />
       <strong className="num rounded-md bg-black/20 px-2 py-0.5 font-display text-sm font-black tracking-wide sm:text-base">
         {formatLiveScore(game.gols1)} × {formatLiveScore(game.gols2)}
       </strong>
       <LiveTeamName name={game.time2} />
+      {team2Code ? (
+        <Flag code={team2Code} name={game.time2} size="sm" static className="shadow-sm ring-white/50" />
+      ) : null}
       <span className="ml-2 h-4 w-px bg-current opacity-35" aria-hidden />
     </span>
   );
 }
 
 function LiveTeamName({ name }: { name: string }) {
-  const code = teamCodeFromName(name);
-  const label = isBrazilTeam(name) ? (
+  return isBrazilTeam(name) ? (
     <strong className="font-black drop-shadow-sm">{name}</strong>
   ) : (
     <span>{name}</span>
-  );
-
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {code ? (
-        <Flag code={code} name={name} size="sm" static className="shadow-sm ring-white/50" />
-      ) : null}
-      {label}
-    </span>
   );
 }
 
