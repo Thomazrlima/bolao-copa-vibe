@@ -5,6 +5,7 @@ import { orderStatistics, normalizeStatisticName } from "@/lib/match-statistics"
 import { groupStandings, type GrupoRow as KnockoutGrupoRow } from "@/lib/knockout";
 import { getRankingBadgeKeys } from "@/lib/ranking-badges";
 import { calcularPontuacaoJogo, type GuessOutcome } from "@/lib/scoring";
+import { getSelectionIdentity } from "@/lib/selection-meta";
 import { resolveSelectionNameFromSlug, selectionSlugFromName } from "@/lib/selections";
 
 type RankingUsuarioRow = {
@@ -573,19 +574,26 @@ export async function getPerfilSelecao(supabase: SupabaseClient, slug: string) {
   const teamGames = jogos
     .filter((jogo) => jogo.time1 === selectionName || jogo.time2 === selectionName)
     .sort((a, b) => a.data.localeCompare(b.data));
-  const guesses = await getPalpitesParaJogos(supabase, teamGames.map((jogo) => jogo.id));
+  const guesses = await getPalpitesParaJogos(
+    supabase,
+    teamGames.map((jogo) => jogo.id),
+  );
   const gameById = new Map(teamGames.map((jogo) => [jogo.id, jogo]));
   const confidence = buildSelectionConfidence(selectionName, guesses, gameById);
   const statistics = buildSelectionStatistics(selectionName, teamGames);
   const summary = buildSelectionSummary(selectionName, teamGames);
+  const selectionCode = teamCodeFromName(selectionName) ?? null;
 
   return {
     selecao: {
       nome: selectionName,
       slug: selectionSlugFromName(selectionName),
-      codigo: teamCodeFromName(selectionName) ?? null,
+      codigo: selectionCode,
+      identidade: getSelectionIdentity(selectionCode),
       grupo:
-        teamStandingEntry?.grupo ?? grupos.find((grupo) => grupo.time === selectionName)?.grupo ?? null,
+        teamStandingEntry?.grupo ??
+        grupos.find((grupo) => grupo.time === selectionName)?.grupo ??
+        null,
       posicao: teamStandingEntry?.posicao ?? null,
       pontos: teamStandingEntry?.pontuacao ?? null,
       saldo_gols: teamStandingEntry?.saldo_gols ?? null,
@@ -599,7 +607,7 @@ export async function getPerfilSelecao(supabase: SupabaseClient, slug: string) {
         id: jogo.id,
         fase_id: jogo.fase_id,
         fase: phaseById.get(jogo.fase_id) ?? "Copa do Mundo",
-        grupo: jogo.fase_id === 1 ? teamStandingEntry?.grupo ?? null : null,
+        grupo: jogo.fase_id === 1 ? (teamStandingEntry?.grupo ?? null) : null,
         rodada: jogo.rodada,
         time1: jogo.time1,
         time2: jogo.time2,
@@ -715,9 +723,7 @@ function buildSelectionSummary(selectionName: string, games: JogoSelecaoRow[]) {
 
   const liveGame = games.find((game) => !game.encerrado && game.placar_status === "live") ?? null;
   const nextGame =
-    liveGame ??
-    games.find((game) => !game.encerrado && game.placar_status !== "finished") ??
-    null;
+    liveGame ?? games.find((game) => !game.encerrado && game.placar_status !== "finished") ?? null;
 
   return {
     disputados,

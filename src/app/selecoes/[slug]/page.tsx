@@ -20,6 +20,7 @@ import { SelectionLink } from "@/components/common/SelectionLink";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { teamCodeFromName } from "@/data/iso2";
 import {
   formatLocalGameDateTime,
   formatLocalGameTime,
@@ -133,11 +134,8 @@ export default function SelecaoPage() {
                 {liveMatch ? "Agora" : "Próximo compromisso"}
               </p>
               {nextMatch ? (
-                <div className="mt-3">
-                  <p className="font-display text-lg font-black">
-                    {data.selecao.nome} <span className="text-muted-foreground">x</span>{" "}
-                    {nextMatch.adversario}
-                  </p>
+                <div className="mt-3 space-y-4">
+                  <HeaderMatchup selection={data.selecao} match={nextMatch} />
                   <p className="mt-1 text-sm font-semibold text-primary">
                     {formatLocalGameDateTime(nextMatch.data)}
                   </p>
@@ -156,10 +154,6 @@ export default function SelecaoPage() {
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <MetricCard icon={Trophy} label="Pontos" value={data.selecao.pontos ?? "-"} />
-        <MetricCard icon={Shield} label="Saldo" value={formatSigned(data.resumo.saldo_gols)} />
-        <MetricCard icon={CalendarDays} label="Jogos" value={data.jogos.length} />
-        <MetricCard icon={Target} label="Gols pró" value={data.resumo.gols_pro} />
         <MetricCard
           icon={Sparkles}
           label="Confiança"
@@ -168,30 +162,85 @@ export default function SelecaoPage() {
               ? "-"
               : `${data.confianca.percentual_vitoria}%`
           }
+          featured
         />
+        <MetricCard icon={Trophy} label="Pontos" value={data.selecao.pontos ?? "-"} />
+        <MetricCard icon={Shield} label="Saldo" value={formatSigned(data.resumo.saldo_gols)} />
+        <MetricCard icon={CalendarDays} label="Jogos" value={data.jogos.length} />
+        <MetricCard icon={Target} label="Gols pró" value={data.resumo.gols_pro} />
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
-        <div>
+      <section className="grid gap-5 lg:grid-cols-2 xl:grid-cols-[minmax(340px,1.1fr)_minmax(300px,0.95fr)_minmax(300px,0.95fr)]">
+        <ConfidenceCard confidence={data.confianca} className="xl:row-span-2" />
+        <SelectionIdentityCard selection={data.selecao} />
+        <RecordCard data={data} />
+        <StatisticsCard statistics={data.estatisticas} className="lg:col-span-2 xl:col-span-2" />
+      </section>
+
+      <section className="mx-auto w-full max-w-4xl">
+        <div className="text-center">
           <SectionTitle eyebrow="Calendário" title="Jogos da seleção" />
-          {data.jogos.length ? (
-            <MatchDateGroups
-              items={data.jogos}
-              getKey={(jogo) => jogo.id}
-              isLive={(jogo) => matchStatus(jogo) === "live"}
-              renderItem={(jogo) => <SelectionMatchCard jogo={jogo} selectionName={data.selecao.nome} />}
-            />
-          ) : (
-            <EmptyState icon={CalendarDays} title="Nenhum jogo encontrado." />
-          )}
         </div>
-
-        <div className="space-y-5">
-          <ConfidenceCard confidence={data.confianca} />
-          <RecordCard data={data} />
-          <StatisticsCard statistics={data.estatisticas} />
-        </div>
+        {data.jogos.length ? (
+          <MatchDateGroups
+            items={data.jogos}
+            getKey={(jogo) => jogo.id}
+            isLive={(jogo) => matchStatus(jogo) === "live"}
+            layout="responsive-row"
+            renderItem={(jogo) => (
+              <SelectionMatchCard jogo={jogo} selectionName={data.selecao.nome} />
+            )}
+          />
+        ) : (
+          <EmptyState icon={CalendarDays} title="Nenhum jogo encontrado." />
+        )}
       </section>
+    </div>
+  );
+}
+
+function HeaderMatchup({
+  selection,
+  match,
+}: {
+  selection: SelecaoPerfilResponse["selecao"];
+  match: Match;
+}) {
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <HeaderTeamFlag name={selection.nome} code={selection.codigo ?? undefined} active />
+      <span className="rounded-lg border border-border bg-background/60 px-3 py-2 font-display text-sm font-black text-muted-foreground">
+        VS
+      </span>
+      <HeaderTeamFlag
+        name={match.adversario}
+        code={teamCodeFromName(match.adversario)}
+        align="right"
+      />
+    </div>
+  );
+}
+
+function HeaderTeamFlag({
+  name,
+  code,
+  active = false,
+  align = "left",
+}: {
+  name: string;
+  code?: string;
+  active?: boolean;
+  align?: "left" | "right";
+}) {
+  return (
+    <div className={cn("min-w-0", align === "right" && "text-right")}>
+      <div className={cn("flex items-center gap-2", align === "right" && "flex-row-reverse")}>
+        <Flag code={code} name={name} size="lg" static />
+        <p className="line-clamp-2 font-display text-sm font-black leading-tight">{name}</p>
+      </div>
+      {active ? (
+        <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Seleção</p>
+      ) : null}
     </div>
   );
 }
@@ -200,13 +249,20 @@ function MetricCard({
   icon: Icon,
   label,
   value,
+  featured = false,
 }: {
   icon: LucideIcon;
   label: string;
   value: string | number;
+  featured?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div
+      className={cn(
+        "rounded-xl border bg-card p-4",
+        featured ? "border-primary/45 bg-primary/10 ring-yellow" : "border-border",
+      )}
+    >
       <Icon className="h-4 w-4 text-primary" />
       <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
         {label}
@@ -310,9 +366,7 @@ function TeamName({
     return (
       <div className={cn("min-w-0", align === "right" && "text-right")}>
         <p className="line-clamp-2 font-display text-sm font-black">{name}</p>
-        <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">
-          Seleção
-        </p>
+        <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Seleção</p>
       </div>
     );
   }
@@ -329,9 +383,15 @@ function TeamName({
   );
 }
 
-function ConfidenceCard({ confidence }: { confidence: SelecaoPerfilResponse["confianca"] }) {
+function ConfidenceCard({
+  confidence,
+  className,
+}: {
+  confidence: SelecaoPerfilResponse["confianca"];
+  className?: string;
+}) {
   return (
-    <section className="rounded-2xl border border-primary/25 bg-card p-5">
+    <section className={cn("rounded-2xl border border-primary/25 bg-card p-5", className)}>
       <SectionTitle eyebrow="Palpites" title="Confiança da galera" />
       {confidence.total_palpites > 0 ? (
         <div className="space-y-4">
@@ -353,9 +413,127 @@ function ConfidenceCard({ confidence }: { confidence: SelecaoPerfilResponse["con
           </p>
         </div>
       ) : (
-        <EmptyState icon={Sparkles} title="Ainda não há palpites suficientes para medir confiança." />
+        <EmptyState
+          icon={Sparkles}
+          title="Ainda não há palpites suficientes para medir confiança."
+        />
       )}
     </section>
+  );
+}
+
+function SelectionIdentityCard({ selection }: { selection: SelecaoPerfilResponse["selecao"] }) {
+  const identity = selection.identidade;
+
+  if (!identity) return null;
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="p-5">
+        <SectionTitle eyebrow="Mapa" title="Localização" />
+        <div className="mb-4 flex items-center gap-3">
+          <Flag code={selection.codigo ?? undefined} name={selection.nome} size="lg" static />
+          <div className="min-w-0">
+            <p className="truncate font-display text-lg font-black">{selection.nome}</p>
+          </div>
+        </div>
+
+        <MiniLocationMap location={identity.location} label={selection.nome} />
+      </div>
+    </section>
+  );
+}
+
+function MiniLocationMap({
+  location,
+  label,
+}: {
+  location: SelecaoPerfilResponse["selecao"]["identidade"] extends infer Identity
+    ? Identity extends { location: infer Location }
+      ? Location
+      : never
+    : never;
+  label: string;
+}) {
+  const point = projectLocation(location.latitude, location.longitude);
+
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-background/45 p-2">
+      <svg
+        viewBox="0 0 360 190"
+        role="img"
+        aria-label={`Localização aproximada de ${label}`}
+        className="h-44 w-full text-muted-foreground"
+      >
+        <defs>
+          <linearGradient id="selection-map-sea" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.04" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0.12" />
+          </linearGradient>
+        </defs>
+        <rect width="360" height="190" rx="18" fill="url(#selection-map-sea)" />
+        <path
+          d="M0 95H360M30 0V190M60 0V190M90 0V190M120 0V190M150 0V190M180 0V190M210 0V190M240 0V190M270 0V190M300 0V190M330 0V190M0 47.5H360M0 142.5H360"
+          className="stroke-border/70"
+          strokeWidth="1"
+        />
+        <path
+          d="M18 58C29 35 56 28 78 34C90 22 118 30 135 45C154 61 151 82 127 89C109 94 98 82 80 88C58 96 33 84 18 58Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M96 76C108 66 126 69 135 82C143 93 137 107 123 108C111 109 105 100 94 104C84 107 77 98 81 89C83 84 89 80 96 76Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M113 103C129 96 151 103 162 119C175 139 162 169 145 178C134 184 128 170 129 157C130 141 118 132 111 118C108 112 108 106 113 103Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M171 52C189 37 218 41 229 58C214 69 188 72 171 52Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M188 72C204 72 219 83 224 101C231 128 214 154 194 153C177 151 168 131 171 107C173 88 178 77 188 72Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M220 54C242 35 286 35 317 52C339 64 349 83 334 96C318 110 294 95 275 109C257 122 237 103 226 82C221 72 218 62 220 54Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M251 112C264 105 279 109 284 122C272 130 257 127 251 112Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M286 136C308 124 333 134 329 151C313 160 288 156 286 136Z"
+          className="fill-muted-foreground/20 stroke-muted-foreground/30"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M150 121C142 127 137 139 139 151M130 109C140 112 148 116 155 125M116 129C124 134 130 142 130 153"
+          className="stroke-primary/30"
+          strokeLinecap="round"
+          strokeWidth="1.4"
+        />
+        <circle cx={point.x} cy={point.y} r="12" className="fill-primary/20" />
+        <circle
+          cx={point.x}
+          cy={point.y}
+          r="7"
+          className="fill-background stroke-primary"
+          strokeWidth="2"
+        />
+        <circle cx={point.x} cy={point.y} r="4.5" className="fill-primary" />
+      </svg>
+    </div>
   );
 }
 
@@ -399,9 +577,15 @@ function RecordCard({ data }: { data: SelecaoPerfilResponse }) {
   );
 }
 
-function StatisticsCard({ statistics }: { statistics: SelecaoPerfilResponse["estatisticas"] }) {
+function StatisticsCard({
+  statistics,
+  className,
+}: {
+  statistics: SelecaoPerfilResponse["estatisticas"];
+  className?: string;
+}) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
+    <section className={cn("rounded-2xl border border-border bg-card p-5", className)}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <SectionTitle eyebrow="Números" title="Estatísticas" />
         {statistics.sincronizado_em ? (
@@ -451,4 +635,11 @@ function matchStatus(jogo: Pick<Match, "encerrado" | "placar_status">) {
 function formatSigned(value: number) {
   if (value > 0) return `+${value}`;
   return String(value);
+}
+
+function projectLocation(latitude: number, longitude: number) {
+  return {
+    x: Math.min(352, Math.max(8, ((longitude + 180) / 360) * 360)),
+    y: Math.min(182, Math.max(8, ((90 - latitude) / 180) * 190)),
+  };
 }

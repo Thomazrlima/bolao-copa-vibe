@@ -12,12 +12,14 @@ export function MatchDateGroups<T extends DatedItem>({
   direction = "asc",
   getKey,
   isLive = () => false,
+  layout = "stacked",
   renderItem,
 }: {
   items: T[];
   direction?: "asc" | "desc";
   getKey: (item: T) => string;
   isLive?: (item: T) => boolean;
+  layout?: "stacked" | "responsive-row";
   renderItem: (item: T) => ReactNode;
 }) {
   const multiplier = direction === "asc" ? 1 : -1;
@@ -38,13 +40,21 @@ export function MatchDateGroups<T extends DatedItem>({
     }));
 
   return (
-    <div className="space-y-8">
+    <div
+      className={cn(
+        "space-y-8",
+        layout === "responsive-row" && "lg:flex lg:gap-4 lg:space-y-0 lg:overflow-x-auto lg:pb-3",
+      )}
+    >
       {dates.map(({ date, items: dateItems }) => {
         const isToday = date === localTodayKey();
         const liveCount = dateItems.filter(isLive).length;
 
         return (
-          <section key={date}>
+          <section
+            key={date}
+            className={cn(layout === "responsive-row" && "lg:min-w-[360px] lg:max-w-[420px]")}
+          >
             <div className="mb-3 flex items-center gap-3">
               <span
                 className={cn(
@@ -70,7 +80,7 @@ export function MatchDateGroups<T extends DatedItem>({
               <span className="h-px flex-1 bg-border" />
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className={cn("grid gap-3", layout === "stacked" && "lg:grid-cols-2")}>
               {dateItems.map((item) => (
                 <Fragment key={getKey(item)}>{renderItem(item)}</Fragment>
               ))}

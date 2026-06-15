@@ -148,6 +148,17 @@ export type SelecaoPerfilResponse = {
     nome: string;
     slug: string;
     codigo: string | null;
+    identidade: {
+      region: string;
+      confederation: {
+        code: "UEFA" | "CONMEBOL" | "CONCACAF" | "CAF" | "AFC" | "OFC";
+        name: string;
+      };
+      location: {
+        latitude: number;
+        longitude: number;
+      };
+    } | null;
     grupo: string | null;
     posicao: number | null;
     pontos: number | null;
