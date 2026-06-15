@@ -217,6 +217,21 @@ export type SelecaoPerfilResponse = {
       media: number | null;
     }>;
   };
+  convocados: {
+    fonte: "TheSportsDB";
+    sportsdb_team_id: string | null;
+    sportsdb_team_name: string | null;
+    sincronizado_em: string | null;
+    erro_sync: string | null;
+    jogadores: Array<{
+      id: string;
+      nome: string;
+      posicao: string | null;
+      clube: string | null;
+      numero: string | null;
+      foto_url: string | null;
+    }>;
+  };
 };
 
 export type EspecialResposta = {

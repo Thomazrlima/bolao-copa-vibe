@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { teamCodeFromName } from "@/data/iso2";
 import { createAdminClient, hasAdminCredentials } from "@/lib/supabase/admin";
 import {
   lookupSportsDbEventStatisticsWithRaw,
   lookupSportsDbScoreWithRaw,
+  lookupSportsDbTeamPlayers,
   type SportsDbEventStatistic,
+  type SportsDbScore,
+  type SportsDbTeamPlayer,
 } from "@/lib/thesportsdb";
 
 type JogoSync = {
@@ -21,7 +25,7 @@ type SyncDiagnostic = {
   jogo_id: string;
   evento_id: string;
   jogo: string;
-  tipo: "placar" | "estatisticas";
+  tipo: "placar" | "estatisticas" | "selecoes" | "convocados";
   consultado_em: string;
   interpretado: unknown;
   resposta: unknown;
@@ -33,10 +37,28 @@ type SyncSummary = {
   jogos_sincronizados: number;
   jogos_encerrados: number;
   estatisticas_sincronizadas: number;
+  selecoes_mapeadas: number;
+  convocados_sincronizados: number;
   provedores: {
     thesportsdb: number;
   };
 };
+
+type SportsDbSelectionCandidate = {
+  codigo: string;
+  nome: string;
+  sportsdb_team_id: string;
+  sportsdb_team_name: string | null;
+};
+
+type SportsDbSelectionCacheRow = SportsDbSelectionCandidate & {
+  jogadores: SportsDbTeamPlayer[] | null;
+  sincronizado_em: string | null;
+};
+
+const MAX_THESPORTSDB_REQUESTS_PER_SYNC = 15;
+const SELECTION_MAPPING_BACKFILL_LIMIT = 6;
+const PLAYERS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function POST(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -81,6 +103,8 @@ export async function POST(request: Request) {
     jogos_sincronizados: 0,
     jogos_encerrados: 0,
     estatisticas_sincronizadas: 0,
+    selecoes_mapeadas: 0,
+    convocados_sincronizados: 0,
     provedores: { thesportsdb: 0 },
   };
   let syncError: string | null = null;
@@ -225,8 +249,11 @@ async function synchronizeGames(
     jogos_sincronizados: 0,
     jogos_encerrados: 0,
     estatisticas_sincronizadas: 0,
+    selecoes_mapeadas: 0,
+    convocados_sincronizados: 0,
     provedores: { thesportsdb: 0 },
   };
+  const mappedSelections = new Map<string, SportsDbSelectionCandidate>();
 
   for (const jogo of activeJogos) {
     if (!jogo.sportsdb_event_id) continue;
@@ -257,6 +284,7 @@ async function synchronizeGames(
     summary.provedores.thesportsdb += 1;
     if (score.encerrado) summary.jogos_encerrados += 1;
 
+    await mapSportsDbSelections(supabase, jogo, score, summary, mappedSelections);
     await synchronizeStatistics(supabase, jogo, summary, diagnostics);
   }
 
@@ -264,7 +292,247 @@ async function synchronizeGames(
     await synchronizeStatistics(supabase, jogo, summary, diagnostics);
   }
 
+  await synchronizeSelectionMappings(supabase, summary, mappedSelections, diagnostics);
+  await synchronizeSelectionPlayers(supabase, [...mappedSelections.values()], summary, diagnostics);
+
   return summary;
+}
+
+async function synchronizeSelectionMappings(
+  supabase: ReturnType<typeof createAdminClient>,
+  summary: SyncSummary,
+  mappedSelections: Map<string, SportsDbSelectionCandidate>,
+  diagnostics: SyncDiagnostic[],
+) {
+  const remainingRequests = MAX_THESPORTSDB_REQUESTS_PER_SYNC - summary.provedores.thesportsdb;
+  if (remainingRequests <= 0) return;
+
+  const existingCodesResult = await supabase.from("selecoes_sportsdb").select("codigo");
+
+  if (existingCodesResult.error) {
+    if (isMissingSportsDbSelectionCacheError(existingCodesResult.error)) return;
+
+    throw new Error(`Falha ao consultar seleções mapeadas: ${existingCodesResult.error.message}`);
+  }
+
+  const existingCodes = new Set(
+    ((existingCodesResult.data ?? []) as Array<{ codigo: string | null }>)
+      .map((row) => row.codigo)
+      .filter((codigo): codigo is string => Boolean(codigo)),
+  );
+  for (const codigo of mappedSelections.keys()) existingCodes.add(codigo);
+
+  const gamesResult = await supabase
+    .from("jogos")
+    .select("id,sportsdb_event_id,time1,time2,data,encerrado,estatisticas")
+    .not("sportsdb_event_id", "is", null)
+    .order("data", { ascending: true })
+    .limit(72);
+
+  if (gamesResult.error) {
+    throw new Error(`Falha ao consultar jogos para mapear seleções: ${gamesResult.error.message}`);
+  }
+
+  const candidates = ((gamesResult.data ?? []) as JogoSync[]).filter((jogo) =>
+    [jogo.time1, jogo.time2].some((team) => {
+      const code = teamCodeFromName(team);
+      return code && !existingCodes.has(code);
+    }),
+  );
+  const lookupLimit = Math.min(
+    remainingRequests,
+    SELECTION_MAPPING_BACKFILL_LIMIT,
+    candidates.length,
+  );
+
+  for (const jogo of candidates.slice(0, lookupLimit)) {
+    if (!jogo.sportsdb_event_id) continue;
+
+    let scoreLookup;
+    try {
+      summary.provedores.thesportsdb += 1;
+      scoreLookup = await lookupSportsDbScoreWithRaw(jogo.sportsdb_event_id);
+    } catch (error) {
+      diagnostics.push(createDiagnostic(jogo, "selecoes", null, null, errorMessage(error)));
+      continue;
+    }
+
+    const score = scoreLookup.data;
+    diagnostics.push(createDiagnostic(jogo, "selecoes", score, scoreLookup.raw));
+    if (!score) continue;
+
+    await mapSportsDbSelections(supabase, jogo, score, summary, mappedSelections);
+    for (const team of [jogo.time1, jogo.time2]) {
+      const code = teamCodeFromName(team);
+      if (code) existingCodes.add(code);
+    }
+  }
+}
+
+async function mapSportsDbSelections(
+  supabase: ReturnType<typeof createAdminClient>,
+  jogo: JogoSync,
+  score: SportsDbScore,
+  summary: SyncSummary,
+  mappedSelections: Map<string, SportsDbSelectionCandidate>,
+) {
+  const candidates = [
+    toSportsDbSelectionCandidate(jogo.time1, score.homeTeam),
+    toSportsDbSelectionCandidate(jogo.time2, score.awayTeam),
+  ].filter((candidate): candidate is SportsDbSelectionCandidate => candidate != null);
+
+  for (const candidate of candidates) {
+    const { error } = await supabase.from("selecoes_sportsdb").upsert(
+      {
+        codigo: candidate.codigo,
+        nome: candidate.nome,
+        sportsdb_team_id: candidate.sportsdb_team_id,
+        sportsdb_team_name: candidate.sportsdb_team_name,
+      },
+      { onConflict: "codigo" },
+    );
+
+    if (error) {
+      if (isMissingSportsDbSelectionCacheError(error)) return;
+
+      throw new Error(`Falha ao mapear ${candidate.nome} no TheSportsDB: ${error.message}`);
+    }
+
+    summary.selecoes_mapeadas += 1;
+    mappedSelections.set(candidate.codigo, candidate);
+  }
+}
+
+function toSportsDbSelectionCandidate(
+  nome: string,
+  team: SportsDbScore["homeTeam"],
+): SportsDbSelectionCandidate | null {
+  const codigo = teamCodeFromName(nome);
+  if (!codigo || !team.id) return null;
+
+  return {
+    codigo,
+    nome,
+    sportsdb_team_id: team.id,
+    sportsdb_team_name: team.name,
+  };
+}
+
+async function synchronizeSelectionPlayers(
+  supabase: ReturnType<typeof createAdminClient>,
+  recentlyMapped: SportsDbSelectionCandidate[],
+  summary: SyncSummary,
+  diagnostics: SyncDiagnostic[],
+) {
+  const remainingRequests = MAX_THESPORTSDB_REQUESTS_PER_SYNC - summary.provedores.thesportsdb;
+  if (remainingRequests <= 0) return;
+
+  const targets = await getSelectionPlayerSyncTargets(supabase, recentlyMapped, remainingRequests);
+
+  for (const target of targets) {
+    if (summary.provedores.thesportsdb >= MAX_THESPORTSDB_REQUESTS_PER_SYNC) return;
+
+    let playersLookup;
+    try {
+      summary.provedores.thesportsdb += 1;
+      playersLookup = await lookupSportsDbTeamPlayers(target.sportsdb_team_id);
+    } catch (error) {
+      diagnostics.push(createSelectionDiagnostic(target, null, null, errorMessage(error)));
+      await supabase
+        .from("selecoes_sportsdb")
+        .update({ erro_sync: errorMessage(error) })
+        .eq("codigo", target.codigo);
+      continue;
+    }
+
+    diagnostics.push(createSelectionDiagnostic(target, playersLookup.data, playersLookup.raw));
+
+    const { error } = await supabase
+      .from("selecoes_sportsdb")
+      .update({
+        jogadores: playersLookup.data,
+        sincronizado_em: new Date().toISOString(),
+        erro_sync: null,
+      })
+      .eq("codigo", target.codigo);
+
+    if (error) {
+      throw new Error(`Falha ao salvar convocados de ${target.nome}: ${error.message}`);
+    }
+
+    summary.convocados_sincronizados += 1;
+  }
+}
+
+async function getSelectionPlayerSyncTargets(
+  supabase: ReturnType<typeof createAdminClient>,
+  recentlyMapped: SportsDbSelectionCandidate[],
+  limit: number,
+) {
+  const byCode = new Map<string, SportsDbSelectionCandidate>();
+  const staleCutoff = new Date(Date.now() - PLAYERS_CACHE_TTL_MS).toISOString();
+  const recentlyMappedCodes = recentlyMapped.map((selection) => selection.codigo);
+
+  if (recentlyMappedCodes.length) {
+    const recentResult = await supabase
+      .from("selecoes_sportsdb")
+      .select("codigo,nome,sportsdb_team_id,sportsdb_team_name,jogadores,sincronizado_em")
+      .in("codigo", recentlyMappedCodes);
+
+    if (recentResult.error) {
+      if (isMissingSportsDbSelectionCacheError(recentResult.error)) return [];
+
+      throw new Error(`Falha ao consultar cache recém-mapeado: ${recentResult.error.message}`);
+    }
+
+    for (const row of (recentResult.data ?? []) as SportsDbSelectionCacheRow[]) {
+      if (shouldSyncPlayers(row, staleCutoff)) {
+        byCode.set(row.codigo, {
+          codigo: row.codigo,
+          nome: row.nome,
+          sportsdb_team_id: row.sportsdb_team_id,
+          sportsdb_team_name: row.sportsdb_team_name,
+        });
+      }
+    }
+  }
+
+  const staleResult = await supabase
+    .from("selecoes_sportsdb")
+    .select("codigo,nome,sportsdb_team_id,sportsdb_team_name,jogadores,sincronizado_em")
+    .or(`sincronizado_em.is.null,sincronizado_em.lt.${staleCutoff}`)
+    .order("sincronizado_em", { ascending: true, nullsFirst: true })
+    .limit(limit);
+
+  if (staleResult.error) {
+    if (isMissingSportsDbSelectionCacheError(staleResult.error)) return [];
+
+    throw new Error(`Falha ao consultar cache de convocados: ${staleResult.error.message}`);
+  }
+
+  for (const row of (staleResult.data ?? []) as SportsDbSelectionCacheRow[]) {
+    byCode.set(row.codigo, {
+      codigo: row.codigo,
+      nome: row.nome,
+      sportsdb_team_id: row.sportsdb_team_id,
+      sportsdb_team_name: row.sportsdb_team_name,
+    });
+  }
+
+  return [...byCode.values()].slice(0, limit);
+}
+
+function shouldSyncPlayers(row: SportsDbSelectionCacheRow, staleCutoff: string) {
+  const hasPlayers = Array.isArray(row.jogadores) && row.jogadores.length > 0;
+  return !hasPlayers || !row.sincronizado_em || row.sincronizado_em < staleCutoff;
+}
+
+function isMissingSportsDbSelectionCacheError(error: { message: string; code?: string }) {
+  return (
+    error.code === "PGRST205" ||
+    /selecoes_sportsdb/i.test(error.message) ||
+    /schema cache/i.test(error.message)
+  );
 }
 
 async function synchronizeStatistics(
@@ -315,6 +583,24 @@ function createDiagnostic(
     evento_id: jogo.sportsdb_event_id ?? "",
     jogo: `${jogo.time1} x ${jogo.time2}`,
     tipo,
+    consultado_em: new Date().toISOString(),
+    interpretado,
+    resposta,
+    ...(erro ? { erro } : {}),
+  };
+}
+
+function createSelectionDiagnostic(
+  selection: SportsDbSelectionCandidate,
+  interpretado: unknown,
+  resposta: unknown,
+  erro?: string,
+): SyncDiagnostic {
+  return {
+    jogo_id: "",
+    evento_id: selection.sportsdb_team_id,
+    jogo: selection.nome,
+    tipo: "convocados",
     consultado_em: new Date().toISOString(),
     interpretado,
     resposta,

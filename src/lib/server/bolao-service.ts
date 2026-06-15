@@ -76,6 +76,23 @@ type FaseRow = {
   nome: string;
 };
 
+type ConvocadoRow = {
+  id?: string | null;
+  nome?: string | null;
+  posicao?: string | null;
+  clube?: string | null;
+  numero?: string | null;
+  foto_url?: string | null;
+};
+
+type SelecaoSportsDbRow = {
+  sportsdb_team_id: string | null;
+  sportsdb_team_name: string | null;
+  jogadores: ConvocadoRow[] | null;
+  sincronizado_em: string | null;
+  erro_sync: string | null;
+};
+
 type PerfilEspeciaisRow = {
   acertos: number;
   pontos: number;
@@ -583,6 +600,23 @@ export async function getPerfilSelecao(supabase: SupabaseClient, slug: string) {
   const statistics = buildSelectionStatistics(selectionName, teamGames);
   const summary = buildSelectionSummary(selectionName, teamGames);
   const selectionCode = teamCodeFromName(selectionName) ?? null;
+  const sportsDbSelectionResult = selectionCode
+    ? await supabase
+        .from("selecoes_sportsdb")
+        .select("sportsdb_team_id,sportsdb_team_name,jogadores,sincronizado_em,erro_sync")
+        .eq("codigo", selectionCode)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (
+    sportsDbSelectionResult.error &&
+    !isMissingSportsDbSelectionCacheError(sportsDbSelectionResult.error)
+  ) {
+    assertNoError(sportsDbSelectionResult.error);
+  }
+  const sportsDbSelection = sportsDbSelectionResult.error
+    ? null
+    : ((sportsDbSelectionResult.data ?? null) as SelecaoSportsDbRow | null);
 
   return {
     selecao: {
@@ -624,7 +658,47 @@ export async function getPerfilSelecao(supabase: SupabaseClient, slug: string) {
     resumo: summary,
     confianca: confidence,
     estatisticas: statistics,
+    convocados: buildSelectionRoster(sportsDbSelection),
   };
+}
+
+function isMissingSportsDbSelectionCacheError(error: { message: string; code?: string }) {
+  return (
+    error.code === "PGRST205" ||
+    /selecoes_sportsdb/i.test(error.message) ||
+    /schema cache/i.test(error.message)
+  );
+}
+
+function buildSelectionRoster(row: SelecaoSportsDbRow | null) {
+  return {
+    fonte: "TheSportsDB" as const,
+    sportsdb_team_id: row?.sportsdb_team_id ?? null,
+    sportsdb_team_name: row?.sportsdb_team_name ?? null,
+    sincronizado_em: row?.sincronizado_em ?? null,
+    erro_sync: row?.erro_sync ?? null,
+    jogadores: (row?.jogadores ?? [])
+      .map((jogador) => {
+        const id = cleanRosterText(jogador.id);
+        const nome = cleanRosterText(jogador.nome);
+        if (!id || !nome) return null;
+
+        return {
+          id,
+          nome,
+          posicao: cleanRosterText(jogador.posicao),
+          clube: cleanRosterText(jogador.clube),
+          numero: cleanRosterText(jogador.numero),
+          foto_url: cleanRosterText(jogador.foto_url),
+        };
+      })
+      .filter((jogador): jogador is NonNullable<typeof jogador> => jogador != null),
+  };
+}
+
+function cleanRosterText(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 async function getPalpitesParaJogos(supabase: SupabaseClient, gameIds: string[]) {

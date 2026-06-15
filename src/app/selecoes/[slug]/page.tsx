@@ -7,11 +7,15 @@ import {
   Activity,
   ArrowLeft,
   CalendarDays,
+  Globe2,
   type LucideIcon,
+  MapPinned,
   Shield,
   Sparkles,
   Target,
   Trophy,
+  UserRound,
+  UsersRound,
 } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
@@ -33,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 type Match = SelecaoPerfilResponse["jogos"][number];
+type SelectionView = "calendario" | "elenco";
 
 export default function SelecaoPage() {
   const params = useParams<{ slug: string }>();
@@ -40,6 +45,7 @@ export default function SelecaoPage() {
   const [data, setData] = useState<SelecaoPerfilResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<SelectionView>("calendario");
 
   const loadData = useCallback(async () => {
     try {
@@ -178,24 +184,67 @@ export default function SelecaoPage() {
         <StatisticsCard statistics={data.estatisticas} className="lg:col-span-2 xl:col-span-2" />
       </section>
 
-      <section className="mx-auto w-full max-w-4xl">
-        <div className="text-center">
-          <SectionTitle eyebrow="Calendário" title="Jogos da seleção" />
-        </div>
-        {data.jogos.length ? (
-          <MatchDateGroups
-            items={data.jogos}
-            getKey={(jogo) => jogo.id}
-            isLive={(jogo) => matchStatus(jogo) === "live"}
-            layout="responsive-row"
-            renderItem={(jogo) => (
-              <SelectionMatchCard jogo={jogo} selectionName={data.selecao.nome} />
+      <SelectionViewSwitcher view={view} onChange={setView} />
+
+      {view === "elenco" ? (
+        <RosterCard convocados={data.convocados} />
+      ) : (
+        <section className="mx-auto w-full max-w-4xl">
+          <div className="text-center">
+            <SectionTitle eyebrow="Calendário" title="Jogos da seleção" />
+          </div>
+          {data.jogos.length ? (
+            <MatchDateGroups
+              items={data.jogos}
+              getKey={(jogo) => jogo.id}
+              isLive={(jogo) => matchStatus(jogo) === "live"}
+              layout="responsive-row"
+              renderItem={(jogo) => (
+                <SelectionMatchCard jogo={jogo} selectionName={data.selecao.nome} />
+              )}
+            />
+          ) : (
+            <EmptyState icon={CalendarDays} title="Nenhum jogo encontrado." />
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function SelectionViewSwitcher({
+  view,
+  onChange,
+}: {
+  view: SelectionView;
+  onChange: (view: SelectionView) => void;
+}) {
+  const items = [
+    { value: "calendario" as const, label: "Calendário", icon: CalendarDays },
+    { value: "elenco" as const, label: "Elenco", icon: UsersRound },
+  ];
+
+  return (
+    <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-1 rounded-xl border border-border bg-card/85 p-1">
+      {items.map(({ value, label, icon: Icon }) => {
+        const active = view === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onChange(value)}
+            className={cn(
+              "flex min-w-0 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-black transition-colors",
+              active
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
             )}
-          />
-        ) : (
-          <EmptyState icon={CalendarDays} title="Nenhum jogo encontrado." />
-        )}
-      </section>
+          >
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -430,12 +479,46 @@ function SelectionIdentityCard({ selection }: { selection: SelecaoPerfilResponse
           <Flag code={selection.codigo ?? undefined} name={selection.nome} size="lg" static />
           <div className="min-w-0">
             <p className="truncate font-display text-lg font-black">{selection.nome}</p>
+            <p className="mt-1 text-xs font-semibold text-muted-foreground">{identity.region}</p>
           </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <IdentityPill
+            icon={Globe2}
+            label="Confederação"
+            value={identity.confederation.code}
+            detail={identity.confederation.name}
+          />
+          <IdentityPill icon={MapPinned} label="Região" value={identity.region} />
         </div>
 
         <MiniLocationMap location={identity.location} label={selection.nome} />
       </div>
     </section>
+  );
+}
+
+function IdentityPill({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-background/40 p-3">
+      <div className="flex items-center gap-2 text-primary">
+        <Icon className="h-4 w-4 shrink-0" />
+        <p className="truncate text-[10px] font-black uppercase tracking-wider">{label}</p>
+      </div>
+      <p className="mt-2 truncate font-display text-lg font-black">{value}</p>
+      {detail ? <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{detail}</p> : null}
+    </div>
   );
 }
 
@@ -559,6 +642,91 @@ function StatisticsCard({
         <EmptyState icon={Activity} title="Estatísticas ainda não disponíveis." />
       )}
     </section>
+  );
+}
+
+function RosterCard({ convocados }: { convocados: SelecaoPerfilResponse["convocados"] }) {
+  const players = convocados.jogadores.slice(0, 18);
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <SectionTitle eyebrow="Elenco" title="Convocados" />
+        {convocados.sincronizado_em ? (
+          <span className="rounded-full bg-background px-2 py-1 text-[10px] font-bold text-muted-foreground">
+            {formatLocalTime(convocados.sincronizado_em)}
+          </span>
+        ) : null}
+      </div>
+
+      {players.length ? (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {players.map((player) => (
+            <article
+              key={player.id}
+              className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-background/35 p-3"
+            >
+              <PlayerPhoto player={player} />
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-black">{player.nome}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
+                  {player.numero ? (
+                    <span className="num rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+                      #{player.numero}
+                    </span>
+                  ) : null}
+                  {player.posicao ? <span className="truncate">{player.posicao}</span> : null}
+                </div>
+                {player.clube ? (
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{player.clube}</p>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={UsersRound}
+          title={
+            convocados.sportsdb_team_id
+              ? "Convocados ainda não disponíveis no cache."
+              : "Convocados ainda não disponíveis para esta seleção."
+          }
+        />
+      )}
+
+      {convocados.erro_sync ? (
+        <p className="mt-3 text-xs font-semibold text-muted-foreground">
+          Última tentativa de sync: {convocados.erro_sync}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function PlayerPhoto({
+  player,
+}: {
+  player: SelecaoPerfilResponse["convocados"]["jogadores"][number];
+}) {
+  if (!player.foto_url) {
+    return (
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+        <UserRound className="h-5 w-5" />
+      </span>
+    );
+  }
+
+  return (
+    <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+      <img
+        src={player.foto_url}
+        alt={player.nome}
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover"
+      />
+    </span>
   );
 }
 
