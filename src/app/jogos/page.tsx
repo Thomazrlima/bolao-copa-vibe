@@ -108,7 +108,7 @@ export default function CalendarioPage() {
       setError(null);
     } catch (loadError) {
       setError(
-        loadError instanceof Error ? loadError.message : "Não foi possível carregar o calendário.",
+        loadError instanceof Error ? loadError.message : "Não foi possível carregar os jogos.",
       );
     }
   }, []);
@@ -471,12 +471,12 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
       onClick={(event) => {
         if (state !== "live") return;
         if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
-        router.push(`/calendario/${jogo.id}`);
+        router.push(`/jogos/${jogo.id}`);
       }}
       onKeyDown={(event) => {
         if (state !== "live" || (event.key !== "Enter" && event.key !== " ")) return;
         event.preventDefault();
-        router.push(`/calendario/${jogo.id}`);
+        router.push(`/jogos/${jogo.id}`);
       }}
       className={cn(
         "relative overflow-hidden rounded-xl border bg-card shadow-[0_12px_35px_-30px_rgba(0,0,0,0.9)] transition-colors",
@@ -555,7 +555,7 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
             {stateLabel(state, jogo.data)}
           </span>
           <Button asChild variant="secondary" size="sm">
-            <Link href={`/calendario/${jogo.id}`}>Ver detalhes</Link>
+            <Link href={`/jogos/${jogo.id}`}>Ver detalhes</Link>
           </Button>
         </div>
       </div>
@@ -575,7 +575,7 @@ function TeamSide({ name, align = "left" }: { name: string; align?: "left" | "ri
 function CalendarSkeleton({ compact }: { compact?: boolean }) {
   return (
     <SpinningBallLoader
-      label="Carregando calendário"
+      label="Carregando jogos"
       className={compact ? "min-h-[220px]" : "min-h-[420px]"}
     />
   );
@@ -608,7 +608,7 @@ function filterTitle(status: StatusFilter, group: string) {
   if (status === "live") return "Acontecendo agora";
   if (status === "upcoming") return "Jogos não iniciados";
   if (status === "finished") return "Jogos encerrados";
-  return "Calendário da Copa";
+  return "Jogos da Copa";
 }
 
 function formatDate(yyyymmdd: string) {

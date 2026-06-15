@@ -1233,12 +1233,12 @@ function OpenMatchCard({
       aria-label={`Abrir detalhes de ${game.time1} x ${game.time2}`}
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
-        router.push(`/calendario/${game.id}`);
+        router.push(`/jogos/${game.id}`);
       }}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
-        router.push(`/calendario/${game.id}`);
+        router.push(`/jogos/${game.id}`);
       }}
       className={cn(
         "cursor-pointer overflow-hidden rounded-xl border bg-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -1355,11 +1355,11 @@ function HistoryMatchCard({ game }: { game: DashboardGame }) {
       role="link"
       tabIndex={0}
       aria-label={`Abrir detalhes de ${game.time1} x ${game.time2}`}
-      onClick={() => router.push(`/calendario/${game.id}`)}
+      onClick={() => router.push(`/jogos/${game.id}`)}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
-        router.push(`/calendario/${game.id}`);
+        router.push(`/jogos/${game.id}`);
       }}
       className="cursor-pointer rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >

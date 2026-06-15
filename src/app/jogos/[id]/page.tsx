@@ -190,7 +190,7 @@ export default function JogoDetalhePage() {
           {error ?? "Não foi possível carregar os detalhes do jogo."}
         </p>
         <Button asChild variant="secondary" className="mt-4">
-          <Link href="/calendario">Voltar ao calendário</Link>
+          <Link href="/jogos">Voltar aos jogos</Link>
         </Button>
       </div>
     );
@@ -211,9 +211,9 @@ export default function JogoDetalhePage() {
     <>
       <div className="mb-5">
         <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">
-          <Link href="/calendario">
+          <Link href="/jogos">
             <ArrowLeft className="h-4 w-4" />
-            Calendário
+            Jogos
           </Link>
         </Button>
 
@@ -240,8 +240,10 @@ export default function JogoDetalhePage() {
               <KpiCard icon={Target} label="Seu palpite" value={currentUserGuessLabel} />
               <KpiCard
                 icon={BarChart3}
-                label="Pontuação média"
-                value={formatAveragePoints(dashboard.averagePoints)}
+                label={isLive ? "Pontuação média (parcial)" : "Pontuação média"}
+                value={
+                  jogo.encerrado || isLive ? formatAveragePoints(dashboard.averagePoints) : "-"
+                }
               />
             </div>
           </div>
@@ -288,7 +290,7 @@ export default function JogoDetalhePage() {
                 />
               )}
               <Activity className="relative z-10 h-4 w-4" />
-              <span className="relative z-10">Estatísticas</span>
+              <span className="relative z-10">Estatísticas da Partida</span>
             </TabsTrigger>
           ) : null}
           <TabsTrigger
@@ -364,14 +366,6 @@ const STATISTIC_LABELS: Record<string, string> = {
 
 function MatchStatisticsSection({ jogo }: { jogo: JogoPalpitesResponse["jogo"] }) {
   const statistics = jogo.estatisticas ?? [];
-  const featuredNames = new Set([
-    "ball possession",
-    "total shots",
-    "shots on goal",
-    "expected_goals",
-  ]);
-  const featured = statistics.filter((item) => featuredNames.has(item.name.toLowerCase()));
-  const remaining = statistics.filter((item) => !featuredNames.has(item.name.toLowerCase()));
 
   return (
     <section className="overflow-hidden rounded-2xl border border-primary/25 bg-card">
@@ -405,26 +399,16 @@ function MatchStatisticsSection({ jogo }: { jogo: JogoPalpitesResponse["jogo"] }
       </div>
 
       {statistics.length ? (
-        <div className="space-y-6 p-4 sm:p-6">
-          {featured.length ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {featured.map((statistic) => (
-                <FeaturedStatistic key={statistic.name} statistic={statistic} />
-              ))}
-            </div>
-          ) : null}
-
-          {remaining.length ? (
-            <div className="overflow-hidden rounded-xl border border-border bg-background/35">
-              {remaining.map((statistic, index) => (
-                <StatisticComparison
-                  key={statistic.name}
-                  statistic={statistic}
-                  className={index > 0 ? "border-t border-border" : undefined}
-                />
-              ))}
-            </div>
-          ) : null}
+        <div className="p-4 sm:p-6">
+          <div className="overflow-hidden rounded-xl border border-border bg-background/35">
+            {statistics.map((statistic, index) => (
+              <StatisticComparison
+                key={statistic.name}
+                statistic={statistic}
+                className={index > 0 ? "border-t border-border" : undefined}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="px-5 py-12 text-center">
@@ -457,36 +441,6 @@ function StatisticsTeam({ name, align = "left" }: { name: string; align?: "left"
       >
         {name}
       </span>
-    </div>
-  );
-}
-
-function FeaturedStatistic({
-  statistic,
-}: {
-  statistic: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>[number];
-}) {
-  const home = statistic.home ?? 0;
-  const away = statistic.away ?? 0;
-  const total = home + away;
-  const homeWidth = total > 0 ? (home / total) * 100 : 50;
-
-  return (
-    <div className="rounded-xl border border-border bg-background/55 p-4">
-      <p className="text-center text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-        {getStatisticLabel(statistic.name)}
-      </p>
-      <div className="mt-3 flex items-end justify-between gap-4">
-        <span className="num font-display text-2xl font-black text-primary">
-          {formatStatisticValue(statistic.name, statistic.home)}
-        </span>
-        <span className="num font-display text-2xl font-black text-success">
-          {formatStatisticValue(statistic.name, statistic.away)}
-        </span>
-      </div>
-      <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-success">
-        <div className="h-full bg-primary" style={{ width: `${homeWidth}%` }} />
-      </div>
     </div>
   );
 }

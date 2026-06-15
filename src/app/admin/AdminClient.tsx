@@ -944,7 +944,7 @@ function PendingUserCard({ user }: { user: PendingUser }) {
         {user.jogos_pendentes.map((game) => (
           <Link
             key={game.id}
-            href={`/calendario/${game.id}`}
+            href={`/jogos/${game.id}`}
             className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/50"
           >
             <p className="text-sm font-bold">

@@ -152,7 +152,7 @@ function HighlightCard({ game }: { game: GameRow }) {
 
       <div className="p-4">
         <Button asChild variant="secondary" className="w-full">
-          <Link href={`/calendario/${game.id}`}>Abrir detalhes do jogo</Link>
+          <Link href={`/jogos/${game.id}`}>Abrir detalhes do jogo</Link>
         </Button>
       </div>
     </article>
@@ -197,4 +197,3 @@ function getYoutubeThumbnailUrl(url: string) {
     return null;
   }
 }
-

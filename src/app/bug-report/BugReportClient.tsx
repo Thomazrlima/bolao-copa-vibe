@@ -175,7 +175,7 @@ export function BugReportClient() {
               <Input
                 value={form.pagina}
                 onChange={(event) => updateField("pagina", event.target.value)}
-                placeholder="/palpites, /ranking, calendário..."
+                placeholder="/palpites, /ranking, /jogos..."
                 maxLength={220}
               />
             </Field>

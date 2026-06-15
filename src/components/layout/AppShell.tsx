@@ -43,7 +43,7 @@ const TABS = [
   { to: "/ranking", label: "Ranking", icon: Trophy },
   { to: "/palpites", label: "Palpites", icon: Goal },
   { to: "/grupos", label: "Copa", icon: LayoutGrid },
-  { to: "/calendario", label: "Calendário", icon: CalendarDays },
+  { to: "/jogos", label: "Jogos", icon: CalendarDays },
   { to: "/regras", label: "Regras", icon: ScrollText },
 ];
 
@@ -373,7 +373,7 @@ function LiveScoreGroup({
 function LiveScoreItem({ game, hidden }: { game: LiveGame; hidden: boolean }) {
   return (
     <Link
-      href={`/calendario/${game.id}`}
+      href={`/jogos/${game.id}`}
       tabIndex={hidden ? -1 : undefined}
       onClick={(event) => event.currentTarget.blur()}
       className="group relative flex h-10 shrink-0 items-center text-xs font-bold text-white hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white sm:text-sm"
@@ -391,7 +391,13 @@ function LiveScoreContent({ game }: { game: LiveGame }) {
     <span className="flex h-10 shrink-0 items-center gap-2 px-5 sm:gap-3 sm:px-8">
       <Radio className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
       {team1Code ? (
-        <Flag code={team1Code} name={game.time1} size="sm" static className="shadow-sm ring-white/50" />
+        <Flag
+          code={team1Code}
+          name={game.time1}
+          size="sm"
+          static
+          className="shadow-sm ring-white/50"
+        />
       ) : null}
       <LiveTeamName name={game.time1} />
       <strong className="num rounded-md bg-black/20 px-2 py-0.5 font-display text-sm font-black tracking-wide sm:text-base">
@@ -399,7 +405,13 @@ function LiveScoreContent({ game }: { game: LiveGame }) {
       </strong>
       <LiveTeamName name={game.time2} />
       {team2Code ? (
-        <Flag code={team2Code} name={game.time2} size="sm" static className="shadow-sm ring-white/50" />
+        <Flag
+          code={team2Code}
+          name={game.time2}
+          size="sm"
+          static
+          className="shadow-sm ring-white/50"
+        />
       ) : null}
       <span className="ml-2 h-4 w-px bg-current opacity-35" aria-hidden />
     </span>

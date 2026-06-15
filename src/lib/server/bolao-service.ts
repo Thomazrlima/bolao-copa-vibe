@@ -478,17 +478,22 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
   const users = await getRankingUsuariosPorIds(supabase, userIds);
   const userById = new Map(users.map((user) => [user.id, user]));
   const game = jogo as JogoRow;
+  const gameIsLive = !game.encerrado && game.placar_status === "live";
+  const shouldCalculateScore = game.encerrado || gameIsLive;
 
   return {
     jogo: game,
     palpites: guesses
       .map((guess) => {
-        const scoring = calcularPontuacaoJogo(game, {
-          user_id: guess.user_id,
-          jogo_id: guess.jogo_id,
-          gols1: guess.gols1,
-          gols2: guess.gols2,
-        });
+        const scoring = calcularPontuacaoJogo(
+          { ...game, encerrado: shouldCalculateScore },
+          {
+            user_id: guess.user_id,
+            jogo_id: guess.jogo_id,
+            gols1: guess.gols1,
+            gols2: guess.gols2,
+          },
+        );
         const user = userById.get(guess.user_id);
 
         return {
@@ -496,9 +501,9 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
           nome_completo: user?.nome_completo ?? "Participante",
           avatar_url: user?.avatar_url ?? null,
           palpite: { gols1: guess.gols1, gols2: guess.gols2 },
-          pontos: getGuessPoints(guess, game.encerrado ? scoring.pontos : null),
-          outcome: getGuessOutcome(guess, game.encerrado ? scoring.outcome : null),
-          chinelada: game.encerrado ? scoring.chinelada : (guess.chinelada ?? false),
+          pontos: getGuessPoints(guess, shouldCalculateScore ? scoring.pontos : null),
+          outcome: getGuessOutcome(guess, shouldCalculateScore ? scoring.outcome : null),
+          chinelada: shouldCalculateScore ? scoring.chinelada : (guess.chinelada ?? false),
           criado_em: guess.criado_em,
         };
       })

@@ -6,11 +6,10 @@ import "@/styles.css";
 export const metadata: Metadata = {
   title: "Bolão dos v(devers) · 2026",
   description:
-    "Dashboard do Bolão dos v(devers): ranking ao vivo, grupos, calendário completo e simulador do mata-mata da Copa de 48 seleções.",
+    "Dashboard do Bolão dos v(devers): ranking ao vivo, grupos, jogos e simulador do mata-mata da Copa de 48 seleções.",
   openGraph: {
     title: "Bolão dos v(devers)",
-    description:
-      "Ranking, grupos, calendário e simulador do mata-mata da Copa do Mundo de 48 seleções.",
+    description: "Ranking, grupos, jogos e simulador do mata-mata da Copa do Mundo de 48 seleções.",
     type: "website",
   },
   twitter: {

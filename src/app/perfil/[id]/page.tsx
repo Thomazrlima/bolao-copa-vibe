@@ -438,12 +438,12 @@ function GuessCard({ guess }: { guess: PerfilPalpite }) {
       tabIndex={isLive ? 0 : undefined}
       aria-label={isLive ? `Acompanhar ${guess.time1} x ${guess.time2} ao vivo` : undefined}
       onClick={() => {
-        if (isLive) router.push(`/calendario/${guess.jogo_id}`);
+        if (isLive) router.push(`/jogos/${guess.jogo_id}`);
       }}
       onKeyDown={(event) => {
         if (!isLive || (event.key !== "Enter" && event.key !== " ")) return;
         event.preventDefault();
-        router.push(`/calendario/${guess.jogo_id}`);
+        router.push(`/jogos/${guess.jogo_id}`);
       }}
       className={cn(
         "overflow-hidden rounded-xl border border-border bg-card/90",
