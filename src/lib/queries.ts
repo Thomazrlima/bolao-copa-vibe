@@ -157,6 +157,10 @@ export type SelecaoPerfilResponse = {
       location: {
         latitude: number;
         longitude: number;
+        marker?: {
+          x: number;
+          y: number;
+        };
       };
     } | null;
     grupo: string | null;

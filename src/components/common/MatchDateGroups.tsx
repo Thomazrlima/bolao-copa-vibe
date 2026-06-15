@@ -43,7 +43,8 @@ export function MatchDateGroups<T extends DatedItem>({
     <div
       className={cn(
         "space-y-8",
-        layout === "responsive-row" && "lg:flex lg:gap-4 lg:space-y-0 lg:overflow-x-auto lg:pb-3",
+        layout === "responsive-row" &&
+          "lg:grid lg:grid-cols-[repeat(auto-fit,minmax(300px,1fr))] lg:gap-4 lg:space-y-0",
       )}
     >
       {dates.map(({ date, items: dateItems }) => {
@@ -51,10 +52,7 @@ export function MatchDateGroups<T extends DatedItem>({
         const liveCount = dateItems.filter(isLive).length;
 
         return (
-          <section
-            key={date}
-            className={cn(layout === "responsive-row" && "lg:min-w-[360px] lg:max-w-[420px]")}
-          >
+          <section key={date} className={cn(layout === "responsive-row" && "lg:min-w-0")}>
             <div className="mb-3 flex items-center gap-3">
               <span
                 className={cn(

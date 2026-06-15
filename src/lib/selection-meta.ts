@@ -9,6 +9,10 @@ export type SelectionIdentity = {
   location: {
     latitude: number;
     longitude: number;
+    marker?: {
+      x: number;
+      y: number;
+    };
   };
 };
 
@@ -28,6 +32,10 @@ const SELECTION_META: Record<
     confederation: ConfederationCode;
     latitude: number;
     longitude: number;
+    marker?: {
+      x: number;
+      y: number;
+    };
   }
 > = {
   ALG: { region: "África", confederation: "CAF", latitude: 28.03, longitude: 1.66 },
@@ -36,7 +44,12 @@ const SELECTION_META: Record<
   AUT: { region: "Europa", confederation: "UEFA", latitude: 47.52, longitude: 14.55 },
   BEL: { region: "Europa", confederation: "UEFA", latitude: 50.5, longitude: 4.47 },
   BIH: { region: "Europa", confederation: "UEFA", latitude: 43.92, longitude: 17.68 },
-  BRA: { region: "America do Sul", confederation: "CONMEBOL", latitude: -14.24, longitude: -51.93 },
+  BRA: {
+    region: "America do Sul",
+    confederation: "CONMEBOL",
+    latitude: -14.24,
+    longitude: -51.93,
+  },
   CAN: {
     region: "America do Norte",
     confederation: "CONCACAF",
@@ -110,6 +123,62 @@ const SELECTION_META: Record<
   UZB: { region: "Ásia", confederation: "AFC", latitude: 41.38, longitude: 64.59 },
 };
 
+const MAP_MARKERS: Record<string, { x: number; y: number }> = {
+  ALG: { x: 50.5, y: 52.7 },
+  ARG: { x: 34.2, y: 80.5 },
+  AUS: { x: 79.5, y: 80 },
+  AUT: { x: 51.2, y: 40.7 },
+  BEL: { x: 49, y: 37.5 },
+  BIH: { x: 52.8, y: 43.3 },
+  BRA: { x: 37.4, y: 69.6 },
+  CAN: { x: 20, y: 24 },
+  CHI: { x: 30.8, y: 80 },
+  CIV: { x: 48.3, y: 63 },
+  COD: { x: 55.2, y: 68.2 },
+  COL: { x: 32, y: 59 },
+  CPV: { x: 42.7, y: 56.5 },
+  CRC: { x: 27.5, y: 57 },
+  CRO: { x: 52.5, y: 42.2 },
+  CUW: { x: 32.4, y: 52.5 },
+  CZE: { x: 51.7, y: 39.6 },
+  DEN: { x: 50.6, y: 34.5 },
+  ECU: { x: 30.5, y: 62 },
+  EGY: { x: 56, y: 52.8 },
+  ENG: { x: 46.8, y: 36 },
+  ESP: { x: 47, y: 44 },
+  FRA: { x: 48.4, y: 40.8 },
+  GER: { x: 50.8, y: 38.5 },
+  GHA: { x: 49.4, y: 64 },
+  HAI: { x: 31.5, y: 51 },
+  IRN: { x: 63.8, y: 52 },
+  IRQ: { x: 60.5, y: 51.5 },
+  ITA: { x: 51.8, y: 45.5 },
+  JOR: { x: 58.5, y: 53 },
+  JPN: { x: 84.5, y: 45.2 },
+  KOR: { x: 80.8, y: 45 },
+  MAR: { x: 47.5, y: 50.2 },
+  MEX: { x: 18, y: 48 },
+  NED: { x: 49.2, y: 36.3 },
+  NOR: { x: 50.2, y: 27.5 },
+  NZL: { x: 91.5, y: 85 },
+  PAN: { x: 29.5, y: 58 },
+  PAR: { x: 35, y: 70.5 },
+  POR: { x: 45.7, y: 44 },
+  QAT: { x: 61.8, y: 55.3 },
+  RSA: { x: 55.2, y: 82 },
+  SAU: { x: 60.5, y: 58 },
+  SCO: { x: 46.3, y: 32.5 },
+  SEN: { x: 45.2, y: 58.5 },
+  SRB: { x: 53.2, y: 43.7 },
+  SUI: { x: 50, y: 41 },
+  SWE: { x: 52.3, y: 29.8 },
+  TUN: { x: 52.1, y: 49.5 },
+  TUR: { x: 56.5, y: 45.6 },
+  URU: { x: 36.3, y: 76 },
+  USA: { x: 20, y: 37 },
+  UZB: { x: 64.5, y: 45.5 },
+};
+
 export function getSelectionIdentity(code?: string | null): SelectionIdentity | null {
   if (!code) return null;
 
@@ -125,6 +194,7 @@ export function getSelectionIdentity(code?: string | null): SelectionIdentity | 
     location: {
       latitude: meta.latitude,
       longitude: meta.longitude,
+      marker: MAP_MARKERS[code] ?? meta.marker,
     },
   };
 }

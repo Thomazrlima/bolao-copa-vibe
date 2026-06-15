@@ -20,6 +20,7 @@ import { SelectionLink } from "@/components/common/SelectionLink";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
+import mapaSvg from "@/app/mapa.svg";
 import { teamCodeFromName } from "@/data/iso2";
 import {
   formatLocalGameDateTime,
@@ -90,8 +91,8 @@ export default function SelecaoPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <Button asChild variant="ghost" size="sm" className="-ml-2">
+    <div className="space-y-6">
+      <Button asChild variant="ghost" size="sm" className="-ml-1">
         <Link href="/grupos">
           <ArrowLeft className="h-4 w-4" />
           Copa
@@ -208,7 +209,7 @@ function HeaderMatchup({
 }) {
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-      <HeaderTeamFlag name={selection.nome} code={selection.codigo ?? undefined} active />
+      <HeaderTeamFlag name={selection.nome} code={selection.codigo ?? undefined} />
       <span className="rounded-lg border border-border bg-background/60 px-3 py-2 font-display text-sm font-black text-muted-foreground">
         VS
       </span>
@@ -224,23 +225,18 @@ function HeaderMatchup({
 function HeaderTeamFlag({
   name,
   code,
-  active = false,
   align = "left",
 }: {
   name: string;
   code?: string;
-  active?: boolean;
   align?: "left" | "right";
 }) {
   return (
     <div className={cn("min-w-0", align === "right" && "text-right")}>
       <div className={cn("flex items-center gap-2", align === "right" && "flex-row-reverse")}>
-        <Flag code={code} name={name} size="lg" static />
+        <Flag code={code} name={name} size="md" static />
         <p className="line-clamp-2 font-display text-sm font-black leading-tight">{name}</p>
       </div>
-      {active ? (
-        <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Seleção</p>
-      ) : null}
     </div>
   );
 }
@@ -366,7 +362,6 @@ function TeamName({
     return (
       <div className={cn("min-w-0", align === "right" && "text-right")}>
         <p className="line-clamp-2 font-display text-sm font-black">{name}</p>
-        <p className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Seleção</p>
       </div>
     );
   }
@@ -455,84 +450,34 @@ function MiniLocationMap({
     : never;
   label: string;
 }) {
-  const point = projectLocation(location.latitude, location.longitude);
+  const point = location.marker ?? projectLocation(location.latitude, location.longitude);
+  const mapSrc = typeof mapaSvg === "string" ? mapaSvg : mapaSvg.src;
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-background/45 p-2">
-      <svg
-        viewBox="0 0 360 190"
-        role="img"
-        aria-label={`Localização aproximada de ${label}`}
-        className="h-44 w-full text-muted-foreground"
-      >
-        <defs>
-          <linearGradient id="selection-map-sea" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.04" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0.12" />
-          </linearGradient>
-        </defs>
-        <rect width="360" height="190" rx="18" fill="url(#selection-map-sea)" />
-        <path
-          d="M0 95H360M30 0V190M60 0V190M90 0V190M120 0V190M150 0V190M180 0V190M210 0V190M240 0V190M270 0V190M300 0V190M330 0V190M0 47.5H360M0 142.5H360"
-          className="stroke-border/70"
-          strokeWidth="1"
-        />
-        <path
-          d="M18 58C29 35 56 28 78 34C90 22 118 30 135 45C154 61 151 82 127 89C109 94 98 82 80 88C58 96 33 84 18 58Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M96 76C108 66 126 69 135 82C143 93 137 107 123 108C111 109 105 100 94 104C84 107 77 98 81 89C83 84 89 80 96 76Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M113 103C129 96 151 103 162 119C175 139 162 169 145 178C134 184 128 170 129 157C130 141 118 132 111 118C108 112 108 106 113 103Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M171 52C189 37 218 41 229 58C214 69 188 72 171 52Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M188 72C204 72 219 83 224 101C231 128 214 154 194 153C177 151 168 131 171 107C173 88 178 77 188 72Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M220 54C242 35 286 35 317 52C339 64 349 83 334 96C318 110 294 95 275 109C257 122 237 103 226 82C221 72 218 62 220 54Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M251 112C264 105 279 109 284 122C272 130 257 127 251 112Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M286 136C308 124 333 134 329 151C313 160 288 156 286 136Z"
-          className="fill-muted-foreground/20 stroke-muted-foreground/30"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M150 121C142 127 137 139 139 151M130 109C140 112 148 116 155 125M116 129C124 134 130 142 130 153"
-          className="stroke-primary/30"
-          strokeLinecap="round"
-          strokeWidth="1.4"
-        />
-        <circle cx={point.x} cy={point.y} r="12" className="fill-primary/20" />
-        <circle
-          cx={point.x}
-          cy={point.y}
-          r="7"
-          className="fill-background stroke-primary"
-          strokeWidth="2"
-        />
-        <circle cx={point.x} cy={point.y} r="4.5" className="fill-primary" />
-      </svg>
+    <div
+      className="relative aspect-[740/423] overflow-hidden rounded-xl border border-primary/20 bg-background/45"
+      role="img"
+      aria-label={`Localização aproximada de ${label}`}
+    >
+      <div className="absolute inset-0 bg-primary/[0.03]" />
+      <img
+        src={mapSrc}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full object-contain opacity-45 mix-blend-screen [filter:invert(86%)_sepia(34%)_saturate(768%)_hue-rotate(2deg)_brightness(104%)_contrast(92%)]"
+      />
+      <span
+        className="absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20"
+        style={{ left: `${point.x}%`, top: `${point.y}%` }}
+      />
+      <span
+        className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-background shadow-[0_0_18px_color-mix(in_srgb,var(--primary)_45%,transparent)]"
+        style={{ left: `${point.x}%`, top: `${point.y}%` }}
+      />
+      <span
+        className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary"
+        style={{ left: `${point.x}%`, top: `${point.y}%` }}
+      />
     </div>
   );
 }
@@ -639,7 +584,7 @@ function formatSigned(value: number) {
 
 function projectLocation(latitude: number, longitude: number) {
   return {
-    x: Math.min(352, Math.max(8, ((longitude + 180) / 360) * 360)),
-    y: Math.min(182, Math.max(8, ((90 - latitude) / 180) * 190)),
+    x: Math.min(97, Math.max(3, ((longitude + 180) / 360) * 100)),
+    y: Math.min(97, Math.max(3, ((90 - latitude) / 180) * 100)),
   };
 }
