@@ -364,8 +364,20 @@ const STATISTIC_LABELS: Record<string, string> = {
   goals_prevented: "Gols evitados",
 };
 
+const STATISTIC_ORDER = [
+  "total shots",
+  "shots on goal",
+  "shots off goal",
+  "blocked shots",
+  "shots insidebox",
+];
+
+const STATISTIC_ORDER_INDEX = new Map(
+  STATISTIC_ORDER.map((name, index) => [normalizeStatisticName(name), index]),
+);
+
 function MatchStatisticsSection({ jogo }: { jogo: JogoPalpitesResponse["jogo"] }) {
-  const statistics = jogo.estatisticas ?? [];
+  const statistics = useMemo(() => orderStatistics(jogo.estatisticas ?? []), [jogo.estatisticas]);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-primary/25 bg-card">
@@ -421,6 +433,20 @@ function MatchStatisticsSection({ jogo }: { jogo: JogoPalpitesResponse["jogo"] }
       )}
     </section>
   );
+}
+
+function orderStatistics(
+  statistics: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>,
+) {
+  return [...statistics].sort((statisticA, statisticB) => {
+    const orderA = STATISTIC_ORDER_INDEX.get(normalizeStatisticName(statisticA.name));
+    const orderB = STATISTIC_ORDER_INDEX.get(normalizeStatisticName(statisticB.name));
+
+    if (orderA != null && orderB != null) return orderA - orderB;
+    if (orderA != null) return -1;
+    if (orderB != null) return 1;
+    return 0;
+  });
 }
 
 function StatisticsTeam({ name, align = "left" }: { name: string; align?: "left" | "right" }) {
@@ -484,7 +510,11 @@ function StatisticComparison({
 }
 
 function getStatisticLabel(name: string) {
-  return STATISTIC_LABELS[name.toLowerCase()] ?? name;
+  return STATISTIC_LABELS[normalizeStatisticName(name)] ?? name;
+}
+
+function normalizeStatisticName(name: string) {
+  return name.trim().toLowerCase();
 }
 
 function formatStatisticValue(name: string, value: number | null) {
