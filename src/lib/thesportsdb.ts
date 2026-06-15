@@ -14,12 +14,25 @@ export type SportsDbScore = {
   status: string | null;
 };
 
+export type SportsDbEventStatistic = {
+  name: string;
+  home: number | null;
+  away: number | null;
+};
+
+type SportsDbEventStatisticResponse = {
+  idEvent?: string;
+  strStat?: string | null;
+  intHome?: string | null;
+  intAway?: string | null;
+};
+
 const API_KEY = process.env.THESPORTSDB_API_KEY ?? "123";
 const BASE_URL = `https://www.thesportsdb.com/api/v1/json/${API_KEY}`;
 
-function parseScore(value: string | null | undefined) {
+function parseNumber(value: string | null | undefined) {
   if (value == null || value === "") return null;
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -45,9 +58,36 @@ export async function lookupSportsDbScore(eventId: string): Promise<SportsDbScor
 
   return {
     eventId,
-    gols1: parseScore(event.intHomeScore),
-    gols2: parseScore(event.intAwayScore),
+    gols1: parseNumber(event.intHomeScore),
+    gols2: parseNumber(event.intAwayScore),
     encerrado: isFinished(status),
     status,
   };
+}
+
+export async function lookupSportsDbEventStatistics(
+  eventId: string,
+): Promise<SportsDbEventStatistic[]> {
+  const response = await fetch(
+    `${BASE_URL}/lookupeventstats.php?id=${encodeURIComponent(eventId)}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `TheSportsDB retornou ${response.status} nas estatísticas do evento ${eventId}.`,
+    );
+  }
+
+  const body = (await response.json()) as {
+    eventstats?: SportsDbEventStatisticResponse[] | null;
+  };
+
+  return (body.eventstats ?? [])
+    .filter((statistic) => statistic.strStat?.trim())
+    .map((statistic) => ({
+      name: statistic.strStat!.trim(),
+      home: parseNumber(statistic.intHome),
+      away: parseNumber(statistic.intAway),
+    }));
 }

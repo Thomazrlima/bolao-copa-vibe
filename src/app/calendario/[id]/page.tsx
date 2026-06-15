@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  Activity,
   ArrowLeft,
   BarChart3,
   CheckCircle2,
@@ -45,16 +46,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
-import {
-  formatLocalGameDateTime,
-  formatLocalTime,
-} from "@/lib/local-datetime";
+import { formatLocalGameDateTime, formatLocalTime } from "@/lib/local-datetime";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { GuessOutcome } from "@/lib/scoring";
 
-type TabValue = "dashboard" | "transmissao";
+type TabValue = "dashboard" | "estatisticas" | "transmissao";
 
 type ChatMessage = {
   id: string;
@@ -199,6 +197,8 @@ export default function JogoDetalhePage() {
   }
 
   const { jogo } = data;
+  const showStatistics =
+    jogo.encerrado || jogo.placar_status === "live" || jogo.placar_status === "finished";
   const videoTabLabel = getVideoTabLabel(jogo, isLive);
   const currentUserGuess = currentUserId
     ? data.palpites.find((item) => item.user_id === currentUserId)
@@ -249,7 +249,12 @@ export default function JogoDetalhePage() {
       </div>
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabValue)}>
-        <TabsList className="grid h-auto w-full grid-cols-2 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[360px]">
+        <TabsList
+          className={cn(
+            "grid h-auto w-full rounded-xl border border-border bg-card/80 p-1 sm:w-fit",
+            showStatistics ? "grid-cols-3 sm:min-w-[540px]" : "grid-cols-2 sm:min-w-[360px]",
+          )}
+        >
           <TabsTrigger
             value="dashboard"
             className="relative gap-1.5 py-2.5 data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
@@ -267,6 +272,25 @@ export default function JogoDetalhePage() {
             <BarChart3 className="relative z-10 h-4 w-4" />
             <span className="relative z-10">Dashboard</span>
           </TabsTrigger>
+          {showStatistics ? (
+            <TabsTrigger
+              value="estatisticas"
+              className="relative gap-1.5 py-2.5 data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
+              {tab === "estatisticas" && (
+                <motion.span
+                  layoutId="game-detail-tab"
+                  className="absolute inset-0 rounded-md bg-primary"
+                  transition={{
+                    duration: reduceMotion ? 0 : 0.18,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                />
+              )}
+              <Activity className="relative z-10 h-4 w-4" />
+              <span className="relative z-10">Estatísticas</span>
+            </TabsTrigger>
+          ) : null}
           <TabsTrigger
             value="transmissao"
             className="relative gap-1.5 py-2.5 data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
@@ -290,6 +314,12 @@ export default function JogoDetalhePage() {
           <DashboardTab data={dashboard} />
         </TabsContent>
 
+        {showStatistics ? (
+          <TabsContent value="estatisticas" className="mt-6">
+            <MatchStatisticsSection jogo={jogo} />
+          </TabsContent>
+        ) : null}
+
         <TabsContent value="transmissao" className="mt-6">
           <TransmissaoTab
             data={data}
@@ -309,6 +339,211 @@ function DashboardTab({ data }: { data: ReturnType<typeof buildDashboard> }) {
   }
 
   return <OpenGameDashboardTab data={data} />;
+}
+
+const STATISTIC_LABELS: Record<string, string> = {
+  "shots on goal": "Finalizações no gol",
+  "shots off goal": "Finalizações para fora",
+  "total shots": "Finalizações",
+  "blocked shots": "Finalizações bloqueadas",
+  "shots insidebox": "Finalizações na área",
+  "shots outsidebox": "Finalizações fora da área",
+  fouls: "Faltas",
+  "corner kicks": "Escanteios",
+  offsides: "Impedimentos",
+  "ball possession": "Posse de bola",
+  "yellow cards": "Cartões amarelos",
+  "red cards": "Cartões vermelhos",
+  "goalkeeper saves": "Defesas do goleiro",
+  "total passes": "Passes",
+  "passes accurate": "Passes certos",
+  "passes %": "Precisão dos passes",
+  expected_goals: "Gols esperados (xG)",
+  goals_prevented: "Gols evitados",
+};
+
+function MatchStatisticsSection({ jogo }: { jogo: JogoPalpitesResponse["jogo"] }) {
+  const statistics = jogo.estatisticas ?? [];
+  const featuredNames = new Set([
+    "ball possession",
+    "total shots",
+    "shots on goal",
+    "expected_goals",
+  ]);
+  const featured = statistics.filter((item) => featuredNames.has(item.name.toLowerCase()));
+  const remaining = statistics.filter((item) => !featuredNames.has(item.name.toLowerCase()));
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-primary/25 bg-card">
+      <div className="relative overflow-hidden border-b border-border px-5 py-6 sm:px-7">
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/10 to-transparent" />
+        <div className="relative">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+                {jogo.encerrado || jogo.placar_status === "finished"
+                  ? "Resumo final"
+                  : "Números ao vivo"}
+              </p>
+              <h2 className="font-display text-2xl font-black">Raio-x da partida</h2>
+            </div>
+            {jogo.estatisticas_sincronizadas_em ? (
+              <span className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-semibold text-muted-foreground">
+                Atualizado às {formatLocalTime(jogo.estatisticas_sincronizadas_em)}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+            <StatisticsTeam name={jogo.time1} />
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary">
+              comparativo
+            </span>
+            <StatisticsTeam name={jogo.time2} align="right" />
+          </div>
+        </div>
+      </div>
+
+      {statistics.length ? (
+        <div className="space-y-6 p-4 sm:p-6">
+          {featured.length ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {featured.map((statistic) => (
+                <FeaturedStatistic key={statistic.name} statistic={statistic} />
+              ))}
+            </div>
+          ) : null}
+
+          {remaining.length ? (
+            <div className="overflow-hidden rounded-xl border border-border bg-background/35">
+              {remaining.map((statistic, index) => (
+                <StatisticComparison
+                  key={statistic.name}
+                  statistic={statistic}
+                  className={index > 0 ? "border-t border-border" : undefined}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="px-5 py-12 text-center">
+          <Activity className="mx-auto h-9 w-9 text-muted-foreground/55" />
+          <p className="mt-3 font-semibold">Aguardando as estatísticas da partida.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Os números aparecerão aqui assim que forem recebidos pelo sincronizador.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StatisticsTeam({ name, align = "left" }: { name: string; align?: "left" | "right" }) {
+  return (
+    <div className={cn("flex min-w-0 items-center gap-3", align === "right" && "flex-row-reverse")}>
+      <Flag
+        code={teamCodeFromName(name)}
+        name={name}
+        size="md"
+        static
+        className="shrink-0 shadow-md"
+      />
+      <span
+        className={cn(
+          "truncate font-display text-lg font-black sm:text-xl",
+          align === "right" && "text-right",
+        )}
+      >
+        {name}
+      </span>
+    </div>
+  );
+}
+
+function FeaturedStatistic({
+  statistic,
+}: {
+  statistic: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>[number];
+}) {
+  const home = statistic.home ?? 0;
+  const away = statistic.away ?? 0;
+  const total = home + away;
+  const homeWidth = total > 0 ? (home / total) * 100 : 50;
+
+  return (
+    <div className="rounded-xl border border-border bg-background/55 p-4">
+      <p className="text-center text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        {getStatisticLabel(statistic.name)}
+      </p>
+      <div className="mt-3 flex items-end justify-between gap-4">
+        <span className="num font-display text-2xl font-black text-primary">
+          {formatStatisticValue(statistic.name, statistic.home)}
+        </span>
+        <span className="num font-display text-2xl font-black text-success">
+          {formatStatisticValue(statistic.name, statistic.away)}
+        </span>
+      </div>
+      <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-success">
+        <div className="h-full bg-primary" style={{ width: `${homeWidth}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function StatisticComparison({
+  statistic,
+  className,
+}: {
+  statistic: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>[number];
+  className?: string;
+}) {
+  const home = statistic.home ?? 0;
+  const away = statistic.away ?? 0;
+  const total = home + away;
+  const homeWidth = total > 0 ? (home / total) * 100 : 50;
+  const awayWidth = total > 0 ? (away / total) * 100 : 50;
+
+  return (
+    <div className={cn("px-4 py-4 sm:px-5", className)}>
+      <div className="grid grid-cols-[52px_minmax(0,1fr)_52px] items-center gap-3">
+        <span className="num text-left font-display text-lg font-black text-primary">
+          {formatStatisticValue(statistic.name, statistic.home)}
+        </span>
+        <span className="truncate text-center text-xs font-bold text-muted-foreground">
+          {getStatisticLabel(statistic.name)}
+        </span>
+        <span className="num text-right font-display text-lg font-black text-success">
+          {formatStatisticValue(statistic.name, statistic.away)}
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-1" aria-hidden="true">
+        <div className="flex h-1.5 justify-end overflow-hidden rounded-l-full bg-primary/15">
+          <div className="h-full rounded-l-full bg-primary" style={{ width: `${homeWidth}%` }} />
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-r-full bg-success/15">
+          <div className="h-full rounded-r-full bg-success" style={{ width: `${awayWidth}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getStatisticLabel(name: string) {
+  return STATISTIC_LABELS[name.toLowerCase()] ?? name;
+}
+
+function formatStatisticValue(name: string, value: number | null) {
+  if (value == null) return "-";
+
+  const normalizedName = name.toLowerCase();
+  const formatted = new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+  }).format(value);
+
+  return normalizedName === "ball possession" || normalizedName === "passes %"
+    ? `${formatted}%`
+    : formatted;
 }
 
 function ScoreTooltip({

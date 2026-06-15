@@ -1,19 +1,25 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient, hasAdminCredentials } from "@/lib/supabase/admin";
-import { lookupSportsDbScore } from "@/lib/thesportsdb";
+import {
+  lookupSportsDbEventStatistics,
+  lookupSportsDbScore,
+  type SportsDbEventStatistic,
+} from "@/lib/thesportsdb";
 
 type JogoSync = {
   id: string;
   sportsdb_event_id: string | null;
   data: string;
   encerrado: boolean;
+  estatisticas: SportsDbEventStatistic[] | null;
 };
 
 type SyncSummary = {
   jogos_elegiveis: number;
   jogos_sincronizados: number;
   jogos_encerrados: number;
+  estatisticas_sincronizadas: number;
   provedores: {
     thesportsdb: number;
   };
@@ -61,6 +67,7 @@ export async function POST(request: Request) {
     jogos_elegiveis: 0,
     jogos_sincronizados: 0,
     jogos_encerrados: 0,
+    estatisticas_sincronizadas: 0,
     provedores: { thesportsdb: 0 },
   };
   let syncError: string | null = null;
@@ -110,26 +117,45 @@ export async function POST(request: Request) {
 
 async function synchronizeGames(supabase: ReturnType<typeof createAdminClient>) {
   const nowIso = nowAsStoredBrasiliaIso();
-  const { data: jogos, error } = await supabase
+  const activeResult = await supabase
     .from("jogos")
-    .select("id,sportsdb_event_id,data,encerrado")
+    .select("id,sportsdb_event_id,data,encerrado,estatisticas")
     .lte("data", nowIso)
     .eq("encerrado", false)
     .not("sportsdb_event_id", "is", null)
     .order("data", { ascending: true })
-    .limit(10);
+    .limit(7);
 
-  if (error) throw new Error(error.message);
+  if (activeResult.error) throw new Error(activeResult.error.message);
 
-  const syncableJogos = (jogos ?? []) as JogoSync[];
+  // O cron roda duas vezes por minuto e a chave gratuita permite 30 chamadas/minuto.
+  const remainingRequests = Math.max(0, 15 - (activeResult.data?.length ?? 0) * 2);
+  const finishedLimit = Math.min(5, remainingRequests);
+  const finishedResult =
+    finishedLimit > 0
+      ? await supabase
+          .from("jogos")
+          .select("id,sportsdb_event_id,data,encerrado,estatisticas")
+          .eq("encerrado", true)
+          .is("estatisticas", null)
+          .not("sportsdb_event_id", "is", null)
+          .order("data", { ascending: false })
+          .limit(finishedLimit)
+      : { data: [], error: null };
+
+  if (finishedResult.error) throw new Error(finishedResult.error.message);
+
+  const activeJogos = (activeResult.data ?? []) as JogoSync[];
+  const finishedJogos = (finishedResult.data ?? []) as JogoSync[];
   const summary: SyncSummary = {
-    jogos_elegiveis: syncableJogos.length,
+    jogos_elegiveis: activeJogos.length + finishedJogos.length,
     jogos_sincronizados: 0,
     jogos_encerrados: 0,
+    estatisticas_sincronizadas: 0,
     provedores: { thesportsdb: 0 },
   };
 
-  for (const jogo of syncableJogos) {
+  for (const jogo of activeJogos) {
     if (!jogo.sportsdb_event_id) continue;
 
     const score = await lookupSportsDbScore(jogo.sportsdb_event_id);
@@ -148,9 +174,41 @@ async function synchronizeGames(supabase: ReturnType<typeof createAdminClient>) 
     summary.jogos_sincronizados += 1;
     summary.provedores.thesportsdb += 1;
     if (score.encerrado) summary.jogos_encerrados += 1;
+
+    await synchronizeStatistics(supabase, jogo, summary);
+  }
+
+  for (const jogo of finishedJogos) {
+    await synchronizeStatistics(supabase, jogo, summary);
   }
 
   return summary;
+}
+
+async function synchronizeStatistics(
+  supabase: ReturnType<typeof createAdminClient>,
+  jogo: JogoSync,
+  summary: SyncSummary,
+) {
+  if (!jogo.sportsdb_event_id) return;
+
+  const statistics = await lookupSportsDbEventStatistics(jogo.sportsdb_event_id);
+  if (!statistics.length) return;
+
+  const { error } = await supabase
+    .from("jogos")
+    .update({
+      estatisticas: statistics,
+      estatisticas_sincronizadas_em: new Date().toISOString(),
+    })
+    .eq("id", jogo.id);
+
+  if (error) {
+    throw new Error(`Falha ao salvar estatísticas do jogo ${jogo.id}: ${error.message}`);
+  }
+
+  summary.estatisticas_sincronizadas += 1;
+  summary.provedores.thesportsdb += 1;
 }
 
 function nowAsStoredBrasiliaIso() {

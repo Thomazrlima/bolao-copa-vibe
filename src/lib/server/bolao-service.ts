@@ -49,6 +49,12 @@ type JogoRow = {
   encerrado: boolean;
   placar_status?: "upcoming" | "live" | "finished" | null;
   transmissao_url?: string | null;
+  estatisticas?: Array<{
+    name: string;
+    home: number | null;
+    away: number | null;
+  }> | null;
+  estatisticas_sincronizadas_em?: string | null;
 };
 
 type FaseRow = {
@@ -437,7 +443,9 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
   const [{ data: jogo, error: jogoError }, guessesResult] = await Promise.all([
     supabase
       .from("jogos")
-      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status,transmissao_url")
+      .select(
+        "id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status,transmissao_url,estatisticas,estatisticas_sincronizadas_em",
+      )
       .eq("id", jogoId)
       .maybeSingle(),
     supabase.rpc("listar_palpites_jogo", { p_jogo_id: jogoId }),

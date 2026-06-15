@@ -81,7 +81,6 @@ export default function CalendarioPage() {
   const [grupos, setGrupos] = useState<GrupoRow[]>([]);
   const [status, setStatus] = useState<StatusFilter>("today");
   const [group, setGroup] = useState("all");
-  const [team, setTeam] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -142,13 +141,6 @@ export default function CalendarioPage() {
   });
 
   const groupByTeam = useMemo(() => new Map(grupos.map((row) => [row.time, row.grupo])), [grupos]);
-  const teamOptions = useMemo(
-    () =>
-      [...new Set(jogos.flatMap((jogo) => [jogo.time1, jogo.time2]))].sort((a, b) =>
-        a.localeCompare(b, "pt-BR"),
-      ),
-    [jogos],
-  );
   const todayKey = localTodayKey();
 
   const stats = useMemo(() => {
@@ -177,10 +169,9 @@ export default function CalendarioPage() {
       ) {
         return false;
       }
-      if (team !== "all" && jogo.time1 !== team && jogo.time2 !== team) return false;
       return true;
     });
-  }, [group, groupByTeam, jogos, nowTick, status, team, todayKey]);
+  }, [group, groupByTeam, jogos, nowTick, status, todayKey]);
 
   const dates = useMemo(() => {
     const dateMap = new Map<string, Jogo[]>();
@@ -205,15 +196,7 @@ export default function CalendarioPage() {
   return (
     <>
       <CalendarHero stats={stats} />
-      <CalendarFilters
-        status={status}
-        group={group}
-        team={team}
-        teams={teamOptions}
-        onStatus={setStatus}
-        onGroup={setGroup}
-        onTeam={setTeam}
-      />
+      <CalendarFilters status={status} group={group} onStatus={setStatus} onGroup={setGroup} />
 
       {error && (
         <div className="mb-5 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -226,14 +209,8 @@ export default function CalendarioPage() {
       ) : (
         <div>
           <SectionHeader
-            eyebrow={
-              group === "all"
-                ? team === "all"
-                  ? "Agenda completa"
-                  : "Filtro por time"
-                : `Grupo ${group}`
-            }
-            title={filterTitle(status, group, team)}
+            eyebrow={group === "all" ? "Agenda completa" : `Grupo ${group}`}
+            title={filterTitle(status, group)}
             description={`${filtered.length} jogo${filtered.length === 1 ? "" : "s"} encontrado${filtered.length === 1 ? "" : "s"} · horários de Brasília`}
           >
             <StatusLegend />
@@ -313,19 +290,13 @@ function HeroStat({ value, label, live }: { value: number; label: string; live?:
 function CalendarFilters({
   status,
   group,
-  team,
-  teams,
   onStatus,
   onGroup,
-  onTeam,
 }: {
   status: StatusFilter;
   group: string;
-  team: string;
-  teams: string[];
   onStatus: (status: StatusFilter) => void;
   onGroup: (group: string) => void;
-  onTeam: (team: string) => void;
 }) {
   const reduceMotion = useReducedMotion();
   const filters: Array<{ value: StatusFilter; label: string; icon: typeof CalendarDays }> = [
@@ -380,20 +351,6 @@ function CalendarFilters({
             {GROUPS.map((item) => (
               <SelectItem key={item} value={item}>
                 Grupo {item}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={team} onValueChange={onTeam}>
-          <SelectTrigger className="h-10 w-full rounded-xl border-border bg-background/60 font-bold sm:w-[220px]">
-            <SelectValue placeholder="Todos os times" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os times</SelectItem>
-            {teams.map((item) => (
-              <SelectItem key={item} value={item}>
-                {item}
               </SelectItem>
             ))}
           </SelectContent>
@@ -571,7 +528,7 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
                 state === "live" ? "text-live" : "text-muted-foreground",
               )}
             >
-            {formatLocalGameTime(jogo.data)}
+              {formatLocalGameTime(jogo.data)}
             </span>
             {jogo.gols1 != null && jogo.gols2 != null ? (
               <div
@@ -645,8 +602,7 @@ function stateLabel(state: MatchState, iso: string) {
   return `Próximo jogo · ${formatLocalShortDate(iso)}`;
 }
 
-function filterTitle(status: StatusFilter, group: string, team: string) {
-  if (team !== "all") return `Jogos do ${team}`;
+function filterTitle(status: StatusFilter, group: string) {
   if (group !== "all") return `Jogos do Grupo ${group}`;
   if (status === "today") return "Jogos de hoje";
   if (status === "live") return "Acontecendo agora";

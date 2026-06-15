@@ -84,6 +84,12 @@ export type JogoPalpitesResponse = {
     encerrado: boolean;
     placar_status: "upcoming" | "live" | "finished" | null;
     transmissao_url: string | null;
+    estatisticas: Array<{
+      name: string;
+      home: number | null;
+      away: number | null;
+    }> | null;
+    estatisticas_sincronizadas_em: string | null;
   };
   palpites: JogoPalpite[];
 };
