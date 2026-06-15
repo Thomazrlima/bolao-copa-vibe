@@ -12,16 +12,18 @@ export async function GET(request: NextRequest) {
   const next = safeNextPath(requestUrl.searchParams.get("next"));
   let verifiedRecovery = false;
 
-  if (tokenHash && type) {
+  if (tokenHash && type === "recovery" && next === "/redefinir-senha") {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type,
     });
-    verifiedRecovery = !error && type === "recovery" && next === "/redefinir-senha";
+    verifiedRecovery = !error;
   }
 
-  const response = NextResponse.redirect(new URL(verifiedRecovery ? next : "/login", requestUrl.origin));
+  const response = NextResponse.redirect(
+    new URL(verifiedRecovery ? next : "/login", requestUrl.origin),
+  );
 
   if (verifiedRecovery) {
     response.cookies.set(RECOVERY_COOKIE, "1", {

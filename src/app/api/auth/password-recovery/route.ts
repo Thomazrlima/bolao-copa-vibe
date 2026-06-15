@@ -17,9 +17,17 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const redirectTo = new URL("/auth/callback?next=/redefinir-senha", publicAppUrl(request));
 
-    await supabase.auth.resetPasswordForEmail(payload.data.email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(payload.data.email, {
       redirectTo: redirectTo.toString(),
     });
+
+    if (error) {
+      console.error("Supabase password recovery request failed", {
+        code: error.code,
+        message: error.message,
+        status: error.status,
+      });
+    }
   }
 
   return NextResponse.json({ message: GENERIC_RESPONSE });
