@@ -44,6 +44,7 @@ export type SportsDbTeamPlayer = {
 export type SportsDbLookup<T> = {
   data: T;
   raw: unknown;
+  requestCount?: number;
 };
 
 type SportsDbEventStatisticResponse = {
@@ -164,37 +165,92 @@ export async function lookupSportsDbEventStatisticsWithRaw(
 
 export async function lookupSportsDbTeamPlayers(
   teamId: string,
+  options: { maxRequests?: number } = {},
 ): Promise<SportsDbLookup<SportsDbTeamPlayer[]>> {
-  const response = await fetch(
-    `${BASE_URL}/lookup_all_players.php?id=${encodeURIComponent(teamId)}`,
-    { cache: "no-store" },
-  );
+  const maxPlayers = 26;
+  const maxRosterItems = 27;
+  const maxRequests = Math.max(1, options.maxRequests ?? 3);
+  const playersById = new Map<string, SportsDbTeamPlayer>();
+  const coachesById = new Map<string, SportsDbTeamPlayer>();
+  const rawResponses: unknown[] = [];
+  let requestCount = 0;
 
-  if (!response.ok) {
-    throw new Error(`TheSportsDB retornou ${response.status} nos jogadores do time ${teamId}.`);
+  for (const url of buildPlayerLookupUrls(teamId, maxPlayers).slice(0, maxRequests)) {
+    const response = await fetch(url, { cache: "no-store" });
+    requestCount += 1;
+
+    if (!response.ok) {
+      throw new Error(`TheSportsDB retornou ${response.status} nos jogadores do time ${teamId}.`);
+    }
+
+    const body = (await response.json()) as {
+      player?: SportsDbTeamPlayerResponse[] | null;
+    };
+    rawResponses.push(body);
+
+    const normalizedPlayers = normalizeSportsDbPlayers(body.player ?? []);
+    const previousSize = playersById.size + coachesById.size;
+    normalizedPlayers.forEach((player) => {
+      if (isCoachPosition(player.posicao)) {
+        coachesById.set(player.id, player);
+        return;
+      }
+
+      if (playersById.size < maxPlayers) playersById.set(player.id, player);
+    });
+
+    if (playersById.size >= maxPlayers && coachesById.size > 0) break;
+    if (playersById.size + coachesById.size >= maxRosterItems) break;
+    if (!normalizedPlayers.length || playersById.size + coachesById.size === previousSize) break;
   }
 
-  const body = (await response.json()) as {
-    player?: SportsDbTeamPlayerResponse[] | null;
-  };
-
   return {
-    data: (body.player ?? [])
-      .map((player) => {
-        const id = cleanText(player.idPlayer);
-        const nome = cleanText(player.strPlayer);
-        if (!id || !nome) return null;
-
-        return {
-          id,
-          nome,
-          posicao: cleanText(player.strPosition),
-          clube: cleanText(player.strTeam2) ?? cleanText(player.strTeam),
-          numero: cleanText(player.strNumber),
-          foto_url: cleanText(player.strCutout) ?? cleanText(player.strThumb),
-        };
-      })
-      .filter((player): player is SportsDbTeamPlayer => player != null),
-    raw: body,
+    data: [...playersById.values(), ...coachesById.values()].slice(0, maxRosterItems),
+    raw: rawResponses.length === 1 ? rawResponses[0] : { pages: rawResponses },
+    requestCount,
   };
+}
+
+function buildPlayerLookupUrls(teamId: string, maxPlayers: number) {
+  const encodedTeamId = encodeURIComponent(teamId);
+  const base = `${BASE_URL}/lookup_all_players.php?id=${encodedTeamId}`;
+
+  return [
+    `${base}&limit=${maxPlayers}&per_page=${maxPlayers}`,
+    `${base}&limit=${maxPlayers}&per_page=${maxPlayers}&page=2&offset=${maxPlayers}`,
+    `${base}&limit=${maxPlayers}&per_page=${maxPlayers}&page=3&offset=${maxPlayers * 2}`,
+  ];
+}
+
+function normalizeSportsDbPlayers(players: SportsDbTeamPlayerResponse[]) {
+  return players
+    .map((player) => {
+      const id = cleanText(player.idPlayer);
+      const nome = cleanText(player.strPlayer);
+      if (!id || !nome) return null;
+
+      return {
+        id,
+        nome,
+        posicao: cleanText(player.strPosition),
+        clube: cleanText(player.strTeam2) ?? cleanText(player.strTeam),
+        numero: cleanText(player.strNumber),
+        foto_url: cleanText(player.strCutout) ?? cleanText(player.strThumb),
+      };
+    })
+    .filter((player): player is SportsDbTeamPlayer => player != null);
+}
+
+function isCoachPosition(position: string | null) {
+  const normalized = (position ?? "")
+    .trim()
+    .toLocaleLowerCase("en-US")
+    .replace(/[-_/]+/g, " ");
+
+  return (
+    normalized.includes("coach") ||
+    normalized.includes("manager") ||
+    normalized.includes("trainer") ||
+    normalized.includes("head coach")
+  );
 }

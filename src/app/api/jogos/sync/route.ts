@@ -434,10 +434,13 @@ async function synchronizeSelectionPlayers(
 
     let playersLookup;
     try {
-      summary.provedores.thesportsdb += 1;
-      playersLookup = await lookupSportsDbTeamPlayers(target.sportsdb_team_id);
+      playersLookup = await lookupSportsDbTeamPlayers(target.sportsdb_team_id, {
+        maxRequests: MAX_THESPORTSDB_REQUESTS_PER_SYNC - summary.provedores.thesportsdb,
+      });
+      summary.provedores.thesportsdb += playersLookup.requestCount ?? 1;
     } catch (error) {
       diagnostics.push(createSelectionDiagnostic(target, null, null, errorMessage(error)));
+      summary.provedores.thesportsdb += 1;
       await supabase
         .from("selecoes_sportsdb")
         .update({ erro_sync: errorMessage(error) })
@@ -523,8 +526,10 @@ async function getSelectionPlayerSyncTargets(
 }
 
 function shouldSyncPlayers(row: SportsDbSelectionCacheRow, staleCutoff: string) {
-  const hasPlayers = Array.isArray(row.jogadores) && row.jogadores.length > 0;
-  return !hasPlayers || !row.sincronizado_em || row.sincronizado_em < staleCutoff;
+  const playerCount = Array.isArray(row.jogadores)
+    ? row.jogadores.filter((player) => !isCoachPosition(player.posicao)).length
+    : 0;
+  return playerCount < 26 || !row.sincronizado_em || row.sincronizado_em < staleCutoff;
 }
 
 function isMissingSportsDbSelectionCacheError(error: { message: string; code?: string }) {
@@ -532,6 +537,20 @@ function isMissingSportsDbSelectionCacheError(error: { message: string; code?: s
     error.code === "PGRST205" ||
     /selecoes_sportsdb/i.test(error.message) ||
     /schema cache/i.test(error.message)
+  );
+}
+
+function isCoachPosition(position: string | null) {
+  const normalized = (position ?? "")
+    .trim()
+    .toLocaleLowerCase("en-US")
+    .replace(/[-_/]+/g, " ");
+
+  return (
+    normalized.includes("coach") ||
+    normalized.includes("manager") ||
+    normalized.includes("trainer") ||
+    normalized.includes("head coach")
   );
 }
 
