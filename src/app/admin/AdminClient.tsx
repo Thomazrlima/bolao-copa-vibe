@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
+  Activity,
   Bug,
   Check,
   CheckCircle2,
@@ -111,6 +112,34 @@ type AdminOverview = {
   } | null;
 };
 
+type SyncDiagnostic = {
+  jogo_id: string;
+  evento_id: string;
+  jogo: string;
+  tipo: "placar" | "estatisticas";
+  consultado_em: string;
+  interpretado: unknown;
+  resposta: unknown;
+  erro?: string;
+};
+
+type SyncExecution = {
+  id: string;
+  iniciado_em: string;
+  finalizado_em: string | null;
+  sucesso: boolean | null;
+  erro: string | null;
+  duracao_ms: number | null;
+  resumo: {
+    jogos_elegiveis?: number;
+    jogos_sincronizados?: number;
+    jogos_encerrados?: number;
+    estatisticas_sincronizadas?: number;
+  };
+  diagnosticos: SyncDiagnostic[];
+  legado?: boolean;
+};
+
 export function AdminClient() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
@@ -137,6 +166,9 @@ export function AdminClient() {
   const [userCreating, setUserCreating] = useState(false);
   const [userCreationError, setUserCreationError] = useState<string | null>(null);
   const [createdUser, setCreatedUser] = useState<CreatedUser | null>(null);
+  const [syncExecutions, setSyncExecutions] = useState<SyncExecution[]>([]);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const loadOverview = useCallback(async ({ syncHighlights = true } = {}) => {
     setOverviewLoading(true);
@@ -214,6 +246,31 @@ export function AdminClient() {
     }
   }, []);
 
+  const loadSyncExecutions = useCallback(async () => {
+    setSyncLoading(true);
+    setSyncError(null);
+
+    try {
+      const response = await fetch("/api/admin/sync", { cache: "no-store" });
+      const body = (await response.json().catch(() => ({}))) as {
+        executions?: SyncExecution[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível carregar o histórico do sync.");
+      }
+
+      setSyncExecutions(body.executions ?? []);
+    } catch (error) {
+      setSyncError(
+        error instanceof Error ? error.message : "Não foi possível carregar o histórico do sync.",
+      );
+    } finally {
+      setSyncLoading(false);
+    }
+  }, []);
+
   const refreshOverview = useCallback(
     () => loadOverview({ syncHighlights: false }),
     [loadOverview],
@@ -256,7 +313,12 @@ export function AdminClient() {
         setUsuario(currentUser);
 
         if (currentUser && canManageUsers(currentUser.email)) {
-          await Promise.all([loadOverview(), loadReports(), loadSpecialAnswers()]);
+          await Promise.all([
+            loadOverview(),
+            loadReports(),
+            loadSpecialAnswers(),
+            loadSyncExecutions(),
+          ]);
         }
       } catch (error) {
         if (!active) return;
@@ -271,7 +333,14 @@ export function AdminClient() {
     return () => {
       active = false;
     };
-  }, [loadOverview, loadReports, loadSpecialAnswers]);
+  }, [loadOverview, loadReports, loadSpecialAnswers, loadSyncExecutions]);
+
+  useEffect(() => {
+    if (!usuario || !canManageUsers(usuario.email)) return;
+
+    const interval = window.setInterval(() => void loadSyncExecutions(), 30_000);
+    return () => window.clearInterval(interval);
+  }, [loadSyncExecutions, usuario]);
 
   const realtimeEnabled = Boolean(usuario && canManageUsers(usuario.email));
 
@@ -472,7 +541,7 @@ export function AdminClient() {
       </header>
 
       <Tabs defaultValue="pending">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-5">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-6">
           <TabsTrigger value="pending" className="gap-2">
             <ClockAlert className="h-4 w-4" />
             Pendências
@@ -492,6 +561,10 @@ export function AdminClient() {
           <TabsTrigger value="bugs" className="gap-2">
             <Bug className="h-4 w-4" />
             Bug reports
+          </TabsTrigger>
+          <TabsTrigger value="sync" className="gap-2">
+            <Activity className="h-4 w-4" />
+            Sync
           </TabsTrigger>
         </TabsList>
 
@@ -719,7 +792,172 @@ export function AdminClient() {
             </div>
           </section>
         </TabsContent>
+
+        <TabsContent value="sync" className="mt-5">
+          <SyncDiagnosticsSection
+            executions={syncExecutions}
+            loading={syncLoading}
+            error={syncError}
+            onRefresh={() => void loadSyncExecutions()}
+          />
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function SyncDiagnosticsSection({
+  executions,
+  loading,
+  error,
+  onRefresh,
+}: {
+  executions: SyncExecution[];
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SectionHeader
+          icon={Activity}
+          title="Monitor do sincronizador"
+          description="Últimas 20 execuções. A lista atualiza automaticamente a cada 30 segundos."
+          className="mb-0"
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onRefresh}
+          disabled={loading}
+          className="w-full sm:w-auto"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Atualizar agora
+        </Button>
+      </div>
+
+      {error ? <InlineError message={error} /> : null}
+
+      <div className="mt-5 space-y-3">
+        {loading && executions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Carregando execuções...</p>
+        ) : executions.length ? (
+          executions.map((execution) => (
+            <SyncExecutionCard key={execution.id} execution={execution} />
+          ))
+        ) : (
+          <EmptyMessage message="Nenhuma execução registrada depois da atualização de diagnóstico." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SyncExecutionCard({ execution }: { execution: SyncExecution }) {
+  const running = execution.sucesso == null && !execution.finalizado_em;
+  const summary = execution.resumo ?? {};
+  const idle = execution.sucesso === true && (summary.jogos_elegiveis ?? 0) === 0;
+  const statusLabel = running
+    ? "Executando"
+    : idle
+      ? "Sem jogos elegíveis"
+      : execution.sucesso
+        ? "Sucesso"
+        : "Erro";
+
+  return (
+    <details className="group rounded-lg border border-border bg-background/50">
+      <summary className="cursor-pointer list-none p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={execution.sucesso === false ? "destructive" : "secondary"}>
+              {statusLabel}
+            </Badge>
+            <strong className="text-sm">{formatDateTime(execution.iniciado_em)}</strong>
+            {execution.duracao_ms != null ? (
+              <span className="text-xs text-muted-foreground">{execution.duracao_ms} ms</span>
+            ) : null}
+          </div>
+          <span className="text-xs font-semibold text-muted-foreground">
+            {summary.jogos_sincronizados ?? 0}/{summary.jogos_elegiveis ?? 0} jogos atualizados
+          </span>
+        </div>
+        {execution.erro ? <p className="mt-3 text-sm text-destructive">{execution.erro}</p> : null}
+        {execution.legado ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Esta execução veio do contador antigo do cron. A versão que a executou não gravava
+            histórico detalhado.
+          </p>
+        ) : null}
+      </summary>
+
+      <div className="border-t border-border p-4">
+        <div className="mb-4 grid gap-2 sm:grid-cols-3">
+          <Metric label="Jogos encerrados" value={summary.jogos_encerrados ?? 0} />
+          <Metric label="Estatísticas salvas" value={summary.estatisticas_sincronizadas ?? 0} />
+          <Metric label="Chamadas registradas" value={execution.diagnosticos?.length ?? 0} />
+        </div>
+
+        <div className="space-y-3">
+          {(execution.diagnosticos ?? []).map((diagnostic, index) => (
+            <SyncDiagnosticCard
+              key={`${diagnostic.evento_id}-${diagnostic.tipo}-${index}`}
+              diagnostic={diagnostic}
+            />
+          ))}
+          {!execution.diagnosticos?.length ? (
+            <EmptyMessage
+              message={
+                execution.legado
+                  ? (summary.jogos_elegiveis ?? 0) === 0
+                    ? "Nenhum jogo estava elegível, então nenhuma chamada à API era esperada. O cron ainda precisa receber a versão com histórico detalhado."
+                    : "A versão antiga do cron não armazenou a resposta da API."
+                  : "Esta execução não fez chamadas ao provedor."
+              }
+            />
+          ) : null}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function SyncDiagnosticCard({ diagnostic }: { diagnostic: SyncDiagnostic }) {
+  return (
+    <article className="rounded-lg border border-border bg-card p-3 sm:p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={diagnostic.erro ? "destructive" : "secondary"}>{diagnostic.tipo}</Badge>
+        <strong className="text-sm">{diagnostic.jogo}</strong>
+        <span className="font-mono text-xs text-muted-foreground">
+          evento {diagnostic.evento_id}
+        </span>
+      </div>
+
+      {diagnostic.erro ? <p className="mt-3 text-sm text-destructive">{diagnostic.erro}</p> : null}
+
+      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
+        <JsonBlock title="Interpretação usada pelo bolão" value={diagnostic.interpretado} />
+        <JsonBlock title="Resposta bruta da API" value={diagnostic.resposta} />
+      </div>
+    </article>
+  );
+}
+
+function JsonBlock({ title, value }: { title: string; value: unknown }) {
+  return (
+    <div className="min-w-0">
+      <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary">
+        {title}
+      </p>
+      <pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
+        {JSON.stringify(value, null, 2)}
+      </pre>
     </div>
   );
 }

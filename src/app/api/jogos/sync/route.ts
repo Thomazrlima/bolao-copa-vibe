@@ -2,17 +2,30 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient, hasAdminCredentials } from "@/lib/supabase/admin";
 import {
-  lookupSportsDbEventStatistics,
-  lookupSportsDbScore,
+  lookupSportsDbEventStatisticsWithRaw,
+  lookupSportsDbScoreWithRaw,
   type SportsDbEventStatistic,
 } from "@/lib/thesportsdb";
 
 type JogoSync = {
   id: string;
   sportsdb_event_id: string | null;
+  time1: string;
+  time2: string;
   data: string;
   encerrado: boolean;
   estatisticas: SportsDbEventStatistic[] | null;
+};
+
+type SyncDiagnostic = {
+  jogo_id: string;
+  evento_id: string;
+  jogo: string;
+  tipo: "placar" | "estatisticas";
+  consultado_em: string;
+  interpretado: unknown;
+  resposta: unknown;
+  erro?: string;
 };
 
 type SyncSummary = {
@@ -71,9 +84,34 @@ export async function POST(request: Request) {
     provedores: { thesportsdb: 0 },
   };
   let syncError: string | null = null;
+  const diagnostics: SyncDiagnostic[] = [];
+  const executionResult = await supabase
+    .from("sync_jogos_execucoes")
+    .insert({ iniciado_em: new Date(startedAt).toISOString() })
+    .select("id")
+    .maybeSingle();
+
+  if (executionResult.error || !executionResult.data?.id) {
+    const historyError =
+      executionResult.error?.message ?? "A execução foi criada sem um identificador.";
+    await supabase.rpc("finalizar_sync_jogos", {
+      p_sucesso: false,
+      p_erro: `Falha ao iniciar o diagnóstico: ${historyError}`,
+      p_jogos_elegiveis: 0,
+      p_jogos_sincronizados: 0,
+      p_duracao_ms: Date.now() - startedAt,
+    });
+
+    return NextResponse.json(
+      { error: `Não foi possível iniciar o diagnóstico do sync: ${historyError}` },
+      { status: 500 },
+    );
+  }
+
+  const executionId = executionResult.data.id;
 
   try {
-    summary = await synchronizeGames(supabase);
+    summary = await synchronizeGames(supabase, diagnostics);
   } catch (error) {
     syncError = error instanceof Error ? error.message : "Erro desconhecido ao sincronizar jogos.";
   }
@@ -93,6 +131,38 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  const historyResult = await supabase
+    .from("sync_jogos_execucoes")
+    .update({
+      finalizado_em: new Date().toISOString(),
+      sucesso: syncError == null,
+      erro: syncError,
+      duracao_ms: durationMs,
+      resumo: summary,
+      diagnosticos: diagnostics,
+    })
+    .eq("id", executionId);
+
+  if (historyResult.error) {
+    await supabase.rpc("finalizar_sync_jogos", {
+      p_sucesso: false,
+      p_erro: `O sync executou, mas o diagnóstico não foi salvo: ${historyResult.error.message}`,
+      p_jogos_elegiveis: summary.jogos_elegiveis,
+      p_jogos_sincronizados: summary.jogos_sincronizados,
+      p_duracao_ms: durationMs,
+    });
+
+    return NextResponse.json(
+      { error: `O sync executou, mas o diagnóstico não foi salvo: ${historyResult.error.message}` },
+      { status: 500 },
+    );
+  }
+
+  await supabase
+    .from("sync_jogos_execucoes")
+    .delete()
+    .lt("iniciado_em", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
 
   if (syncError) {
     return NextResponse.json(
@@ -115,11 +185,14 @@ export async function POST(request: Request) {
   });
 }
 
-async function synchronizeGames(supabase: ReturnType<typeof createAdminClient>) {
+async function synchronizeGames(
+  supabase: ReturnType<typeof createAdminClient>,
+  diagnostics: SyncDiagnostic[],
+) {
   const nowIso = nowAsStoredBrasiliaIso();
   const activeResult = await supabase
     .from("jogos")
-    .select("id,sportsdb_event_id,data,encerrado,estatisticas")
+    .select("id,sportsdb_event_id,time1,time2,data,encerrado,estatisticas")
     .lte("data", nowIso)
     .eq("encerrado", false)
     .not("sportsdb_event_id", "is", null)
@@ -135,7 +208,7 @@ async function synchronizeGames(supabase: ReturnType<typeof createAdminClient>) 
     finishedLimit > 0
       ? await supabase
           .from("jogos")
-          .select("id,sportsdb_event_id,data,encerrado,estatisticas")
+          .select("id,sportsdb_event_id,time1,time2,data,encerrado,estatisticas")
           .eq("encerrado", true)
           .is("estatisticas", null)
           .not("sportsdb_event_id", "is", null)
@@ -158,7 +231,16 @@ async function synchronizeGames(supabase: ReturnType<typeof createAdminClient>) 
   for (const jogo of activeJogos) {
     if (!jogo.sportsdb_event_id) continue;
 
-    const score = await lookupSportsDbScore(jogo.sportsdb_event_id);
+    let scoreLookup;
+    try {
+      scoreLookup = await lookupSportsDbScoreWithRaw(jogo.sportsdb_event_id);
+    } catch (error) {
+      diagnostics.push(createDiagnostic(jogo, "placar", null, null, errorMessage(error)));
+      throw error;
+    }
+
+    const score = scoreLookup.data;
+    diagnostics.push(createDiagnostic(jogo, "placar", score, scoreLookup.raw));
     if (!score) continue;
 
     const { error: updateError } = await supabase.rpc("atualizar_placar_jogo_sportsdb", {
@@ -175,11 +257,11 @@ async function synchronizeGames(supabase: ReturnType<typeof createAdminClient>) 
     summary.provedores.thesportsdb += 1;
     if (score.encerrado) summary.jogos_encerrados += 1;
 
-    await synchronizeStatistics(supabase, jogo, summary);
+    await synchronizeStatistics(supabase, jogo, summary, diagnostics);
   }
 
   for (const jogo of finishedJogos) {
-    await synchronizeStatistics(supabase, jogo, summary);
+    await synchronizeStatistics(supabase, jogo, summary, diagnostics);
   }
 
   return summary;
@@ -189,10 +271,20 @@ async function synchronizeStatistics(
   supabase: ReturnType<typeof createAdminClient>,
   jogo: JogoSync,
   summary: SyncSummary,
+  diagnostics: SyncDiagnostic[],
 ) {
   if (!jogo.sportsdb_event_id) return;
 
-  const statistics = await lookupSportsDbEventStatistics(jogo.sportsdb_event_id);
+  let statisticsLookup;
+  try {
+    statisticsLookup = await lookupSportsDbEventStatisticsWithRaw(jogo.sportsdb_event_id);
+  } catch (error) {
+    diagnostics.push(createDiagnostic(jogo, "estatisticas", null, null, errorMessage(error)));
+    throw error;
+  }
+
+  const statistics = statisticsLookup.data;
+  diagnostics.push(createDiagnostic(jogo, "estatisticas", statistics, statisticsLookup.raw));
   if (!statistics.length) return;
 
   const { error } = await supabase
@@ -209,6 +301,29 @@ async function synchronizeStatistics(
 
   summary.estatisticas_sincronizadas += 1;
   summary.provedores.thesportsdb += 1;
+}
+
+function createDiagnostic(
+  jogo: JogoSync,
+  tipo: SyncDiagnostic["tipo"],
+  interpretado: unknown,
+  resposta: unknown,
+  erro?: string,
+): SyncDiagnostic {
+  return {
+    jogo_id: jogo.id,
+    evento_id: jogo.sportsdb_event_id ?? "",
+    jogo: `${jogo.time1} x ${jogo.time2}`,
+    tipo,
+    consultado_em: new Date().toISOString(),
+    interpretado,
+    resposta,
+    ...(erro ? { erro } : {}),
+  };
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Erro desconhecido.";
 }
 
 function nowAsStoredBrasiliaIso() {

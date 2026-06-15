@@ -20,6 +20,11 @@ export type SportsDbEventStatistic = {
   away: number | null;
 };
 
+export type SportsDbLookup<T> = {
+  data: T;
+  raw: unknown;
+};
+
 type SportsDbEventStatisticResponse = {
   idEvent?: string;
   strStat?: string | null;
@@ -42,6 +47,13 @@ function isFinished(status: string | null) {
 }
 
 export async function lookupSportsDbScore(eventId: string): Promise<SportsDbScore | null> {
+  const result = await lookupSportsDbScoreWithRaw(eventId);
+  return result.data;
+}
+
+export async function lookupSportsDbScoreWithRaw(
+  eventId: string,
+): Promise<SportsDbLookup<SportsDbScore | null>> {
   const response = await fetch(`${BASE_URL}/lookupevent.php?id=${encodeURIComponent(eventId)}`, {
     cache: "no-store",
   });
@@ -52,22 +64,32 @@ export async function lookupSportsDbScore(eventId: string): Promise<SportsDbScor
 
   const body = (await response.json()) as { events?: SportsDbEvent[] | null };
   const event = body.events?.[0];
-  if (!event) return null;
+  if (!event) return { data: null, raw: body };
 
   const status = event.strStatus ?? event.strProgress ?? null;
 
   return {
-    eventId,
-    gols1: parseNumber(event.intHomeScore),
-    gols2: parseNumber(event.intAwayScore),
-    encerrado: isFinished(status),
-    status,
+    data: {
+      eventId,
+      gols1: parseNumber(event.intHomeScore),
+      gols2: parseNumber(event.intAwayScore),
+      encerrado: isFinished(status),
+      status,
+    },
+    raw: body,
   };
 }
 
 export async function lookupSportsDbEventStatistics(
   eventId: string,
 ): Promise<SportsDbEventStatistic[]> {
+  const result = await lookupSportsDbEventStatisticsWithRaw(eventId);
+  return result.data;
+}
+
+export async function lookupSportsDbEventStatisticsWithRaw(
+  eventId: string,
+): Promise<SportsDbLookup<SportsDbEventStatistic[]>> {
   const response = await fetch(
     `${BASE_URL}/lookupeventstats.php?id=${encodeURIComponent(eventId)}`,
     { cache: "no-store" },
@@ -83,11 +105,14 @@ export async function lookupSportsDbEventStatistics(
     eventstats?: SportsDbEventStatisticResponse[] | null;
   };
 
-  return (body.eventstats ?? [])
-    .filter((statistic) => statistic.strStat?.trim())
-    .map((statistic) => ({
-      name: statistic.strStat!.trim(),
-      home: parseNumber(statistic.intHome),
-      away: parseNumber(statistic.intAway),
-    }));
+  return {
+    data: (body.eventstats ?? [])
+      .filter((statistic) => statistic.strStat?.trim())
+      .map((statistic) => ({
+        name: statistic.strStat!.trim(),
+        home: parseNumber(statistic.intHome),
+        away: parseNumber(statistic.intAway),
+      })),
+    raw: body,
+  };
 }

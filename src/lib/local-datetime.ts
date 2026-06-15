@@ -12,6 +12,16 @@ function toInstantDate(value: DateInput) {
   return value instanceof Date ? value : new Date(value);
 }
 
+function with24HourClock(options: Intl.DateTimeFormatOptions) {
+  if (!options.hour) return options;
+
+  return {
+    ...options,
+    hour12: false,
+    hourCycle: "h23" as const,
+  };
+}
+
 function getTimeZoneOffsetMs(timeZone: string, date: Date) {
   const parts = new Intl.DateTimeFormat("en", {
     timeZone,
@@ -44,9 +54,7 @@ function getTimeZoneOffsetMs(timeZone: string, date: Date) {
 function storedBrasiliaGameDateToInstant(value: DateInput) {
   if (value instanceof Date || typeof value === "number") return new Date(value);
 
-  const match = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/,
-  );
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
   if (!match) return new Date(value);
 
   const [, year, month, day, hour, minute, second = "00"] = match;
@@ -114,13 +122,15 @@ export function formatLocalGameDateTime(
     minute: "2-digit",
   },
 ) {
-  return storedBrasiliaGameDateToInstant(value).toLocaleString(undefined, options);
+  return storedBrasiliaGameDateToInstant(value).toLocaleString(undefined, with24HourClock(options));
 }
 
 export function formatLocalGameTime(value: DateInput) {
   return storedBrasiliaGameDateToInstant(value).toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
   });
 }
 
@@ -140,12 +150,14 @@ export function formatLocalDateTime(
     minute: "2-digit",
   },
 ) {
-  return toInstantDate(value).toLocaleString(undefined, options);
+  return toInstantDate(value).toLocaleString(undefined, with24HourClock(options));
 }
 
 export function formatLocalTime(value: DateInput) {
   return toInstantDate(value).toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
   });
 }
