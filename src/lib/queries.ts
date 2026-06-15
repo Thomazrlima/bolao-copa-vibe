@@ -143,6 +143,67 @@ export type PalpitesDashboardResponse = {
   };
 };
 
+export type SelecaoPerfilResponse = {
+  selecao: {
+    nome: string;
+    slug: string;
+    codigo: string | null;
+    grupo: string | null;
+    posicao: number | null;
+    pontos: number | null;
+    saldo_gols: number | null;
+    jogos: number | null;
+  };
+  jogos: Array<{
+    id: string;
+    fase_id: number;
+    fase: string;
+    grupo: string | null;
+    rodada: number | null;
+    time1: string;
+    time2: string;
+    adversario: string;
+    selecao_em_casa: boolean;
+    data: string;
+    gols1: number | null;
+    gols2: number | null;
+    encerrado: boolean;
+    placar_status: "upcoming" | "live" | "finished" | null;
+    sportsdb_status: string | null;
+  }>;
+  resumo: {
+    disputados: number;
+    vitorias: number;
+    empates: number;
+    derrotas: number;
+    gols_pro: number;
+    gols_contra: number;
+    saldo_gols: number;
+    proximo_jogo_id: string | null;
+    jogo_ao_vivo_id: string | null;
+  };
+  confianca: {
+    total_palpites: number;
+    vitorias: number;
+    empates: number;
+    derrotas: number;
+    percentual_vitoria: number | null;
+    percentual_empate: number | null;
+    percentual_derrota: number | null;
+    media_gols_pro: number | null;
+    media_gols_contra: number | null;
+  };
+  estatisticas: {
+    sincronizado_em: string | null;
+    itens: Array<{
+      name: string;
+      total: number;
+      jogos: number;
+      media: number | null;
+    }>;
+  };
+};
+
 export type EspecialResposta = {
   pergunta_id: string;
   resposta: string;
@@ -244,6 +305,14 @@ export async function getPerfil(id: string) {
 
 export async function getPalpitesDoJogo(jogoId: string) {
   return requestJson<JogoPalpitesResponse>(`/api/jogos/${encodeURIComponent(jogoId)}/palpites`);
+}
+
+export async function getSelecaoPerfil(slug: string) {
+  const body = await requestJson<{ selecao: SelecaoPerfilResponse }>(
+    `/api/selecoes/${encodeURIComponent(slug)}`,
+  );
+
+  return body.selecao;
 }
 
 export async function getPalpitesDashboard() {

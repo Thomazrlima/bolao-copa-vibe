@@ -15,7 +15,7 @@ import {
   Trophy,
 } from "lucide-react";
 
-import { Flag } from "@/components/common/Flag";
+import { SelectionLink } from "@/components/common/SelectionLink";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { teamCodeFromName } from "@/data/iso2";
 import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
@@ -566,8 +565,15 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
 function TeamSide({ name, align = "left" }: { name: string; align?: "left" | "right" }) {
   return (
     <div className={cn("flex min-w-0 flex-col gap-2", align === "right" && "items-end text-right")}>
-      <Flag code={teamCodeFromName(name)} name={name} size="lg" static />
-      <span className="line-clamp-2 text-xs font-black leading-tight sm:text-sm">{name}</span>
+      <SelectionLink
+        name={name}
+        align={align}
+        direction="column"
+        flagSize="lg"
+        truncateName={false}
+        className={cn("max-w-full items-start gap-2", align === "right" && "items-end")}
+        nameClassName="line-clamp-2 whitespace-normal text-xs font-black leading-tight sm:text-sm"
+      />
     </div>
   );
 }

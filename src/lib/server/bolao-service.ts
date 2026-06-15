@@ -1,7 +1,11 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
+import { teamCodeFromName } from "@/data/iso2";
+import { orderStatistics, normalizeStatisticName } from "@/lib/match-statistics";
+import { groupStandings, type GrupoRow as KnockoutGrupoRow } from "@/lib/knockout";
 import { getRankingBadgeKeys } from "@/lib/ranking-badges";
 import { calcularPontuacaoJogo, type GuessOutcome } from "@/lib/scoring";
+import { resolveSelectionNameFromSlug, selectionSlugFromName } from "@/lib/selections";
 
 type RankingUsuarioRow = {
   id: string;
@@ -55,6 +59,15 @@ type JogoRow = {
     away: number | null;
   }> | null;
   estatisticas_sincronizadas_em?: string | null;
+};
+
+type JogoSelecaoRow = JogoRow & {
+  rodada: number | null;
+  sportsdb_status?: string | null;
+};
+
+type GrupoSelecaoRow = KnockoutGrupoRow & {
+  updated_at?: string | null;
 };
 
 type FaseRow = {
@@ -509,6 +522,267 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
       })
       .sort((a, b) => a.nome_completo.localeCompare(b.nome_completo)),
   };
+}
+
+export async function getPerfilSelecao(supabase: SupabaseClient, slug: string) {
+  const [gruposResult, jogosResult, fasesResult] = await Promise.all([
+    supabase
+      .from("grupos")
+      .select("grupo,time,pontuacao,saldo_gols,gols_pro,gols_contra,updated_at")
+      .order("grupo", { ascending: true }),
+    supabase
+      .from("jogos")
+      .select(
+        "id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status,sportsdb_status,estatisticas,estatisticas_sincronizadas_em",
+      )
+      .order("data", { ascending: true }),
+    supabase.from("fases").select("id,nome"),
+  ]);
+
+  assertNoError(gruposResult.error);
+  assertNoError(jogosResult.error);
+  assertNoError(fasesResult.error);
+
+  const grupos = (gruposResult.data ?? []) as GrupoSelecaoRow[];
+  const jogos = (jogosResult.data ?? []) as JogoSelecaoRow[];
+  const fases = (fasesResult.data ?? []) as FaseRow[];
+  const teamNames = [
+    ...new Set([
+      ...grupos.map((grupo) => grupo.time),
+      ...jogos.flatMap((jogo) => [jogo.time1, jogo.time2]),
+    ]),
+  ];
+  const selectionName = resolveSelectionNameFromSlug(slug, teamNames);
+
+  if (!selectionName) {
+    throw new ServiceError("Seleção não encontrada.", 404);
+  }
+
+  const phaseById = new Map(fases.map((fase) => [fase.id, fase.nome]));
+  const groupStageGames = jogos.filter((jogo) => jogo.fase_id === 1);
+  const standings = groupStandings(grupos, groupStageGames);
+  const teamStandingEntry = standings
+    .flatMap(({ group, standings: groupStandingsList }) =>
+      groupStandingsList.map((standing, index) => ({
+        ...standing,
+        grupo: group,
+        posicao: index + 1,
+      })),
+    )
+    .find((standing) => standing.time === selectionName);
+  const teamGames = jogos
+    .filter((jogo) => jogo.time1 === selectionName || jogo.time2 === selectionName)
+    .sort((a, b) => a.data.localeCompare(b.data));
+  const guesses = await getPalpitesParaJogos(supabase, teamGames.map((jogo) => jogo.id));
+  const gameById = new Map(teamGames.map((jogo) => [jogo.id, jogo]));
+  const confidence = buildSelectionConfidence(selectionName, guesses, gameById);
+  const statistics = buildSelectionStatistics(selectionName, teamGames);
+  const summary = buildSelectionSummary(selectionName, teamGames);
+
+  return {
+    selecao: {
+      nome: selectionName,
+      slug: selectionSlugFromName(selectionName),
+      codigo: teamCodeFromName(selectionName) ?? null,
+      grupo:
+        teamStandingEntry?.grupo ?? grupos.find((grupo) => grupo.time === selectionName)?.grupo ?? null,
+      posicao: teamStandingEntry?.posicao ?? null,
+      pontos: teamStandingEntry?.pontuacao ?? null,
+      saldo_gols: teamStandingEntry?.saldo_gols ?? null,
+      jogos: teamStandingEntry?.jogos ?? null,
+    },
+    jogos: teamGames.map((jogo) => {
+      const isHome = jogo.time1 === selectionName;
+      const opponent = isHome ? jogo.time2 : jogo.time1;
+
+      return {
+        id: jogo.id,
+        fase_id: jogo.fase_id,
+        fase: phaseById.get(jogo.fase_id) ?? "Copa do Mundo",
+        grupo: jogo.fase_id === 1 ? teamStandingEntry?.grupo ?? null : null,
+        rodada: jogo.rodada,
+        time1: jogo.time1,
+        time2: jogo.time2,
+        adversario: opponent,
+        selecao_em_casa: isHome,
+        data: jogo.data,
+        gols1: jogo.gols1,
+        gols2: jogo.gols2,
+        encerrado: jogo.encerrado,
+        placar_status: jogo.placar_status ?? null,
+        sportsdb_status: jogo.sportsdb_status ?? null,
+      };
+    }),
+    resumo: summary,
+    confianca: confidence,
+    estatisticas: statistics,
+  };
+}
+
+async function getPalpitesParaJogos(supabase: SupabaseClient, gameIds: string[]) {
+  if (gameIds.length === 0) return [];
+
+  const results = await Promise.all(
+    gameIds.map(async (jogoId) => {
+      const rpcResult = await supabase.rpc("listar_palpites_jogo", { p_jogo_id: jogoId });
+
+      if (!rpcResult.error) {
+        return (rpcResult.data ?? []) as PalpiteRow[];
+      }
+
+      const fallback = await supabase
+        .from("palpites")
+        .select("jogo_id,fase_id,time1,time2,gols1,gols2,pontos,chinelada,calculado_em,criado_em")
+        .eq("jogo_id", jogoId);
+
+      assertNoError(fallback.error);
+
+      return (fallback.data ?? []) as PalpiteRow[];
+    }),
+  );
+
+  return results.flat();
+}
+
+function buildSelectionConfidence(
+  selectionName: string,
+  guesses: PalpiteRow[],
+  gameById: Map<string, JogoSelecaoRow>,
+) {
+  let wins = 0;
+  let draws = 0;
+  let losses = 0;
+  let goalsFor = 0;
+  let goalsAgainst = 0;
+
+  for (const guess of guesses) {
+    const game = gameById.get(guess.jogo_id);
+    if (!game) continue;
+
+    const isHome = game.time1 === selectionName;
+    const teamGoals = isHome ? guess.gols1 : guess.gols2;
+    const opponentGoals = isHome ? guess.gols2 : guess.gols1;
+
+    goalsFor += teamGoals;
+    goalsAgainst += opponentGoals;
+
+    if (teamGoals > opponentGoals) wins += 1;
+    else if (teamGoals === opponentGoals) draws += 1;
+    else losses += 1;
+  }
+
+  const total = wins + draws + losses;
+
+  return {
+    total_palpites: total,
+    vitorias: wins,
+    empates: draws,
+    derrotas: losses,
+    percentual_vitoria: percentage(wins, total),
+    percentual_empate: percentage(draws, total),
+    percentual_derrota: percentage(losses, total),
+    media_gols_pro: average(goalsFor, total),
+    media_gols_contra: average(goalsAgainst, total),
+  };
+}
+
+function buildSelectionSummary(selectionName: string, games: JogoSelecaoRow[]) {
+  let disputados = 0;
+  let vitorias = 0;
+  let empates = 0;
+  let derrotas = 0;
+  let golsPro = 0;
+  let golsContra = 0;
+
+  for (const game of games) {
+    const hasScore = game.gols1 != null && game.gols2 != null;
+    const finished = game.encerrado || game.placar_status === "finished";
+
+    if (!finished || !hasScore) continue;
+
+    const isHome = game.time1 === selectionName;
+    const teamGoals = isHome ? game.gols1! : game.gols2!;
+    const opponentGoals = isHome ? game.gols2! : game.gols1!;
+
+    disputados += 1;
+    golsPro += teamGoals;
+    golsContra += opponentGoals;
+
+    if (teamGoals > opponentGoals) vitorias += 1;
+    else if (teamGoals === opponentGoals) empates += 1;
+    else derrotas += 1;
+  }
+
+  const liveGame = games.find((game) => !game.encerrado && game.placar_status === "live") ?? null;
+  const nextGame =
+    liveGame ??
+    games.find((game) => !game.encerrado && game.placar_status !== "finished") ??
+    null;
+
+  return {
+    disputados,
+    vitorias,
+    empates,
+    derrotas,
+    gols_pro: golsPro,
+    gols_contra: golsContra,
+    saldo_gols: golsPro - golsContra,
+    proximo_jogo_id: nextGame?.id ?? null,
+    jogo_ao_vivo_id: liveGame?.id ?? null,
+  };
+}
+
+function buildSelectionStatistics(selectionName: string, games: JogoSelecaoRow[]) {
+  const totals = new Map<
+    string,
+    {
+      name: string;
+      total: number;
+      jogos: number;
+    }
+  >();
+  let syncedAt = "";
+
+  for (const game of games) {
+    const isHome = game.time1 === selectionName;
+
+    if (game.estatisticas_sincronizadas_em) {
+      syncedAt =
+        syncedAt > game.estatisticas_sincronizadas_em
+          ? syncedAt
+          : game.estatisticas_sincronizadas_em;
+    }
+
+    for (const statistic of game.estatisticas ?? []) {
+      const value = isHome ? statistic.home : statistic.away;
+      if (value == null) continue;
+
+      const key = normalizeStatisticName(statistic.name);
+      const current = totals.get(key) ?? { name: statistic.name, total: 0, jogos: 0 };
+
+      current.total += value;
+      current.jogos += 1;
+      totals.set(key, current);
+    }
+  }
+
+  return {
+    sincronizado_em: syncedAt || null,
+    itens: orderStatistics(
+      [...totals.values()].map((statistic) => ({
+        ...statistic,
+        media: average(statistic.total, statistic.jogos),
+      })),
+    ),
+  };
+}
+
+function percentage(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : null;
+}
+
+function average(value: number, total: number) {
+  return total > 0 ? Number((value / total).toFixed(1)) : null;
 }
 
 async function getPalpitesPerfil(

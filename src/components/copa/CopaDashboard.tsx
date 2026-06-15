@@ -6,9 +6,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Check, CircleDot, Grid3X3, Network, Sparkles, Trophy } from "lucide-react";
 
-import { Flag } from "@/components/common/Flag";
+import { SelectionLink } from "@/components/common/SelectionLink";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
-import { teamCodeFromName } from "@/data/iso2";
 import { useMounted } from "@/hooks/use-mounted";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
@@ -361,17 +360,12 @@ function GroupCard({ group, standings }: { group: string; standings: Standing[] 
               >
                 {index + 1}
               </span>
-              <span className="flex min-w-0 items-center gap-2">
-                <Flag
-                  code={teamCodeFromName(standing.time)}
-                  name={standing.time}
-                  size="sm"
-                  static
-                />
-                <span className={cn("truncate text-[12px]", direct && "font-bold")}>
-                  {standing.time}
-                </span>
-              </span>
+              <SelectionLink
+                name={standing.time}
+                flagSize="sm"
+                className="max-w-full"
+                nameClassName={cn("text-[12px]", direct && "font-bold")}
+              />
               <span className="num text-right text-xs text-muted-foreground">{standing.jogos}</span>
               <span className="num text-right font-black">{standing.pontuacao}</span>
               <span className="num text-right text-xs text-muted-foreground">
@@ -436,16 +430,13 @@ function ThirdsRanking({ thirds }: { thirds: Standing[] }) {
                     {index + 1}
                   </span>
                   <span className="flex min-w-0 items-center gap-2">
-                    <Flag
-                      code={teamCodeFromName(standing.time)}
+                    <SelectionLink
                       name={standing.time}
-                      size="sm"
-                      static
+                      flagSize="sm"
+                      className="max-w-full"
+                      nameClassName="font-semibold"
                     />
                     <span className="min-w-0">
-                      <span className="block truncate font-semibold text-foreground">
-                        {standing.time}
-                      </span>
                       <span className="text-[9px] uppercase tracking-wider sm:hidden">
                         Grupo {standing.grupo} · SG {formatSigned(standing.saldo_gols)}
                       </span>
@@ -685,9 +676,22 @@ function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => v
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={className}>
+      <article
+        role="button"
+        tabIndex={0}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+          onClick();
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onClick();
+        }}
+        className={className}
+      >
         {content}
-      </button>
+      </article>
     );
   }
 
@@ -698,16 +702,19 @@ function TeamSide({ team, fallback }: { team: TeamSlot | null; fallback: string 
   return (
     <div className={cn("flex min-w-0 items-center gap-2.5", !team && "text-muted-foreground")}>
       {team ? (
-        <Flag code={teamCodeFromName(team.time)} name={team.time} size="md" static />
+        <SelectionLink
+          name={team.time}
+          flagSize="md"
+          className="max-w-[min(100%,11rem)]"
+          nameClassName="font-bold"
+        />
       ) : (
         <span className="grid h-5 w-8 shrink-0 place-items-center rounded bg-muted">
           <CircleDot className="h-3 w-3" />
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm", team && "font-bold text-foreground")}>
-          {team?.time ?? fallback}
-        </p>
+        {!team ? <p className="truncate text-sm">{fallback}</p> : null}
         {team && (
           <p className="mt-0.5 truncate text-[9px] uppercase tracking-wider text-muted-foreground">
             {team.posicao}º do Grupo {team.grupo} · {team.pontuacao} pts

@@ -32,8 +32,8 @@ import {
   Users,
 } from "lucide-react";
 
-import { Flag } from "@/components/common/Flag";
 import { BrazilThemedName } from "@/components/common/BrazilThemedName";
+import { SelectionLink } from "@/components/common/SelectionLink";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,6 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { teamCodeFromName } from "@/data/iso2";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { formatLocalGameDateTime, formatLocalTime } from "@/lib/local-datetime";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
@@ -452,21 +451,16 @@ function orderStatistics(
 function StatisticsTeam({ name, align = "left" }: { name: string; align?: "left" | "right" }) {
   return (
     <div className={cn("flex min-w-0 items-center gap-3", align === "right" && "flex-row-reverse")}>
-      <Flag
-        code={teamCodeFromName(name)}
+      <SelectionLink
         name={name}
-        size="md"
-        static
-        className="shrink-0 shadow-md"
-      />
-      <span
-        className={cn(
-          "truncate font-display text-lg font-black sm:text-xl",
+        align={align}
+        flagSize="md"
+        className={cn("max-w-full", align === "right" && "justify-end")}
+        nameClassName={cn(
+          "font-display text-lg font-black sm:text-xl",
           align === "right" && "text-right",
         )}
-      >
-        {name}
-      </span>
+      />
     </div>
   );
 }
@@ -1224,10 +1218,15 @@ function ChatPanel({ jogoId, isActive }: { jogoId: string; isActive: boolean }) 
 function TeamTitle({ name, align = "left" }: { name: string; align?: "left" | "right" }) {
   return (
     <div className={cn("flex min-w-0 flex-col gap-2", align === "right" && "items-end text-right")}>
-      <Flag code={teamCodeFromName(name)} name={name} size="xl" static />
-      <h1 className="line-clamp-2 font-display text-xl font-black leading-tight sm:text-3xl">
-        {name}
-      </h1>
+      <SelectionLink
+        name={name}
+        align={align}
+        direction="column"
+        flagSize="xl"
+        truncateName={false}
+        className={cn("max-w-full items-start gap-2", align === "right" && "items-end")}
+        nameClassName="line-clamp-2 whitespace-normal font-display text-xl font-black leading-tight sm:text-3xl"
+      />
     </div>
   );
 }
