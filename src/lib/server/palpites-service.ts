@@ -76,7 +76,9 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
   assertNoError(groupsResult.error);
 
   const games = (gamesResult.data ?? []) as JogoRow[];
-  const guesses = (guessesResult.data ?? []) as PalpiteRow[];
+  const publicGuesses = (guessesResult.data ?? []) as PalpiteRow[];
+  const userGuesses = await getPalpitesDoUsuario(supabase, userId);
+  const guesses = [...publicGuesses.filter((guess) => guess.user_id !== userId), ...userGuesses];
   const phases = (phasesResult.data ?? []) as FaseRow[];
   const ranking = (rankingResult.data ?? []) as RankingRow[];
   const groups = (groupsResult.data ?? []) as GrupoRow[];
@@ -302,6 +304,25 @@ function percentage(value: number, total: number) {
 
 function assertNoError(error: { message: string } | null | undefined) {
   if (error) throw new ServiceError(error.message);
+}
+
+async function getPalpitesDoUsuario(supabase: SupabaseClient, userId: string) {
+  const rpcResult = await supabase.rpc("listar_palpites_perfil", { p_user_id: userId });
+
+  if (!rpcResult.error) {
+    return ((rpcResult.data ?? []) as Omit<PalpiteRow, "user_id">[]).map((guess) => ({
+      ...guess,
+      user_id: userId,
+    }));
+  }
+
+  const { data, error } = await supabase
+    .from("palpites")
+    .select("user_id,jogo_id,gols1,gols2,pontos,chinelada,calculado_em,criado_em")
+    .eq("user_id", userId);
+
+  assertNoError(error);
+  return (data ?? []) as PalpiteRow[];
 }
 
 function nowAsStoredBrasiliaMs() {
