@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { DateRange } from "react-day-picker";
+import { toast } from "sonner";
 import {
   Area,
   AreaChart,
@@ -332,6 +333,9 @@ export default function PalpitesPage() {
       await savePalpite(game.id, { gols1: score.home, gols2: score.away });
       dirtyScoresRef.current.delete(game.id);
       setRecentlySaved(game.id);
+      toast.success(`Palpite salvo para ${game.time1} x ${game.time2}`, {
+        description: `${score.home} x ${score.away}`,
+      });
       window.dispatchEvent(new Event(PALPITES_UPDATED_EVENT));
       setData((current) =>
         current
@@ -1655,7 +1659,7 @@ function ScoreInputs({
             disabled={disabled}
             onChange={(event) => onChange(side, event.target.value)}
             aria-label={side === "home" ? "Gols do time da casa" : "Gols do time visitante"}
-            className="num h-11 w-11 px-1 text-center font-display text-lg font-black sm:h-12 sm:w-12"
+            className="palpite-score-input num h-11 w-11 px-1 text-center font-display text-lg font-black sm:h-12 sm:w-12"
           />
         </div>
       ))}

@@ -14,6 +14,7 @@ import {
   Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
 import { Flag } from "@/components/common/Flag";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import {
@@ -181,6 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         pendingGuessUrgency={highestUrgency}
       />
       <PendingGuessModal pending={pendingGuesses} open={modalOpen} onOpenChange={setModalOpen} />
+      <Toaster />
     </div>
   );
 }
