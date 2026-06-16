@@ -761,7 +761,7 @@ function RosterCard({ convocados }: { convocados: SelecaoPerfilResponse["convoca
         <EmptyState
           icon={UsersRound}
           title={
-            convocados.sportsdb_team_id
+            convocados.api_football_team_id
               ? "Convocados ainda não disponíveis no cache."
               : "Convocados ainda não disponíveis para esta seleção."
           }

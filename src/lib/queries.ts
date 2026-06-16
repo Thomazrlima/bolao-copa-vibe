@@ -218,9 +218,9 @@ export type SelecaoPerfilResponse = {
     }>;
   };
   convocados: {
-    fonte: "TheSportsDB";
-    sportsdb_team_id: string | null;
-    sportsdb_team_name: string | null;
+    fonte: "API-Football";
+    api_football_team_id: number | null;
+    api_football_team_name: string | null;
     sincronizado_em: string | null;
     erro_sync: string | null;
     jogadores: Array<{

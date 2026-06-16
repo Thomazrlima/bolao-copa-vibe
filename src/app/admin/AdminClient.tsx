@@ -116,7 +116,7 @@ type SyncDiagnostic = {
   jogo_id: string;
   evento_id: string;
   jogo: string;
-  tipo: "placar" | "estatisticas";
+  tipo: "placar" | "estatisticas" | "selecoes" | "convocados" | "jogadores";
   consultado_em: string;
   interpretado: unknown;
   resposta: unknown;
@@ -135,9 +135,23 @@ type SyncExecution = {
     jogos_sincronizados?: number;
     jogos_encerrados?: number;
     estatisticas_sincronizadas?: number;
+    selecoes_processadas?: number;
+    jogadores_salvos?: number;
+    modo?: "pendentes" | "completo";
   };
   diagnosticos: SyncDiagnostic[];
   legado?: boolean;
+};
+
+type PlayersSyncResponse = {
+  ok?: boolean;
+  selecoes_processadas?: number;
+  selecoes_com_erro?: number;
+  jogadores_salvos?: number;
+  chamadas_api_football?: number;
+  modo?: "pendentes" | "completo";
+  erros?: Array<{ codigo: string; nome: string; erro: string }>;
+  error?: string;
 };
 
 export function AdminClient() {
@@ -169,6 +183,8 @@ export function AdminClient() {
   const [syncExecutions, setSyncExecutions] = useState<SyncExecution[]>([]);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [playersSyncing, setPlayersSyncing] = useState(false);
+  const [playersSyncMessage, setPlayersSyncMessage] = useState<string | null>(null);
 
   const loadOverview = useCallback(async ({ syncHighlights = true } = {}) => {
     setOverviewLoading(true);
@@ -300,6 +316,39 @@ export function AdminClient() {
       );
     } finally {
       setUpdatingReportId(null);
+    }
+  }
+
+  async function handlePlayersSync() {
+    setPlayersSyncing(true);
+    setPlayersSyncMessage(null);
+    setSyncError(null);
+
+    try {
+      const response = await fetch("/api/admin/selecoes/sync", { method: "POST" });
+      const body = (await response.json().catch(() => ({}))) as PlayersSyncResponse;
+
+      if (!response.ok && response.status !== 207) {
+        throw new Error(body.error ?? "Não foi possível sincronizar jogadores.");
+      }
+
+      const errorCount = body.selecoes_com_erro ?? 0;
+      const suffix = errorCount
+        ? ` ${errorCount} seleção(ões) ficaram com erro.`
+        : " Sem erros reportados.";
+      const modeLabel = body.modo === "completo" ? "refresh completo" : "pendentes e falhas";
+      setPlayersSyncMessage(
+        `Sync de ${modeLabel}: ${body.jogadores_salvos ?? 0} jogadores em ${
+          body.selecoes_processadas ?? 0
+        } seleção(ões). ${body.chamadas_api_football ?? 0} chamada(s) à API-Football.${suffix}`,
+      );
+      await loadSyncExecutions();
+    } catch (error) {
+      setSyncError(
+        error instanceof Error ? error.message : "Não foi possível sincronizar jogadores.",
+      );
+    } finally {
+      setPlayersSyncing(false);
     }
   }
 
@@ -798,7 +847,10 @@ export function AdminClient() {
             executions={syncExecutions}
             loading={syncLoading}
             error={syncError}
+            playersSyncing={playersSyncing}
+            playersSyncMessage={playersSyncMessage}
             onRefresh={() => void loadSyncExecutions()}
+            onPlayersSync={() => void handlePlayersSync()}
           />
         </TabsContent>
       </Tabs>
@@ -810,12 +862,18 @@ function SyncDiagnosticsSection({
   executions,
   loading,
   error,
+  playersSyncing,
+  playersSyncMessage,
   onRefresh,
+  onPlayersSync,
 }: {
   executions: SyncExecution[];
   loading: boolean;
   error: string | null;
+  playersSyncing: boolean;
+  playersSyncMessage: string | null;
   onRefresh: () => void;
+  onPlayersSync: () => void;
 }) {
   return (
     <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
@@ -826,23 +884,43 @@ function SyncDiagnosticsSection({
           description="Últimas 20 execuções. A lista atualiza automaticamente a cada 30 segundos."
           className="mb-0"
         />
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onRefresh}
-          disabled={loading}
-          className="w-full sm:w-auto"
-        >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          Atualizar agora
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            type="button"
+            onClick={onPlayersSync}
+            disabled={playersSyncing}
+            className="w-full sm:w-auto"
+          >
+            {playersSyncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Users className="h-4 w-4" />
+            )}
+            Sincronizar jogadores
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onRefresh}
+            disabled={loading}
+            className="w-full sm:w-auto"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Atualizar agora
+          </Button>
+        </div>
       </div>
 
       {error ? <InlineError message={error} /> : null}
+      {playersSyncMessage ? (
+        <p className="mt-3 rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm font-semibold text-primary">
+          {playersSyncMessage}
+        </p>
+      ) : null}
 
       <div className="mt-5 space-y-3">
         {loading && executions.length === 0 ? (
@@ -862,7 +940,8 @@ function SyncDiagnosticsSection({
 function SyncExecutionCard({ execution }: { execution: SyncExecution }) {
   const running = execution.sucesso == null && !execution.finalizado_em;
   const summary = execution.resumo ?? {};
-  const idle = execution.sucesso === true && (summary.jogos_elegiveis ?? 0) === 0;
+  const isPlayersSync = summary.jogadores_salvos != null || summary.selecoes_processadas != null;
+  const idle = execution.sucesso === true && !isPlayersSync && (summary.jogos_elegiveis ?? 0) === 0;
   const statusLabel = running
     ? "Executando"
     : idle
@@ -870,6 +949,11 @@ function SyncExecutionCard({ execution }: { execution: SyncExecution }) {
       : execution.sucesso
         ? "Sucesso"
         : "Erro";
+  const summaryLabel = isPlayersSync
+    ? `${summary.modo === "completo" ? "Refresh completo" : "Pendentes"}: ${
+        summary.jogadores_salvos ?? 0
+      } jogadores em ${summary.selecoes_processadas ?? 0} seleção(ões)`
+    : `${summary.jogos_sincronizados ?? 0}/${summary.jogos_elegiveis ?? 0} jogos atualizados`;
 
   return (
     <details className="group rounded-lg border border-border bg-background/50">
@@ -884,9 +968,7 @@ function SyncExecutionCard({ execution }: { execution: SyncExecution }) {
               <span className="text-xs text-muted-foreground">{execution.duracao_ms} ms</span>
             ) : null}
           </div>
-          <span className="text-xs font-semibold text-muted-foreground">
-            {summary.jogos_sincronizados ?? 0}/{summary.jogos_elegiveis ?? 0} jogos atualizados
-          </span>
+          <span className="text-xs font-semibold text-muted-foreground">{summaryLabel}</span>
         </div>
         {execution.erro ? <p className="mt-3 text-sm text-destructive">{execution.erro}</p> : null}
         {execution.legado ? (
@@ -899,8 +981,17 @@ function SyncExecutionCard({ execution }: { execution: SyncExecution }) {
 
       <div className="border-t border-border p-4">
         <div className="mb-4 grid gap-2 sm:grid-cols-3">
-          <Metric label="Jogos encerrados" value={summary.jogos_encerrados ?? 0} />
-          <Metric label="Estatísticas salvas" value={summary.estatisticas_sincronizadas ?? 0} />
+          {isPlayersSync ? (
+            <>
+              <Metric label="Seleções processadas" value={summary.selecoes_processadas ?? 0} />
+              <Metric label="Jogadores salvos" value={summary.jogadores_salvos ?? 0} />
+            </>
+          ) : (
+            <>
+              <Metric label="Jogos encerrados" value={summary.jogos_encerrados ?? 0} />
+              <Metric label="Estatísticas salvas" value={summary.estatisticas_sincronizadas ?? 0} />
+            </>
+          )}
           <Metric label="Chamadas registradas" value={execution.diagnosticos?.length ?? 0} />
         </div>
 

@@ -76,20 +76,19 @@ type FaseRow = {
   nome: string;
 };
 
-type ConvocadoRow = {
-  id?: string | null;
-  nome?: string | null;
-  posicao?: string | null;
-  clube?: string | null;
-  numero?: string | null;
-  foto_url?: string | null;
+type JogadorSelecaoRow = {
+  api_football_player_id: number | null;
+  nome: string | null;
+  posicao: string | null;
+  numero: number | null;
+  foto_url: string | null;
 };
 
-type SelecaoSportsDbRow = {
-  sportsdb_team_id: string | null;
-  sportsdb_team_name: string | null;
-  jogadores: ConvocadoRow[] | null;
-  sincronizado_em: string | null;
+type SelecaoApiFootballRow = {
+  api_football_team_id: number | null;
+  api_football_team_name: string | null;
+  api_football_logo_url: string | null;
+  jogadores_sincronizados_em: string | null;
   erro_sync: string | null;
 };
 
@@ -600,23 +599,41 @@ export async function getPerfilSelecao(supabase: SupabaseClient, slug: string) {
   const statistics = buildSelectionStatistics(selectionName, teamGames);
   const summary = buildSelectionSummary(selectionName, teamGames);
   const selectionCode = teamCodeFromName(selectionName) ?? null;
-  const sportsDbSelectionResult = selectionCode
-    ? await supabase
-        .from("selecoes_sportsdb")
-        .select("sportsdb_team_id,sportsdb_team_name,jogadores,sincronizado_em,erro_sync")
-        .eq("codigo", selectionCode)
-        .maybeSingle()
-    : { data: null, error: null };
+  const [selectionResult, playersResult] = selectionCode
+    ? await Promise.all([
+        supabase
+          .from("selecao")
+          .select(
+            "api_football_team_id,api_football_team_name,api_football_logo_url,jogadores_sincronizados_em,erro_sync",
+          )
+          .eq("codigo", selectionCode)
+          .maybeSingle(),
+        supabase
+          .from("jogador")
+          .select("api_football_player_id,nome,posicao,numero,foto_url")
+          .eq("selecao_codigo", selectionCode)
+          .order("numero", { ascending: true, nullsFirst: false })
+          .order("nome", { ascending: true }),
+      ])
+    : [
+        { data: null, error: null },
+        { data: [], error: null },
+      ];
 
-  if (
-    sportsDbSelectionResult.error &&
-    !isMissingSportsDbSelectionCacheError(sportsDbSelectionResult.error)
-  ) {
-    assertNoError(sportsDbSelectionResult.error);
+  if (selectionResult.error && !isMissingSelectionRosterError(selectionResult.error)) {
+    assertNoError(selectionResult.error);
   }
-  const sportsDbSelection = sportsDbSelectionResult.error
+
+  if (playersResult.error && !isMissingSelectionRosterError(playersResult.error)) {
+    assertNoError(playersResult.error);
+  }
+
+  const apiFootballSelection = selectionResult.error
     ? null
-    : ((sportsDbSelectionResult.data ?? null) as SelecaoSportsDbRow | null);
+    : ((selectionResult.data ?? null) as SelecaoApiFootballRow | null);
+  const selectionPlayers = playersResult.error
+    ? []
+    : ((playersResult.data ?? []) as JogadorSelecaoRow[]);
 
   return {
     selecao: {
@@ -658,28 +675,29 @@ export async function getPerfilSelecao(supabase: SupabaseClient, slug: string) {
     resumo: summary,
     confianca: confidence,
     estatisticas: statistics,
-    convocados: buildSelectionRoster(sportsDbSelection),
+    convocados: buildSelectionRoster(apiFootballSelection, selectionPlayers),
   };
 }
 
-function isMissingSportsDbSelectionCacheError(error: { message: string; code?: string }) {
+function isMissingSelectionRosterError(error: { message: string; code?: string }) {
   return (
     error.code === "PGRST205" ||
-    /selecoes_sportsdb/i.test(error.message) ||
+    /\bselecao\b/i.test(error.message) ||
+    /\bjogador\b/i.test(error.message) ||
     /schema cache/i.test(error.message)
   );
 }
 
-function buildSelectionRoster(row: SelecaoSportsDbRow | null) {
+function buildSelectionRoster(row: SelecaoApiFootballRow | null, players: JogadorSelecaoRow[]) {
   return {
-    fonte: "TheSportsDB" as const,
-    sportsdb_team_id: row?.sportsdb_team_id ?? null,
-    sportsdb_team_name: row?.sportsdb_team_name ?? null,
-    sincronizado_em: row?.sincronizado_em ?? null,
+    fonte: "API-Football" as const,
+    api_football_team_id: row?.api_football_team_id ?? null,
+    api_football_team_name: row?.api_football_team_name ?? null,
+    sincronizado_em: row?.jogadores_sincronizados_em ?? null,
     erro_sync: row?.erro_sync ?? null,
-    jogadores: (row?.jogadores ?? [])
+    jogadores: players
       .map((jogador) => {
-        const id = cleanRosterText(jogador.id);
+        const id = cleanRosterText(jogador.api_football_player_id);
         const nome = cleanRosterText(jogador.nome);
         if (!id || !nome) return null;
 
@@ -687,7 +705,7 @@ function buildSelectionRoster(row: SelecaoSportsDbRow | null) {
           id,
           nome,
           posicao: cleanRosterText(jogador.posicao),
-          clube: cleanRosterText(jogador.clube),
+          clube: null,
           numero: cleanRosterText(jogador.numero),
           foto_url: cleanRosterText(jogador.foto_url),
         };
@@ -696,8 +714,8 @@ function buildSelectionRoster(row: SelecaoSportsDbRow | null) {
   };
 }
 
-function cleanRosterText(value: string | null | undefined) {
-  const trimmed = value?.trim();
+function cleanRosterText(value: string | number | null | undefined) {
+  const trimmed = String(value ?? "").trim();
   return trimmed ? trimmed : null;
 }
 
