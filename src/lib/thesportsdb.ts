@@ -167,8 +167,8 @@ export async function lookupSportsDbTeamPlayers(
   teamId: string,
   options: { maxRequests?: number } = {},
 ): Promise<SportsDbLookup<SportsDbTeamPlayer[]>> {
-  const maxPlayers = 26;
-  const maxRosterItems = 27;
+  const maxPlayers = 60;
+  const maxRosterItems = 64;
   const maxRequests = Math.max(1, options.maxRequests ?? 3);
   const playersById = new Map<string, SportsDbTeamPlayer>();
   const coachesById = new Map<string, SportsDbTeamPlayer>();
@@ -196,10 +196,9 @@ export async function lookupSportsDbTeamPlayers(
         return;
       }
 
-      if (playersById.size < maxPlayers) playersById.set(player.id, player);
+      playersById.set(player.id, player);
     });
 
-    if (playersById.size >= maxPlayers && coachesById.size > 0) break;
     if (playersById.size + coachesById.size >= maxRosterItems) break;
     if (!normalizedPlayers.length || playersById.size + coachesById.size === previousSize) break;
   }

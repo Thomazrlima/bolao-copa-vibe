@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 type Match = SelecaoPerfilResponse["jogos"][number];
-type SelectionView = "calendario" | "elenco";
+type SelectionView = "informacoes" | "calendario" | "elenco";
 
 export default function SelecaoPage() {
   const params = useParams<{ slug: string }>();
@@ -45,7 +45,7 @@ export default function SelecaoPage() {
   const [data, setData] = useState<SelecaoPerfilResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<SelectionView>("calendario");
+  const [view, setView] = useState<SelectionView>("informacoes");
 
   const loadData = useCallback(async () => {
     try {
@@ -160,33 +160,38 @@ export default function SelecaoPage() {
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <MetricCard
-          icon={Sparkles}
-          label="Confiança"
-          value={
-            data.confianca.percentual_vitoria == null
-              ? "-"
-              : `${data.confianca.percentual_vitoria}%`
-          }
-          featured
-        />
-        <MetricCard icon={Trophy} label="Pontos" value={data.selecao.pontos ?? "-"} />
-        <MetricCard icon={Shield} label="Saldo" value={formatSigned(data.resumo.saldo_gols)} />
-        <MetricCard icon={CalendarDays} label="Jogos" value={data.jogos.length} />
-        <MetricCard icon={Target} label="Gols pró" value={data.resumo.gols_pro} />
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-2 xl:grid-cols-[minmax(340px,1.1fr)_minmax(300px,0.95fr)_minmax(300px,0.95fr)]">
-        <ConfidenceCard confidence={data.confianca} className="xl:row-span-2" />
-        <SelectionIdentityCard selection={data.selecao} />
-        <RecordCard data={data} />
-        <StatisticsCard statistics={data.estatisticas} className="lg:col-span-2 xl:col-span-2" />
-      </section>
-
       <SelectionViewSwitcher view={view} onChange={setView} />
 
-      {view === "elenco" ? (
+      {view === "informacoes" ? (
+        <div className="space-y-5">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <MetricCard
+              icon={Sparkles}
+              label="Confiança"
+              value={
+                data.confianca.percentual_vitoria == null
+                  ? "-"
+                  : `${data.confianca.percentual_vitoria}%`
+              }
+              featured
+            />
+            <MetricCard icon={Trophy} label="Pontos" value={data.selecao.pontos ?? "-"} />
+            <MetricCard icon={Shield} label="Saldo" value={formatSigned(data.resumo.saldo_gols)} />
+            <MetricCard icon={CalendarDays} label="Jogos" value={data.jogos.length} />
+            <MetricCard icon={Target} label="Gols pró" value={data.resumo.gols_pro} />
+          </section>
+
+          <section className="grid gap-5 lg:grid-cols-2 xl:grid-cols-[minmax(340px,1.1fr)_minmax(300px,0.95fr)_minmax(300px,0.95fr)]">
+            <ConfidenceCard confidence={data.confianca} className="xl:row-span-2" />
+            <SelectionIdentityCard selection={data.selecao} />
+            <RecordCard data={data} />
+            <StatisticsCard
+              statistics={data.estatisticas}
+              className="lg:col-span-2 xl:col-span-2"
+            />
+          </section>
+        </div>
+      ) : view === "elenco" ? (
         <RosterCard convocados={data.convocados} />
       ) : (
         <section className="mx-auto w-full max-w-4xl">
@@ -220,12 +225,13 @@ function SelectionViewSwitcher({
   onChange: (view: SelectionView) => void;
 }) {
   const items = [
+    { value: "informacoes" as const, label: "Informações", icon: Globe2 },
     { value: "calendario" as const, label: "Calendário", icon: CalendarDays },
     { value: "elenco" as const, label: "Elenco", icon: UsersRound },
   ];
 
   return (
-    <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-1 rounded-xl border border-border bg-card/85 p-1">
+    <div className="grid w-full grid-cols-3 gap-1 rounded-xl border border-border bg-card/85 p-1 sm:mx-auto sm:max-w-2xl">
       {items.map(({ value, label, icon: Icon }) => {
         const active = view === value;
         return (
@@ -475,14 +481,6 @@ function SelectionIdentityCard({ selection }: { selection: SelecaoPerfilResponse
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="p-5">
         <SectionTitle eyebrow="Mapa" title="Localização" />
-        <div className="mb-4 flex items-center gap-3">
-          <Flag code={selection.codigo ?? undefined} name={selection.nome} size="lg" static />
-          <div className="min-w-0">
-            <p className="truncate font-display text-lg font-black">{selection.nome}</p>
-            <p className="mt-1 text-xs font-semibold text-muted-foreground">{identity.region}</p>
-          </div>
-        </div>
-
         <div className="mb-4 grid grid-cols-2 gap-2">
           <IdentityPill
             icon={Globe2}
@@ -647,26 +645,49 @@ function StatisticsCard({
 
 type RosterPlayer = SelecaoPerfilResponse["convocados"]["jogadores"][number];
 type RosterGroupKey = "goalkeepers" | "defenders" | "midfielders" | "attackers";
+type RosterRole =
+  | "goalkeeper"
+  | "centre-back"
+  | "left-back"
+  | "right-back"
+  | "defender"
+  | "defensive-midfield"
+  | "central-midfield"
+  | "attacking-midfield"
+  | "midfielder"
+  | "left-wing"
+  | "right-wing"
+  | "centre-forward"
+  | "forward"
+  | "coach"
+  | "unknown";
 type RosterPlayerView = RosterPlayer & {
   displayPosition: string;
   group: RosterGroupKey | "coach";
+  role: RosterRole;
 };
 type FieldRosterPlayer = RosterPlayerView & { group: RosterGroupKey };
 
 const ROSTER_GROUPS: Array<{ key: RosterGroupKey; label: string }> = [
   { key: "goalkeepers", label: "GOLEIROS" },
-  { key: "defenders", label: "ZAGUEIROS" },
+  { key: "defenders", label: "DEFENSORES" },
   { key: "midfielders", label: "MEIAS" },
   { key: "attackers", label: "ATACANTES" },
 ];
 
-const PITCH_GROUPS: RosterGroupKey[] = ["attackers", "midfielders", "defenders", "goalkeepers"];
+const PITCH_LINES: Array<{ key: RosterGroupKey; label: string }> = [
+  { key: "attackers", label: "Ataque" },
+  { key: "midfielders", label: "Meio-campo" },
+  { key: "defenders", label: "Defesa" },
+  { key: "goalkeepers", label: "Goleiro" },
+];
 
 function RosterCard({ convocados }: { convocados: SelecaoPerfilResponse["convocados"] }) {
   const roster = splitRoster(convocados.jogadores.map(toRosterPlayerView));
   const players = roster.players;
   const coach = roster.coach;
   const groups = groupRosterPlayers(players);
+  const formation = selectFormationPlayers(groups);
 
   return (
     <section className="rounded-2xl border border-border bg-card p-5">
@@ -675,7 +696,7 @@ function RosterCard({ convocados }: { convocados: SelecaoPerfilResponse["convoca
         <div className="flex flex-wrap items-center gap-2">
           {players.length ? (
             <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
-              {players.length}/26 jogadores{coach ? " + treinador" : ""}
+              {players.length} jogadores{coach ? " + treinador" : ""}
             </span>
           ) : null}
           {convocados.sincronizado_em ? (
@@ -688,7 +709,7 @@ function RosterCard({ convocados }: { convocados: SelecaoPerfilResponse["convoca
 
       {players.length ? (
         <div className="space-y-6">
-          <RosterPitch groups={groups} />
+          <RosterPitch formation={formation} />
           <div className="space-y-5">
             {ROSTER_GROUPS.map((group) => {
               const groupPlayers = groups[group.key];
@@ -776,17 +797,35 @@ function CoachCard({ coach }: { coach: RosterPlayerView }) {
   );
 }
 
-function PlayerPhoto({ player }: { player: RosterPlayerView }) {
+function PlayerPhoto({
+  player,
+  size = "list",
+}: {
+  player: RosterPlayerView;
+  size?: "list" | "field";
+}) {
+  const className = size === "field" ? "h-16 w-16 sm:h-[72px] sm:w-[72px]" : "h-14 w-14";
+
   if (!player.foto_url) {
     return (
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-muted text-muted-foreground ring-2 ring-background">
-        <UserRound className="h-5 w-5" />
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-full border border-primary/25 bg-muted text-muted-foreground ring-2 ring-background",
+          className,
+        )}
+      >
+        <UserRound className={size === "field" ? "h-6 w-6" : "h-5 w-5"} />
       </span>
     );
   }
 
   return (
-    <span className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-primary/25 bg-muted ring-2 ring-background">
+    <span
+      className={cn(
+        "shrink-0 overflow-hidden rounded-full border border-primary/25 bg-muted ring-2 ring-background",
+        className,
+      )}
+    >
       <img
         src={player.foto_url}
         alt={player.nome}
@@ -798,35 +837,34 @@ function PlayerPhoto({ player }: { player: RosterPlayerView }) {
   );
 }
 
-function RosterPitch({ groups }: { groups: Record<RosterGroupKey, RosterPlayerView[]> }) {
+function RosterPitch({ formation }: { formation: Record<RosterGroupKey, FieldRosterPlayer[]> }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-[linear-gradient(180deg,#10241b,#07110d)] p-3 shadow-inner">
+    <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-[linear-gradient(180deg,#15331f,#07110d)] p-3 shadow-inner">
       <div className="absolute inset-3 rounded-xl border border-primary/25" />
-      <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/20" />
+      <div className="absolute inset-x-[23%] top-3 h-12 rounded-b-full border-x border-b border-primary/20" />
+      <div className="absolute inset-x-[23%] bottom-3 h-12 rounded-t-full border-x border-t border-primary/20" />
+      <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/20" />
       <div className="absolute inset-x-3 top-1/2 border-t border-primary/20" />
 
-      <div className="relative z-10 grid min-h-[360px] gap-3">
-        {PITCH_GROUPS.map((groupKey) => {
-          const group = ROSTER_GROUPS.find((item) => item.key === groupKey)!;
-          const players = groups[groupKey];
+      <div className="relative z-10 grid min-h-[440px] grid-rows-4 gap-3 py-3">
+        {PITCH_LINES.map((line) => {
+          const players = formation[line.key];
 
           return (
-            <div key={groupKey} className="flex min-h-16 flex-col justify-center gap-2">
+            <div key={line.key} className="flex min-h-20 flex-col justify-center gap-2">
               <p className="text-center text-[9px] font-black uppercase tracking-[0.24em] text-primary/80">
-                {group.label}
+                {line.label}
               </p>
-              <div className="flex flex-wrap justify-center gap-1.5">
+              <div
+                className={cn(
+                  "mx-auto grid w-full max-w-xl items-center justify-center gap-2",
+                  players.length === 1 && "grid-cols-[72px]",
+                  players.length === 3 && "grid-cols-3",
+                  players.length === 4 && "grid-cols-4",
+                )}
+              >
                 {players.map((player) => (
-                  <span
-                    key={player.id}
-                    className="max-w-[130px] truncate rounded-full border border-primary/25 bg-background/80 px-2 py-1 text-[10px] font-black text-foreground shadow-sm"
-                    title={`${player.nome} · ${player.displayPosition}`}
-                  >
-                    {player.numero ? (
-                      <span className="num mr-1 text-primary">#{player.numero}</span>
-                    ) : null}
-                    {player.nome}
-                  </span>
+                  <FieldPlayerMarker key={player.id} player={player} />
                 ))}
               </div>
             </div>
@@ -837,9 +875,27 @@ function RosterPitch({ groups }: { groups: Record<RosterGroupKey, RosterPlayerVi
   );
 }
 
+function FieldPlayerMarker({ player }: { player: FieldRosterPlayer }) {
+  const title = player.numero
+    ? `${player.nome} · #${player.numero} · ${player.displayPosition}`
+    : `${player.nome} · ${player.displayPosition}`;
+
+  return (
+    <div className="group relative mx-auto grid justify-items-center" title={title}>
+      <PlayerPhoto player={player} size="field" />
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden min-w-max -translate-x-1/2 rounded-lg border border-primary/30 bg-background px-2.5 py-1.5 text-center text-[10px] font-black shadow-xl group-hover:block">
+        <span className="block max-w-36 truncate">{player.nome}</span>
+        <span className="num mt-0.5 block text-primary">
+          {player.numero ? `#${player.numero}` : player.displayPosition}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function splitRoster(roster: RosterPlayerView[]) {
   const coach = roster.find((player) => player.group === "coach") ?? null;
-  const players = roster.filter(isFieldRosterPlayer).slice(0, 26);
+  const players = roster.filter(isFieldRosterPlayer);
   return { players, coach };
 }
 
@@ -863,6 +919,62 @@ function groupRosterPlayers(players: FieldRosterPlayer[]) {
   return grouped;
 }
 
+function selectFormationPlayers(groups: Record<RosterGroupKey, RosterPlayerView[]>) {
+  const used = new Set<string>();
+  const pick = (
+    candidates: RosterPlayerView[],
+    predicate: (player: RosterPlayerView) => boolean = () => true,
+  ) => {
+    const player = candidates.find((candidate) => !used.has(candidate.id) && predicate(candidate));
+    if (player) used.add(player.id);
+    return player as FieldRosterPlayer | undefined;
+  };
+  const pickMany = (
+    candidates: RosterPlayerView[],
+    count: number,
+    predicate: (player: RosterPlayerView) => boolean = () => true,
+  ) => {
+    const selected: FieldRosterPlayer[] = [];
+    while (selected.length < count) {
+      const player = pick(candidates, predicate);
+      if (!player) break;
+      selected.push(player);
+    }
+    return selected;
+  };
+
+  const goalkeeper = pick(groups.goalkeepers);
+  const leftBack = pick(groups.defenders, (player) => player.role === "left-back");
+  const centreBacks = pickMany(groups.defenders, 2, (player) => player.role === "centre-back");
+  const rightBack = pick(groups.defenders, (player) => player.role === "right-back");
+  const defenders = [
+    leftBack,
+    ...centreBacks,
+    rightBack,
+    ...pickMany(groups.defenders, 4 - [leftBack, ...centreBacks, rightBack].filter(Boolean).length),
+  ].filter((player): player is FieldRosterPlayer => Boolean(player));
+  const midfielders = [
+    ...pickMany(groups.midfielders, 1, (player) => player.role === "defensive-midfield"),
+    ...pickMany(groups.midfielders, 1, (player) => player.role === "central-midfield"),
+    ...pickMany(groups.midfielders, 1, (player) => player.role === "attacking-midfield"),
+  ];
+  const attackers = [
+    pick(groups.attackers, (player) => player.role === "left-wing"),
+    pick(groups.attackers, (player) => player.role === "centre-forward"),
+    pick(groups.attackers, (player) => player.role === "right-wing"),
+  ].filter((player): player is FieldRosterPlayer => Boolean(player));
+
+  return {
+    attackers: [...attackers, ...pickMany(groups.attackers, 3 - attackers.length)].slice(0, 3),
+    midfielders: [...midfielders, ...pickMany(groups.midfielders, 3 - midfielders.length)].slice(
+      0,
+      3,
+    ),
+    defenders: defenders.slice(0, 4),
+    goalkeepers: goalkeeper ? [goalkeeper] : [],
+  };
+}
+
 function sortRosterPlayers(a: RosterPlayerView, b: RosterPlayerView) {
   const numberA = Number(a.numero);
   const numberB = Number(b.numero);
@@ -879,48 +991,103 @@ function toRosterPlayerView(player: RosterPlayer): RosterPlayerView {
     ...player,
     displayPosition: position.label,
     group: position.group,
+    role: position.role,
   };
 }
 
 function translateRosterPosition(position: string | null): {
   label: string;
   group: RosterGroupKey | "coach";
+  role: RosterRole;
 } {
   const original = position?.trim();
   const normalized = normalizeRosterPosition(original);
-  const exact: Record<string, { label: string; group: RosterGroupKey }> = {
-    goalkeeper: { label: "Goleiro", group: "goalkeepers" },
-    gk: { label: "Goleiro", group: "goalkeepers" },
-    "centre back": { label: "Zagueiro", group: "defenders" },
-    "center back": { label: "Zagueiro", group: "defenders" },
-    defender: { label: "Defensor", group: "defenders" },
-    "left back": { label: "Lateral Esquerdo", group: "defenders" },
-    "right back": { label: "Lateral Direito", group: "defenders" },
-    "full back": { label: "Lateral", group: "defenders" },
-    "defensive midfield": { label: "Volante", group: "midfielders" },
-    "central midfield": { label: "Meio-campista Central", group: "midfielders" },
-    midfielder: { label: "Meio-campista", group: "midfielders" },
-    "attacking midfield": { label: "Meia-atacante", group: "midfielders" },
-    "left midfield": { label: "Meia Esquerda", group: "midfielders" },
-    "right midfield": { label: "Meia Direita", group: "midfielders" },
-    "left wing": { label: "Ponta Esquerda", group: "attackers" },
-    "right wing": { label: "Ponta Direita", group: "attackers" },
-    winger: { label: "Ponta", group: "attackers" },
-    forward: { label: "Atacante", group: "attackers" },
-    striker: { label: "Atacante", group: "attackers" },
-    "centre forward": { label: "Centroavante", group: "attackers" },
-    "center forward": { label: "Centroavante", group: "attackers" },
-    "second striker": { label: "Segundo Atacante", group: "attackers" },
+  const exact: Record<string, { label: string; group: RosterGroupKey; role: RosterRole }> = {
+    goalkeeper: { label: "Goleiro", group: "goalkeepers", role: "goalkeeper" },
+    goleiro: { label: "Goleiro", group: "goalkeepers", role: "goalkeeper" },
+    gk: { label: "Goleiro", group: "goalkeepers", role: "goalkeeper" },
+    "centre back": { label: "Zagueiro", group: "defenders", role: "centre-back" },
+    "center back": { label: "Zagueiro", group: "defenders", role: "centre-back" },
+    zagueiro: { label: "Zagueiro", group: "defenders", role: "centre-back" },
+    defender: { label: "Defensor", group: "defenders", role: "defender" },
+    defensor: { label: "Defensor", group: "defenders", role: "defender" },
+    "left back": { label: "Lateral Esquerdo", group: "defenders", role: "left-back" },
+    "lateral esquerdo": { label: "Lateral Esquerdo", group: "defenders", role: "left-back" },
+    "right back": { label: "Lateral Direito", group: "defenders", role: "right-back" },
+    "lateral direito": { label: "Lateral Direito", group: "defenders", role: "right-back" },
+    "full back": { label: "Lateral", group: "defenders", role: "defender" },
+    lateral: { label: "Lateral", group: "defenders", role: "defender" },
+    "defensive midfield": { label: "Volante", group: "midfielders", role: "defensive-midfield" },
+    volante: { label: "Volante", group: "midfielders", role: "defensive-midfield" },
+    "central midfield": {
+      label: "Meio-campista Central",
+      group: "midfielders",
+      role: "central-midfield",
+    },
+    midfielder: { label: "Meio-campista", group: "midfielders", role: "midfielder" },
+    meia: { label: "Meio-campista", group: "midfielders", role: "midfielder" },
+    "meio campista": { label: "Meio-campista", group: "midfielders", role: "midfielder" },
+    "attacking midfield": {
+      label: "Meia-atacante",
+      group: "midfielders",
+      role: "attacking-midfield",
+    },
+    "left midfield": { label: "Meia Esquerda", group: "midfielders", role: "midfielder" },
+    "right midfield": { label: "Meia Direita", group: "midfielders", role: "midfielder" },
+    "left wing": { label: "Ponta Esquerda", group: "attackers", role: "left-wing" },
+    "ponta esquerda": { label: "Ponta Esquerda", group: "attackers", role: "left-wing" },
+    "right wing": { label: "Ponta Direita", group: "attackers", role: "right-wing" },
+    "ponta direita": { label: "Ponta Direita", group: "attackers", role: "right-wing" },
+    winger: { label: "Ponta", group: "attackers", role: "forward" },
+    ponta: { label: "Ponta", group: "attackers", role: "forward" },
+    forward: { label: "Atacante", group: "attackers", role: "forward" },
+    atacante: { label: "Atacante", group: "attackers", role: "forward" },
+    striker: { label: "Atacante", group: "attackers", role: "centre-forward" },
+    "centre forward": { label: "Centroavante", group: "attackers", role: "centre-forward" },
+    "center forward": { label: "Centroavante", group: "attackers", role: "centre-forward" },
+    centroavante: { label: "Centroavante", group: "attackers", role: "centre-forward" },
+    "second striker": { label: "Segundo Atacante", group: "attackers", role: "forward" },
   };
 
-  if (isCoachRosterPosition(normalized)) return { label: "Treinador", group: "coach" };
+  if (isCoachRosterPosition(normalized))
+    return { label: "Treinador", group: "coach", role: "coach" };
   if (exact[normalized]) return exact[normalized];
-  if (normalized.includes("goalkeeper")) return { label: "Goleiro", group: "goalkeepers" };
+  if (normalized.includes("goalkeeper") || normalized.includes("goleiro")) {
+    return { label: "Goleiro", group: "goalkeepers", role: "goalkeeper" };
+  }
   if (normalized.includes("back") || normalized.includes("defender")) {
-    return { label: original ?? "Defensor", group: "defenders" };
+    if (normalized.includes("left")) {
+      return { label: original ?? "Lateral Esquerdo", group: "defenders", role: "left-back" };
+    }
+    if (normalized.includes("right")) {
+      return { label: original ?? "Lateral Direito", group: "defenders", role: "right-back" };
+    }
+    if (normalized.includes("centre") || normalized.includes("center")) {
+      return { label: original ?? "Zagueiro", group: "defenders", role: "centre-back" };
+    }
+    return { label: original ?? "Defensor", group: "defenders", role: "defender" };
+  }
+  if (normalized.includes("zagueiro")) {
+    return { label: original ?? "Zagueiro", group: "defenders", role: "centre-back" };
+  }
+  if (normalized.includes("lateral")) {
+    if (normalized.includes("esquerdo")) {
+      return { label: original ?? "Lateral Esquerdo", group: "defenders", role: "left-back" };
+    }
+    if (normalized.includes("direito")) {
+      return { label: original ?? "Lateral Direito", group: "defenders", role: "right-back" };
+    }
+    return { label: original ?? "Lateral", group: "defenders", role: "defender" };
   }
   if (normalized.includes("midfield")) {
-    return { label: original ?? "Meio-campista", group: "midfielders" };
+    return { label: original ?? "Meio-campista", group: "midfielders", role: "midfielder" };
+  }
+  if (normalized.includes("meia") || normalized.includes("volante")) {
+    return {
+      label: original ?? "Meio-campista",
+      group: "midfielders",
+      role: normalized.includes("volante") ? "defensive-midfield" : "midfielder",
+    };
   }
   if (
     normalized.includes("wing") ||
@@ -928,10 +1095,13 @@ function translateRosterPosition(position: string | null): {
     normalized.includes("striker") ||
     normalized.includes("attack")
   ) {
-    return { label: original ?? "Atacante", group: "attackers" };
+    return { label: original ?? "Atacante", group: "attackers", role: "forward" };
+  }
+  if (normalized.includes("ponta") || normalized.includes("atacante")) {
+    return { label: original ?? "Atacante", group: "attackers", role: "forward" };
   }
 
-  return { label: original ?? "Jogador", group: "midfielders" };
+  return { label: original ?? "Jogador", group: "midfielders", role: "unknown" };
 }
 
 function isCoachRosterPosition(normalized: string) {
