@@ -11,6 +11,7 @@ import {
   ClockAlert,
   ExternalLink,
   Loader2,
+  PencilLine,
   Radio,
   RefreshCw,
   Settings,
@@ -67,6 +68,8 @@ type AdminGame = {
   time1: string;
   time2: string;
   data: string;
+  gols1: number | null;
+  gols2: number | null;
   encerrado: boolean;
   transmissao_url: string | null;
 };
@@ -185,6 +188,11 @@ export function AdminClient() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [playersSyncing, setPlayersSyncing] = useState(false);
   const [playersSyncMessage, setPlayersSyncMessage] = useState<string | null>(null);
+  const [scoreGameId, setScoreGameId] = useState("");
+  const [scoreGols1, setScoreGols1] = useState("");
+  const [scoreGols2, setScoreGols2] = useState("");
+  const [scoreSaving, setScoreSaving] = useState(false);
+  const [scoreMessage, setScoreMessage] = useState<string | null>(null);
 
   const loadOverview = useCallback(async ({ syncHighlights = true } = {}) => {
     setOverviewLoading(true);
@@ -514,6 +522,44 @@ export function AdminClient() {
     }
   }
 
+  async function handleCorrectScore(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScoreSaving(true);
+    setScoreMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/placar", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jogo_id: scoreGameId,
+          gols1: Number(scoreGols1),
+          gols2: Number(scoreGols2),
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        ranking?: {
+          palpites_calculados: number;
+          usuarios_atualizados: number;
+        };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível corrigir o placar.");
+      }
+
+      setScoreMessage(
+        `Placar corrigido. ${body.ranking?.palpites_calculados ?? 0} palpite(s) recalculado(s) e ${body.ranking?.usuarios_atualizados ?? 0} participante(s) atualizado(s).`,
+      );
+      await loadOverview({ syncHighlights: false });
+    } catch (error) {
+      setScoreMessage(error instanceof Error ? error.message : "Não foi possível corrigir o placar.");
+    } finally {
+      setScoreSaving(false);
+    }
+  }
+
   function updateHighlight(slot: number, field: "jogo_id" | "url", value: string) {
     setHighlights((current) =>
       current.map((highlight) =>
@@ -550,6 +596,14 @@ export function AdminClient() {
     setSpecialsMessage(null);
   }
 
+  function selectScoreGame(jogoId: string) {
+    const game = overview?.games.find((item) => item.id === jogoId);
+    setScoreGameId(jogoId);
+    setScoreGols1(game?.gols1 == null ? "" : String(game.gols1));
+    setScoreGols2(game?.gols2 == null ? "" : String(game.gols2));
+    setScoreMessage(null);
+  }
+
   if (loading) {
     return <SpinningBallLoader label="Carregando administração" />;
   }
@@ -575,6 +629,7 @@ export function AdminClient() {
   const openReports = reports.filter((report) => report.status !== "resolvido");
   const closedReports = reports.filter((report) => report.status === "resolvido");
   const visibleReports = reportFilter === "open" ? openReports : closedReports;
+  const finishedGames = (overview?.games ?? []).filter((game) => game.encerrado);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -590,7 +645,7 @@ export function AdminClient() {
       </header>
 
       <Tabs defaultValue="pending">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-7">
           <TabsTrigger value="pending" className="gap-2">
             <ClockAlert className="h-4 w-4" />
             Pendências
@@ -602,6 +657,10 @@ export function AdminClient() {
           <TabsTrigger value="specials" className="gap-2">
             <CheckCircle2 className="h-4 w-4" />
             Especiais
+          </TabsTrigger>
+          <TabsTrigger value="score" className="gap-2">
+            <PencilLine className="h-4 w-4" />
+            Placar
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-2">
             <Users className="h-4 w-4" />
@@ -719,6 +778,23 @@ export function AdminClient() {
             onSave={handleSaveSpecialAnswers}
             onChange={updateSpecialAnswer}
             onClear={clearSpecialAnswer}
+          />
+        </TabsContent>
+
+        <TabsContent value="score" className="mt-5">
+          <ScoreCorrectionSection
+            games={finishedGames}
+            selectedGameId={scoreGameId}
+            gols1={scoreGols1}
+            gols2={scoreGols2}
+            loading={overviewLoading}
+            saving={scoreSaving}
+            message={scoreMessage}
+            onRefresh={() => void loadOverview({ syncHighlights: false })}
+            onSelectGame={selectScoreGame}
+            onChangeGols1={setScoreGols1}
+            onChangeGols2={setScoreGols2}
+            onSave={handleCorrectScore}
           />
         </TabsContent>
 
@@ -934,6 +1010,138 @@ function SyncDiagnosticsSection({
         )}
       </div>
     </section>
+  );
+}
+
+function ScoreCorrectionSection({
+  games,
+  selectedGameId,
+  gols1,
+  gols2,
+  loading,
+  saving,
+  message,
+  onRefresh,
+  onSelectGame,
+  onChangeGols1,
+  onChangeGols2,
+  onSave,
+}: {
+  games: AdminGame[];
+  selectedGameId: string;
+  gols1: string;
+  gols2: string;
+  loading: boolean;
+  saving: boolean;
+  message: string | null;
+  onRefresh: () => void;
+  onSelectGame: (jogoId: string) => void;
+  onChangeGols1: (value: string) => void;
+  onChangeGols2: (value: string) => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const selectedGame = games.find((game) => game.id === selectedGameId);
+
+  return (
+    <form onSubmit={onSave} className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SectionHeader
+          icon={PencilLine}
+          title="Correção de placar"
+          description="Edite o placar final de um jogo encerrado e recalcule pontuações e chineladas."
+          className="mb-0"
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onRefresh}
+          disabled={loading || saving}
+          className="w-full sm:w-auto"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Atualizar
+        </Button>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="space-y-2">
+          <Label htmlFor="score-game">Jogo encerrado</Label>
+          <Select
+            value={selectedGameId}
+            onValueChange={onSelectGame}
+            disabled={loading || saving || games.length === 0}
+          >
+            <SelectTrigger id="score-game" className="min-w-0">
+              <SelectValue placeholder="Selecione um jogo encerrado" />
+            </SelectTrigger>
+            <SelectContent className="max-w-[calc(100vw-2rem)]">
+              {games.map((game) => (
+                <SelectItem key={game.id} value={game.id}>
+                  {formatFinishedGameOption(game)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+          <div className="space-y-2">
+            <Label htmlFor="score-gols1">{selectedGame?.time1 ?? "Time 1"}</Label>
+            <Input
+              id="score-gols1"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={99}
+              value={gols1}
+              onChange={(event) => onChangeGols1(event.target.value)}
+              disabled={!selectedGameId || saving}
+              required
+            />
+          </div>
+          <span className="pb-3 text-sm font-black text-muted-foreground">x</span>
+          <div className="space-y-2">
+            <Label htmlFor="score-gols2">{selectedGame?.time2 ?? "Time 2"}</Label>
+            <Input
+              id="score-gols2"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={99}
+              value={gols2}
+              onChange={(event) => onChangeGols2(event.target.value)}
+              disabled={!selectedGameId || saving}
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      {games.length === 0 ? (
+        <div className="mt-5">
+          <EmptyMessage message="Nenhum jogo encerrado disponível para correção." />
+        </div>
+      ) : null}
+
+      {message ? (
+        <p className="mt-4 rounded-lg border border-border bg-background/50 p-3 text-sm">
+          {message}
+        </p>
+      ) : null}
+
+      <Button
+        type="submit"
+        disabled={!selectedGameId || saving || loading}
+        className="mt-5 w-full sm:w-auto"
+      >
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+        {saving ? "Corrigindo..." : "Corrigir placar e recalcular"}
+      </Button>
+    </form>
   );
 }
 
@@ -1533,6 +1741,13 @@ function formatDateTime(value: string) {
 
 function formatGameOption(game: AdminGame) {
   return `${game.time1} x ${game.time2} · ${formatGameDateTime(game.data)}`;
+}
+
+function formatFinishedGameOption(game: AdminGame) {
+  const score =
+    game.gols1 == null || game.gols2 == null ? "sem placar" : `${game.gols1} x ${game.gols2}`;
+
+  return `${game.time1} ${score} ${game.time2} · ${formatGameDateTime(game.data)}`;
 }
 
 function formatGameDateTime(value: string) {

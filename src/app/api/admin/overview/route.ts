@@ -9,6 +9,8 @@ type GameRow = {
   time1: string;
   time2: string;
   data: string;
+  gols1: number | null;
+  gols2: number | null;
   encerrado: boolean;
   transmissao_url: string | null;
 };
@@ -52,7 +54,15 @@ export async function GET() {
   if (authResult instanceof NextResponse) return authResult;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("admin_overview_bolao");
+  const [overviewResult, gamesResult] = await Promise.all([
+    supabase.rpc("admin_overview_bolao"),
+    supabase
+      .from("jogos")
+      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,transmissao_url")
+      .order("data", { ascending: true }),
+  ]);
+
+  const error = overviewResult.error ?? gamesResult.error;
 
   if (error) {
     return NextResponse.json(
@@ -61,9 +71,9 @@ export async function GET() {
     );
   }
 
-  const overview = (data ?? {}) as OverviewRpcData;
+  const overview = (overviewResult.data ?? {}) as OverviewRpcData;
   const users = overview.users ?? [];
-  const games = overview.games ?? [];
+  const games = (gamesResult.data ?? []) as GameRow[];
   const now = nowAsStoredBrasiliaMs();
   const deadline = now + 24 * 60 * 60 * 1000;
   const urgentGames = games.filter((game) => {
