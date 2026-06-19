@@ -10,7 +10,7 @@ import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { getDisplayName } from "@/lib/display-name";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
-import { getRanking, type RankingUsuario } from "@/lib/queries";
+import { getCurrentUsuario, getRanking, type RankingUsuario } from "@/lib/queries";
 import { getRankingBadgeKeys, RANKING_BADGES, type RankingBadgeKey } from "@/lib/ranking-badges";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +23,7 @@ type ParticipantTitle = {
 
 export default function RankingPage() {
   const [ranking, setRanking] = useState<RankingUsuario[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +32,13 @@ export default function RankingPage() {
     setError(null);
 
     try {
-      setRanking(await getRanking());
+      const [nextRanking, currentUsuario] = await Promise.all([
+        getRanking(),
+        getCurrentUsuario().catch(() => null),
+      ]);
+
+      setRanking(nextRanking);
+      setCurrentUserId(currentUsuario?.id ?? null);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Não foi possível carregar o ranking.");
     } finally {
@@ -71,7 +78,7 @@ export default function RankingPage() {
         </div>
       ) : (
         <LayoutGroup id="ranking-geral">
-          <Podium ranking={podium} fullRanking={ranking} />
+          <Podium ranking={podium} fullRanking={ranking} currentUserId={currentUserId} />
 
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             <div className="grid grid-cols-[58px_minmax(0,1fr)_46px_52px] items-center gap-1.5 border-b border-border bg-background/40 px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[96px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-3 sm:text-xs">
@@ -102,6 +109,7 @@ export default function RankingPage() {
                       row={row}
                       pos={pos}
                       relegated={relegated}
+                      isCurrentUser={row.id === currentUserId}
                       badges={getRankingBadgeKeys(row.id, ranking)}
                     />
                   </Fragment>
@@ -119,11 +127,13 @@ function RankingRow({
   row,
   pos,
   relegated,
+  isCurrentUser,
   badges,
 }: {
   row: RankingUsuario;
   pos: number;
   relegated: boolean;
+  isCurrentUser: boolean;
   badges: RankingBadgeKey[];
 }) {
   const reduceMotion = useReducedMotion();
@@ -137,13 +147,24 @@ function RankingRow({
         "grid grid-cols-[58px_minmax(0,1fr)_46px_52px] items-center gap-1.5 px-2 py-3 text-sm sm:grid-cols-[96px_minmax(0,1fr)_100px_120px] sm:gap-2 sm:px-5 sm:py-4",
         relegated &&
           "relegation-alert border-destructive/25 bg-destructive/15 text-destructive-foreground first:border-t",
+        isCurrentUser &&
+          !relegated &&
+          "bg-primary/15 text-foreground ring-1 ring-inset ring-primary/70 shadow-[inset_4px_0_0_var(--primary),0_0_24px_color-mix(in_oklab,var(--primary)_18%,transparent)]",
+        isCurrentUser &&
+          relegated &&
+          "bg-destructive/25 ring-1 ring-inset ring-destructive/80 shadow-[inset_4px_0_0_var(--destructive),0_0_24px_color-mix(in_oklab,var(--destructive)_18%,transparent)]",
       )}
+      aria-current={isCurrentUser ? "true" : undefined}
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span
           className={cn(
             "font-display text-lg font-black num",
-            relegated ? "text-destructive" : "text-muted-foreground",
+            isCurrentUser
+              ? "text-primary"
+              : relegated
+                ? "text-destructive"
+                : "text-muted-foreground",
           )}
         >
           {pos}
@@ -158,7 +179,13 @@ function RankingRow({
         <AvatarName
           name={row.nome_completo}
           avatarPath={row.avatar_url}
-          className={relegated ? "bg-card text-destructive ring-destructive/60" : undefined}
+          className={
+            isCurrentUser
+              ? "bg-primary/25 text-primary ring-primary"
+              : relegated
+                ? "bg-card text-destructive ring-destructive/60"
+                : undefined
+          }
         />
         <InlineParticipantName name={row.nome_completo} titles={badges.map(toParticipantTitle)} />
       </Link>
@@ -340,9 +367,11 @@ function toParticipantTitle(badgeKey: RankingBadgeKey): ParticipantTitle {
 function Podium({
   ranking,
   fullRanking,
+  currentUserId,
 }: {
   ranking: RankingUsuario[];
   fullRanking: RankingUsuario[];
+  currentUserId: string | null;
 }) {
   const reduceMotion = useReducedMotion();
 
@@ -390,7 +419,12 @@ function Podium({
               ease: [0.22, 1, 0.36, 1],
               layout: { duration: reduceMotion ? 0 : 0.55, ease: [0.22, 1, 0.36, 1] },
             }}
-            className="group flex min-w-0 flex-col items-center text-center"
+            className={cn(
+              "group flex min-w-0 flex-col items-center rounded-lg text-center",
+              row.id === currentUserId &&
+                "bg-primary/10 ring-1 ring-inset ring-primary/70 shadow-[0_0_24px_color-mix(in_oklab,var(--primary)_18%,transparent)]",
+            )}
+            aria-current={row.id === currentUserId ? "true" : undefined}
           >
             <Link
               href={profileHref(row)}
