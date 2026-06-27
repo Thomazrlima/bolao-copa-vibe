@@ -2,10 +2,11 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   status: "live" | "finished" | "scheduled";
+  liveLabel?: string | null;
   className?: string;
 };
 
-export function StatusBadge({ status, className }: Props) {
+export function StatusBadge({ status, liveLabel, className }: Props) {
   if (status === "live") {
     return (
       <span
@@ -18,7 +19,7 @@ export function StatusBadge({ status, className }: Props) {
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[color:var(--live)] opacity-75" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--live)]" />
         </span>
-        AO VIVO
+        {liveLabel ?? "AO VIVO"}
       </span>
     );
   }

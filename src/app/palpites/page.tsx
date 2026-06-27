@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   ChevronsUpDown,
   Clock3,
+  GitBranch,
   LockKeyhole,
   LogIn,
   Pencil,
@@ -72,6 +73,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { ChaveamentoSection } from "@/components/palpites/ChaveamentoSection";
 import {
   CAMPEAO_BOLAO_QUESTION_ID,
   ESPECIAIS,
@@ -80,14 +82,23 @@ import {
 } from "@/lib/especiais";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
+  getAppConfig,
+  getCurrentUsuario,
   getRanking,
+  getPalpiteChaveamento,
   getPalpitesDashboard,
   getPalpitesEspeciais,
   savePalpite,
+  savePalpiteChaveamento,
   savePalpiteEspecial,
+  type AppConfigResponse,
+  type ChaveamentoConfronto,
+  type PalpiteChaveamentoResponse,
   type PalpitesDashboardResponse,
   type RankingUsuario,
+  type Usuario,
 } from "@/lib/queries";
+import { canManageUsers } from "@/lib/admin-users";
 import type { GuessOutcome } from "@/lib/scoring";
 import {
   formatPalpiteTimeRemaining,
@@ -104,10 +115,19 @@ import {
   localDateKey,
   localTodayKey,
 } from "@/lib/local-datetime";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import { cn } from "@/lib/utils";
 
 type Score = { home: number | null; away: number | null };
 type DashboardGame = PalpitesDashboardResponse["jogos"][number];
+type ChaveamentoConfrontoInput = {
+  fase_id: number;
+  slot: number;
+  time1: string;
+  time2: string;
+  vencedor: string;
+};
+type PalpiteSection = "open" | "specials" | "bracket" | "history" | "dashboard";
 type PalpiteFilters = {
   dateFrom: string;
   dateTo: string;
@@ -181,8 +201,10 @@ const outcomeChartConfig = {
 export default function PalpitesPage() {
   const reduceMotion = useReducedMotion();
   const [data, setData] = useState<PalpitesDashboardResponse | null>(null);
-  const [activeSection, setActiveSection] = useState("open");
-  const activeSectionIndex = ["open", "specials", "history", "dashboard"].indexOf(activeSection);
+  const [bracket, setBracket] = useState<PalpiteChaveamentoResponse | null>(null);
+  const [appConfig, setAppConfig] = useState<AppConfigResponse>({ chaveamento_visible: true });
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [activeSection, setActiveSection] = useState<PalpiteSection>("open");
   const [scores, setScores] = useState<Record<string, Score>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +216,7 @@ export default function PalpitesPage() {
   const [savedSpecialIds, setSavedSpecialIds] = useState<Set<string>>(new Set());
   const [savingSpecialId, setSavingSpecialId] = useState<string | null>(null);
   const [recentlySavedSpecialId, setRecentlySavedSpecialId] = useState<string | null>(null);
+  const [savingBracket, setSavingBracket] = useState(false);
   const [participants, setParticipants] = useState<RankingUsuario[]>([]);
   const [openFilters, setOpenFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
   const [historyFilters, setHistoryFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
@@ -214,12 +237,19 @@ export default function PalpitesPage() {
       setError(null);
 
       try {
-        const [loaded, specialResponses, ranking] = await Promise.all([
-          getPalpitesDashboard(),
-          includeSpecials ? getPalpitesEspeciais() : Promise.resolve(null),
-          getRanking(),
-        ]);
+        const [loaded, specialResponses, ranking, loadedBracket, loadedConfig, currentUser] =
+          await Promise.all([
+            getPalpitesDashboard(),
+            includeSpecials ? getPalpitesEspeciais() : Promise.resolve(null),
+            getRanking(),
+            getPalpiteChaveamento(),
+            getAppConfig(),
+            getCurrentUsuario(),
+          ]);
         setData(loaded);
+        setBracket(loadedBracket);
+        setAppConfig(loadedConfig);
+        setUsuario(currentUser);
         setParticipants(ranking);
         setScores((current) =>
           Object.fromEntries(
@@ -283,6 +313,29 @@ export default function PalpitesPage() {
     onRefresh: load,
     enabled: !unauthenticated,
   });
+
+  const sections = useMemo(
+    () => [
+      { value: "open" as const, label: "Abertos", icon: CalendarClock },
+      { value: "specials" as const, label: "Especiais", icon: WandSparkles },
+      ...(bracket?.disponivel && (appConfig.chaveamento_visible || canManageUsers(usuario?.email))
+        ? [{ value: "bracket" as const, label: "Chaveamento", icon: GitBranch }]
+        : []),
+      { value: "history" as const, label: "Histórico", icon: CheckCircle2 },
+      { value: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
+    ],
+    [appConfig.chaveamento_visible, bracket?.disponivel, usuario?.email],
+  );
+  const activeSectionIndex = Math.max(
+    0,
+    sections.findIndex((section) => section.value === activeSection),
+  );
+
+  useEffect(() => {
+    if (!sections.some((section) => section.value === activeSection)) {
+      setActiveSection("open");
+    }
+  }, [activeSection, sections]);
 
   const openGames = useMemo(() => data?.jogos.filter((game) => !game.encerrado) ?? [], [data]);
   const historyGames = useMemo(
@@ -389,6 +442,26 @@ export default function PalpitesPage() {
     }
   }
 
+  async function persistBracket(confrontos: ChaveamentoConfrontoInput[]) {
+    setSavingBracket(true);
+    setError(null);
+
+    try {
+      const updated = await savePalpiteChaveamento(confrontos);
+      setBracket(updated);
+      toast.success("Chaveamento salvo", {
+        description: "Suas escolhas do mata-mata foram registradas.",
+      });
+      await load({ preserveDrafts: true, includeSpecials: false });
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "Não foi possível salvar o chaveamento.",
+      );
+    } finally {
+      setSavingBracket(false);
+    }
+  }
+
   if (loading) return <PageSkeleton />;
 
   if (unauthenticated) {
@@ -446,46 +519,35 @@ export default function PalpitesPage() {
         position={data.resumo.posicao}
       />
 
-      <Tabs value={activeSection} onValueChange={setActiveSection} className="mt-6">
-        <TabsList className="relative grid h-auto w-full grid-cols-4 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]">
+      <Tabs
+        value={activeSection}
+        onValueChange={(value) => setActiveSection(value as PalpiteSection)}
+        className="mt-6"
+      >
+        <TabsList
+          className="relative grid h-auto w-full rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]"
+          style={{ gridTemplateColumns: `repeat(${sections.length}, minmax(0, 1fr))` }}
+        >
           <motion.span
             aria-hidden="true"
             className="absolute inset-y-1 left-1 rounded-md bg-primary"
-            style={{ width: "calc((100% - 0.5rem) / 4)" }}
+            style={{ width: `calc((100% - 0.5rem) / ${sections.length})` }}
             animate={{ x: `${Math.max(activeSectionIndex, 0) * 100}%` }}
             transition={{
               duration: reduceMotion ? 0 : 0.34,
               ease: [0.22, 1, 0.36, 1],
             }}
           />
-          <TabsTrigger
-            value="open"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <CalendarClock className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Abertos</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="specials"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <WandSparkles className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Especiais</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="history"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <CheckCircle2 className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Histórico</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="dashboard"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <BarChart3 className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Dashboard</span>
-          </TabsTrigger>
+          {sections.map(({ value, label, icon: Icon }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
+            >
+              <Icon className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
+              <span className="relative z-10 truncate">{label}</span>
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         <TabsContent value="open" className="mt-6">
@@ -543,6 +605,17 @@ export default function PalpitesPage() {
             onSave={persistSpecial}
           />
         </TabsContent>
+
+        {bracket?.disponivel &&
+          (appConfig.chaveamento_visible || canManageUsers(usuario?.email)) && (
+            <TabsContent value="bracket" className="mt-6">
+              <ChaveamentoSection
+                bracket={bracket}
+                saving={savingBracket}
+                onSave={persistBracket}
+              />
+            </TabsContent>
+          )}
 
         <TabsContent value="history" className="mt-6">
           <SectionHeading
@@ -1272,7 +1345,10 @@ function OpenMatchCard({
             {urgencyMeta.label}
           </span>
         ) : (
-          <StatusBadge status={game.ao_vivo ? "live" : "scheduled"} />
+          <StatusBadge
+            status={game.ao_vivo ? "live" : "scheduled"}
+            liveLabel={game.ao_vivo ? liveMatchStatusLabel(game.sportsdb_status) : null}
+          />
         )}
       </div>
 

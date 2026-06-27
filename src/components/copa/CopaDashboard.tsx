@@ -8,7 +8,6 @@ import { ArrowRight, Check, CircleDot, Grid3X3, Network, Sparkles, Trophy } from
 
 import { SelectionLink } from "@/components/common/SelectionLink";
 import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
-import { useMounted } from "@/hooks/use-mounted";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
   buildKnockoutBracket,
@@ -26,14 +25,20 @@ import { cn } from "@/lib/utils";
 type View = "grupos" | "mata-mata";
 type GrupoApiRow = GrupoRow & { updated_at?: string };
 
-export function CopaDashboard() {
-  const mounted = useMounted();
+export function CopaDashboard({
+  initialGrupos = [],
+  initialJogos = [],
+}: {
+  initialGrupos?: GrupoApiRow[];
+  initialJogos?: JogoGrupo[];
+}) {
   const searchParams = useSearchParams();
   const reduceMotion = useReducedMotion();
   const view: View = searchParams.get("visao") === "mata-mata" ? "mata-mata" : "grupos";
-  const [grupos, setGrupos] = useState<GrupoApiRow[]>([]);
-  const [jogos, setJogos] = useState<JogoGrupo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const hasInitialData = initialGrupos.length > 0 || initialJogos.length > 0;
+  const [grupos, setGrupos] = useState<GrupoApiRow[]>(initialGrupos);
+  const [jogos, setJogos] = useState<JogoGrupo[]>(initialJogos);
+  const [loading, setLoading] = useState(!hasInitialData);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -103,7 +108,7 @@ export function CopaDashboard() {
         </div>
       )}
 
-      {loading || !mounted ? (
+      {loading ? (
         <ViewSkeleton view={view} />
       ) : (
         <AnimatePresence mode="wait" initial={false}>

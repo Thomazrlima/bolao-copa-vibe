@@ -46,10 +46,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { formatLocalGameDateTime, formatLocalTime } from "@/lib/local-datetime";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
+import { getPhaseAdjustedPoints, type GuessOutcome } from "@/lib/scoring";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { GuessOutcome } from "@/lib/scoring";
 
 type TabValue = "dashboard" | "estatisticas" | "transmissao";
 
@@ -229,6 +230,7 @@ export default function JogoDetalhePage() {
                   gols2={jogo.gols2}
                   encerrado={jogo.encerrado}
                   live={isLive}
+                  liveStatus={jogo.sportsdb_status}
                 />
                 <TeamTitle name={jogo.time2} align="right" />
               </div>
@@ -434,9 +436,7 @@ function MatchStatisticsSection({ jogo }: { jogo: JogoPalpitesResponse["jogo"] }
   );
 }
 
-function orderStatistics(
-  statistics: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>,
-) {
+function orderStatistics(statistics: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>) {
   return [...statistics].sort((statisticA, statisticB) => {
     const orderA = STATISTIC_ORDER_INDEX.get(normalizeStatisticName(statisticA.name));
     const orderB = STATISTIC_ORDER_INDEX.get(normalizeStatisticName(statisticB.name));
@@ -589,177 +589,215 @@ function OpenGameDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
 
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-4 font-display text-lg font-black">Distribuição dos palpites</h3>
-        <div
-          className="h-[280px] min-w-0 max-w-full cursor-pointer overflow-hidden"
-          onMouseLeave={() => setHoveredFilter(null)}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={data.scoreBars}
-              margin={{ left: -18, right: 8, top: 12 }}
-              throttleDelay={0}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={handleChartHover}
-              onMouseMove={handleChartHover}
-              onClick={handleChartClick}
+      {!data.publicGuessesVisible && <HiddenGuessesNotice className="lg:col-span-2" />}
+
+      {data.publicGuessesVisible && (
+        <>
+          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
+            <h3 className="mb-4 font-display text-lg font-black">Distribuição dos palpites</h3>
+            <div
+              className="h-[280px] min-w-0 max-w-full cursor-pointer overflow-hidden"
+              onMouseLeave={() => setHoveredFilter(null)}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="score" tickLine={false} axisLine={false} fontSize={11} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
-              <ChartTooltip
-                cursor={{ fill: "color-mix(in oklab, var(--primary) 12%, transparent)" }}
-                content={<ScoreTooltip />}
-              />
-              <Bar dataKey="count" fill="var(--primary)" radius={[6, 6, 0, 0]}>
-                {data.scoreBars.map((item) => (
-                  <Cell
-                    key={item.score}
-                    style={{ cursor: "pointer" }}
-                    fill={
-                      activeFilter?.type === "score" && activeFilter.value !== item.score
-                        ? "color-mix(in oklab, var(--primary) 24%, transparent)"
-                        : "var(--primary)"
-                    }
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.scoreBars}
+                  margin={{ left: -18, right: 8, top: 12 }}
+                  throttleDelay={0}
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={handleChartHover}
+                  onMouseMove={handleChartHover}
+                  onClick={handleChartClick}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="score" tickLine={false} axisLine={false} fontSize={11} />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
+                  <ChartTooltip
+                    cursor={{ fill: "color-mix(in oklab, var(--primary) 12%, transparent)" }}
+                    content={<ScoreTooltip />}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
+                  <Bar dataKey="count" fill="var(--primary)" radius={[6, 6, 0, 0]}>
+                    {data.scoreBars.map((item) => (
+                      <Cell
+                        key={item.score}
+                        style={{ cursor: "pointer" }}
+                        fill={
+                          activeFilter?.type === "score" && activeFilter.value !== item.score
+                            ? "color-mix(in oklab, var(--primary) 24%, transparent)"
+                            : "var(--primary)"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
 
-      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-4 font-display text-lg font-black">Resultado previsto</h3>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center lg:block">
-          <ChartContainer
-            config={resultChartConfig}
-            className="mx-auto h-[210px] max-w-[300px] cursor-pointer"
-            onMouseLeave={() => setHoveredFilter(null)}
-          >
-            <PieChart style={{ cursor: "pointer" }}>
-              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-              <Pie
-                data={data.resultPie}
-                dataKey="count"
-                nameKey="label"
-                innerRadius={58}
-                outerRadius={94}
-                paddingAngle={3}
-                onMouseEnter={(_, index) => {
-                  const result = data.resultPie[index]?.label;
-                  if (result) setHoveredFilter({ type: "result", value: result });
-                }}
-                onClick={(_, index) => {
-                  const result = data.resultPie[index]?.label;
-                  if (result) selectFilter({ type: "result", value: result });
-                }}
+          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4">
+            <h3 className="mb-4 font-display text-lg font-black">Resultado previsto</h3>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center lg:block">
+              <ChartContainer
+                config={resultChartConfig}
+                className="mx-auto h-[210px] max-w-[300px] cursor-pointer"
+                onMouseLeave={() => setHoveredFilter(null)}
               >
-                {data.resultPie.map((item, index) => (
-                  <Cell
-                    key={item.label}
-                    style={{ cursor: "pointer" }}
-                    fill={COLORS[index % COLORS.length]}
-                    opacity={
-                      activeFilter?.type === "result" && activeFilter.value !== item.label
-                        ? 0.35
-                        : 1
-                    }
-                  />
-                ))}
-              </Pie>
-            </PieChart>
-          </ChartContainer>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-1 lg:grid-cols-3">
-            {data.resultPie.map((item, index) => {
-              const isActive = activeFilter?.type === "result" && activeFilter.value === item.label;
-              const isSelected =
-                selectedFilter?.type === "result" && selectedFilter.value === item.label;
+                <PieChart style={{ cursor: "pointer" }}>
+                  <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                  <Pie
+                    data={data.resultPie}
+                    dataKey="count"
+                    nameKey="label"
+                    innerRadius={58}
+                    outerRadius={94}
+                    paddingAngle={3}
+                    onMouseEnter={(_, index) => {
+                      const result = data.resultPie[index]?.label;
+                      if (result) setHoveredFilter({ type: "result", value: result });
+                    }}
+                    onClick={(_, index) => {
+                      const result = data.resultPie[index]?.label;
+                      if (result) selectFilter({ type: "result", value: result });
+                    }}
+                  >
+                    {data.resultPie.map((item, index) => (
+                      <Cell
+                        key={item.label}
+                        style={{ cursor: "pointer" }}
+                        fill={COLORS[index % COLORS.length]}
+                        opacity={
+                          activeFilter?.type === "result" && activeFilter.value !== item.label
+                            ? 0.35
+                            : 1
+                        }
+                      />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-1 lg:grid-cols-3">
+                {data.resultPie.map((item, index) => {
+                  const isActive =
+                    activeFilter?.type === "result" && activeFilter.value === item.label;
+                  const isSelected =
+                    selectedFilter?.type === "result" && selectedFilter.value === item.label;
 
-              return (
-                <button
-                  type="button"
-                  key={item.label}
-                  onMouseEnter={() => setHoveredFilter({ type: "result", value: item.label })}
-                  onMouseLeave={() => setHoveredFilter(null)}
-                  onFocus={() => setHoveredFilter({ type: "result", value: item.label })}
-                  onBlur={() => setHoveredFilter(null)}
-                  onClick={() => selectFilter({ type: "result", value: item.label })}
-                  aria-pressed={isSelected}
-                  className={cn(
-                    "flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-background/45 p-2 text-left transition-[opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    activeFilter?.type === "result" && !isActive && "opacity-45",
-                    isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-card",
-                  )}
-                >
-                  <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </span>
-                  <span className="num font-display text-lg font-black">{item.count}</span>
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      type="button"
+                      key={item.label}
+                      onMouseEnter={() => setHoveredFilter({ type: "result", value: item.label })}
+                      onMouseLeave={() => setHoveredFilter(null)}
+                      onFocus={() => setHoveredFilter({ type: "result", value: item.label })}
+                      onBlur={() => setHoveredFilter(null)}
+                      onClick={() => selectFilter({ type: "result", value: item.label })}
+                      aria-pressed={isSelected}
+                      className={cn(
+                        "flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-background/45 p-2 text-left transition-[opacity,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        activeFilter?.type === "result" && !isActive && "opacity-45",
+                        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-card",
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                      <span className="num font-display text-lg font-black">{item.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 lg:col-span-2">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <h3 className="font-display text-lg font-black">Todos os palpites</h3>
+              <span
+                className={cn("num text-xs font-bold text-primary", !activeFilter && "invisible")}
+                aria-hidden={!activeFilter}
+              >
+                Filtrando{" "}
+                {activeFilter?.type === "score"
+                  ? `placar ${activeFilter.value}`
+                  : `resultado ${activeFilter?.value ?? "Empate"}`}{" "}
+                ({filteredRows.length}){selectedFilter && !hoveredFilter ? " · fixado" : ""}
+              </span>
+            </div>
+            {rows.length ? (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {rows.map((row) => {
+                  const isHidden = activeFilter !== null && !filteredUserIds.has(row.user_id);
+
+                  return (
+                    <Link
+                      key={row.user_id}
+                      href={`/perfil/${row.user_id}`}
+                      tabIndex={isHidden ? -1 : undefined}
+                      aria-hidden={isHidden}
+                      className={cn(
+                        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3",
+                        isHidden && "invisible pointer-events-none",
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <UserAvatar
+                          name={row.nome_completo}
+                          avatarPath={row.avatar_url}
+                          className="h-8 w-8 bg-primary/15"
+                          fallbackClassName="bg-primary/15 text-xs font-black text-primary"
+                        />
+                        <BrazilThemedName className="truncate text-sm font-semibold">
+                          {row.nome_completo}
+                        </BrazilThemedName>
+                      </span>
+                      <span className="num font-display text-lg font-black">
+                        {row.palpite.gols1} x {row.palpite.gols2}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhum palpite registrado para este jogo.
+              </p>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function HiddenGuessesNotice({
+  compact = false,
+  className,
+}: {
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-primary/30 bg-primary/10 text-primary",
+        compact ? "p-4 text-sm" : "p-4 sm:p-5",
+        className,
+      )}
+    >
+      <div className="flex gap-3">
+        <CircleHelp className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p className="font-bold">Palpites do mata-mata protegidos</p>
+          <p className="mt-1 text-sm text-primary/80">
+            Em jogos de mata-mata, antes do jogo ficar ao vivo, cada participante vê apenas o
+            próprio palpite. Jogos que não são de mata-mata mostram os palpites normalmente.
+          </p>
         </div>
-      </section>
-
-      <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 lg:col-span-2">
-        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <h3 className="font-display text-lg font-black">Todos os palpites</h3>
-          <span
-            className={cn("num text-xs font-bold text-primary", !activeFilter && "invisible")}
-            aria-hidden={!activeFilter}
-          >
-            Filtrando{" "}
-            {activeFilter?.type === "score"
-              ? `placar ${activeFilter.value}`
-              : `resultado ${activeFilter?.value ?? "Empate"}`}{" "}
-            ({filteredRows.length}){selectedFilter && !hoveredFilter ? " · fixado" : ""}
-          </span>
-        </div>
-        {rows.length ? (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {rows.map((row) => {
-              const isHidden = activeFilter !== null && !filteredUserIds.has(row.user_id);
-
-              return (
-                <Link
-                  key={row.user_id}
-                  href={`/perfil/${row.user_id}`}
-                  tabIndex={isHidden ? -1 : undefined}
-                  aria-hidden={isHidden}
-                  className={cn(
-                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background/45 p-3",
-                    isHidden && "invisible pointer-events-none",
-                  )}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <UserAvatar
-                      name={row.nome_completo}
-                      avatarPath={row.avatar_url}
-                      className="h-8 w-8 bg-primary/15"
-                      fallbackClassName="bg-primary/15 text-xs font-black text-primary"
-                    />
-                    <BrazilThemedName className="truncate text-sm font-semibold">
-                      {row.nome_completo}
-                    </BrazilThemedName>
-                  </span>
-                  <span className="num font-display text-lg font-black">
-                    {row.palpite.gols1} x {row.palpite.gols2}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Nenhum palpite registrado para este jogo.</p>
-        )}
-      </section>
+      </div>
     </div>
   );
 }
@@ -840,7 +878,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                       {meta.label}
                     </span>
                   </span>
-                  <span className="num shrink-0 text-xs font-black">+{meta.points} pts</span>
+                  <span className="num shrink-0 text-xs font-black">+{item.points} pts</span>
                 </div>
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <span className="num font-display text-3xl font-black">{item.count}</span>
@@ -1236,11 +1274,13 @@ function ScoreBox({
   gols2,
   encerrado,
   live,
+  liveStatus,
 }: {
   gols1: number | null;
   gols2: number | null;
   encerrado: boolean;
   live: boolean;
+  liveStatus: string | null;
 }) {
   return (
     <div className="text-center">
@@ -1259,7 +1299,7 @@ function ScoreBox({
         </div>
       )}
       <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {encerrado ? "Encerrado" : live ? "Ao vivo" : "Agendado"}
+        {encerrado ? "Encerrado" : live ? liveMatchStatusLabel(liveStatus) : "Agendado"}
       </p>
     </div>
   );
@@ -1328,6 +1368,7 @@ function buildDashboard(data: JogoPalpitesResponse) {
     const count = outcomeCount.get(item.outcome) ?? 0;
     return {
       outcome: item.outcome,
+      points: getPhaseAdjustedPoints(item.points, data.jogo.fase_id),
       count,
       percent: data.palpites.length ? Math.round((count / data.palpites.length) * 100) : 0,
     };
@@ -1335,6 +1376,12 @@ function buildDashboard(data: JogoPalpitesResponse) {
 
   return {
     finished: data.jogo.encerrado,
+    publicGuessesVisible:
+      data.jogo.fase_id <= 1 ||
+      data.jogo.fase_id === 6 ||
+      data.jogo.encerrado ||
+      data.jogo.placar_status === "live" ||
+      data.jogo.placar_status === "finished",
     totalPalpites: data.palpites.length,
     mostPopularScore,
     actualScore,

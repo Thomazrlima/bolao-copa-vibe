@@ -13,9 +13,10 @@ const palpiteSchema = z.object({
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
 
   try {
-    const payload = await getPalpitesDoJogo(supabase, id);
+    const payload = await getPalpitesDoJogo(supabase, id, auth.user?.id ?? null);
     return NextResponse.json(payload);
   } catch (error) {
     const serviceError = error instanceof ServiceError ? error : null;

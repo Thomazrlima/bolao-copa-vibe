@@ -27,6 +27,7 @@ import { getDisplayName } from "@/lib/display-name";
 import { USER_PROFILE_UPDATED_EVENT } from "@/lib/avatar-storage";
 import type { PalpiteUrgency } from "@/lib/palpite-deadlines";
 import { createClient } from "@/lib/supabase/client";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import { useBrazilGoalCelebration } from "@/hooks/use-brazil-goal-celebration";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -79,6 +80,7 @@ type LiveGame = {
   gols2: number | null;
   encerrado: boolean;
   placar_status: "upcoming" | "live" | "finished" | null;
+  sportsdb_status: string | null;
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -163,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <motion.main
         key={pathname}
-        initial={reduceMotion ? false : { opacity: 0, x: direction * 16 }}
+        initial={false}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
         className="mx-auto w-full max-w-7xl flex-1 px-3 pb-12 pt-5 sm:px-6 lg:py-8"
@@ -314,7 +316,9 @@ function LiveScoreTicker({
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
               </span>
               <span className="text-[10px] font-black uppercase tracking-[0.16em] sm:text-xs">
-                Ao vivo
+                {liveGames.length === 1
+                  ? liveMatchStatusLabel(liveGames[0]?.sportsdb_status)
+                  : "Ao vivo"}
               </span>
               {brazilThemeActive && (
                 <Flag code={teamCodeFromName("Brasil")} name="Brasil" size="sm" static />
@@ -392,6 +396,9 @@ function LiveScoreContent({ game }: { game: LiveGame }) {
   return (
     <span className="flex h-10 shrink-0 items-center gap-2 px-5 sm:gap-3 sm:px-8">
       <Radio className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+      <span className="rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
+        {liveMatchStatusLabel(game.sportsdb_status)}
+      </span>
       {team1Code ? (
         <Flag
           code={team1Code}
@@ -442,7 +449,9 @@ function formatLiveScore(score: number | null) {
 }
 
 function liveGameLabel(game: LiveGame) {
-  return `${game.time1} ${formatLiveScore(game.gols1)} a ${formatLiveScore(game.gols2)} ${game.time2}`;
+  return `${liveMatchStatusLabel(game.sportsdb_status)}. ${game.time1} ${formatLiveScore(
+    game.gols1,
+  )} a ${formatLiveScore(game.gols2)} ${game.time2}`;
 }
 
 function AppFooter() {

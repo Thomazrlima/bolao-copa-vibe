@@ -47,6 +47,14 @@ type GrupoRow = {
 
 const OUTCOMES: GuessOutcome[] = ["chinelada", "strong", "result", "goals", "miss"];
 
+function canShowPublicGuesses(
+  game: Pick<JogoRow, "fase_id" | "encerrado" | "placar_status"> | undefined,
+) {
+  if (!game) return true;
+  const isProtectedKnockoutGame = game.fase_id > 1 && game.fase_id !== 6;
+  return !isProtectedKnockoutGame || game.encerrado || game.placar_status === "live";
+}
+
 export async function getPalpitesDashboard(supabase: SupabaseClient, userId: string) {
   const [gamesResult, guessesResult, phasesResult, rankingResult, groupsResult] = await Promise.all(
     [
@@ -78,13 +86,19 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
   const games = (gamesResult.data ?? []) as JogoRow[];
   const publicGuesses = (guessesResult.data ?? []) as PalpiteRow[];
   const userGuesses = await getPalpitesDoUsuario(supabase, userId);
-  const guesses = [...publicGuesses.filter((guess) => guess.user_id !== userId), ...userGuesses];
   const phases = (phasesResult.data ?? []) as FaseRow[];
   const ranking = (rankingResult.data ?? []) as RankingRow[];
   const groups = (groupsResult.data ?? []) as GrupoRow[];
   const phaseById = new Map(phases.map((phase) => [phase.id, phase.nome]));
   const groupByTeam = new Map(groups.map((group) => [group.time, group.grupo]));
   const gameById = new Map(games.map((game) => [game.id, game]));
+  const visiblePublicGuesses = publicGuesses.filter((guess) =>
+    canShowPublicGuesses(gameById.get(guess.jogo_id)),
+  );
+  const guesses = [
+    ...visiblePublicGuesses.filter((guess) => guess.user_id !== userId),
+    ...userGuesses,
+  ];
   const myGuessByGame = new Map(
     guesses.filter((guess) => guess.user_id === userId).map((guess) => [guess.jogo_id, guess]),
   );
@@ -122,6 +136,7 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
     return [{ guess, game, scoring: scoreGuess(game, guess) }];
   });
   const myFinished = finishedGuesses.filter(({ guess }) => guess.user_id === userId);
+  const myAccuracyGuesses = myFinished.filter(({ scoring }) => isAccuracyEligible(scoring.outcome));
   const myOpen = mappedGames.filter((game) => !game.encerrado);
   const currentUser = ranking.find((participant) => participant.id === userId);
   const position = ranking.findIndex((participant) => participant.id === userId) + 1;
@@ -164,8 +179,8 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
       posicao: position || null,
       pontos: currentUser?.pontos ?? 0,
       chineladas: currentUser?.chineladas ?? 0,
-      encerrados: myFinished.length,
-      acertos: myFinished.filter(({ scoring }) => scoring.outcome !== "miss").length,
+      encerrados: myAccuracyGuesses.length,
+      acertos: myAccuracyGuesses.filter(({ scoring }) => isAccuracyHit(scoring.outcome)).length,
       outcomes: OUTCOMES.map((outcome) => ({
         outcome,
         count: myFinished.filter(({ scoring }) => scoring.outcome === outcome).length,
@@ -218,7 +233,13 @@ export async function upsertPalpite(
 
 function scoreGuess(game: JogoRow, guess: PalpiteRow) {
   return calcularPontuacaoJogo(
-    { id: game.id, gols1: game.gols1, gols2: game.gols2, encerrado: game.encerrado },
+    {
+      id: game.id,
+      fase_id: game.fase_id,
+      gols1: game.gols1,
+      gols2: game.gols2,
+      encerrado: game.encerrado,
+    },
     {
       user_id: guess.user_id,
       jogo_id: guess.jogo_id,
@@ -241,7 +262,11 @@ function buildRoundAccuracy(
   const labels = new Map(
     games.map((game) => [
       game.id,
-      game.rodada ? `R${game.rodada}` : (phaseById.get(game.fase_id) ?? "Copa"),
+      game.rodada
+        ? `R${game.rodada}`
+        : game.fase_id > 1
+          ? "MATA-MATA"
+          : (phaseById.get(game.fase_id) ?? "Copa"),
     ]),
   );
   const grouped = new Map<
@@ -250,22 +275,41 @@ function buildRoundAccuracy(
   >();
 
   finishedGuesses.forEach(({ guess, game, scoring }) => {
+    if (!isAccuracyEligible(scoring.outcome)) return;
+
     const label = labels.get(game.id) ?? "Copa";
     const row = grouped.get(label) ?? { total: 0, correct: 0, userTotal: 0, userCorrect: 0 };
     row.total += 1;
-    if (scoring.outcome !== "miss") row.correct += 1;
+    if (isAccuracyHit(scoring.outcome)) row.correct += 1;
     if (guess.user_id === userId) {
       row.userTotal += 1;
-      if (scoring.outcome !== "miss") row.userCorrect += 1;
+      if (isAccuracyHit(scoring.outcome)) row.userCorrect += 1;
     }
     grouped.set(label, row);
   });
 
-  return [...grouped.entries()].map(([round, row]) => ({
-    round,
-    geral: percentage(row.correct, row.total),
-    voce: percentage(row.userCorrect, row.userTotal),
-  }));
+  return [...grouped.entries()]
+    .map(([round, row]) => ({
+      round,
+      geral: percentage(row.correct, row.total),
+      voce: percentage(row.userCorrect, row.userTotal),
+    }))
+    .sort((a, b) => roundAccuracyOrder(a.round) - roundAccuracyOrder(b.round));
+}
+
+function isAccuracyEligible(outcome: GuessOutcome) {
+  return outcome !== "goals";
+}
+
+function isAccuracyHit(outcome: GuessOutcome) {
+  return outcome !== "miss" && outcome !== "goals";
+}
+
+function roundAccuracyOrder(round: string) {
+  const groupRound = round.match(/^R(\d+)$/i);
+  if (groupRound) return Number(groupRound[1]);
+  if (round === "MATA-MATA") return 100;
+  return 200;
 }
 
 function buildPointsEvolution(

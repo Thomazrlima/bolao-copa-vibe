@@ -33,11 +33,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { canManageUsers } from "@/lib/admin-users";
 import { CAMPEAO_BOLAO_QUESTION_ID, ESPECIAIS } from "@/lib/especiais";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { formatLocalDateTime, formatLocalGameDateTime } from "@/lib/local-datetime";
-import { createUsuario, getCurrentUsuario, type Usuario } from "@/lib/queries";
+import {
+  createUsuario,
+  getAdminConfig,
+  getCurrentUsuario,
+  saveAdminConfig,
+  type AppConfigResponse,
+  type Usuario,
+} from "@/lib/queries";
 
 type CreatedUser = {
   email: string;
@@ -193,6 +201,12 @@ export function AdminClient() {
   const [scoreGols2, setScoreGols2] = useState("");
   const [scoreSaving, setScoreSaving] = useState(false);
   const [scoreMessage, setScoreMessage] = useState<string | null>(null);
+  const [adminConfig, setAdminConfig] = useState<AppConfigResponse>({
+    chaveamento_visible: true,
+  });
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configMessage, setConfigMessage] = useState<string | null>(null);
 
   const loadOverview = useCallback(async ({ syncHighlights = true } = {}) => {
     setOverviewLoading(true);
@@ -295,6 +309,22 @@ export function AdminClient() {
     }
   }, []);
 
+  const loadAdminConfig = useCallback(async () => {
+    setConfigLoading(true);
+    setConfigMessage(null);
+
+    try {
+      const config = await getAdminConfig();
+      setAdminConfig(config);
+    } catch (error) {
+      setConfigMessage(
+        error instanceof Error ? error.message : "Não foi possível carregar as configurações.",
+      );
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
+
   const refreshOverview = useCallback(
     () => loadOverview({ syncHighlights: false }),
     [loadOverview],
@@ -375,6 +405,7 @@ export function AdminClient() {
             loadReports(),
             loadSpecialAnswers(),
             loadSyncExecutions(),
+            loadAdminConfig(),
           ]);
         }
       } catch (error) {
@@ -390,7 +421,7 @@ export function AdminClient() {
     return () => {
       active = false;
     };
-  }, [loadOverview, loadReports, loadSpecialAnswers, loadSyncExecutions]);
+  }, [loadAdminConfig, loadOverview, loadReports, loadSpecialAnswers, loadSyncExecutions]);
 
   useEffect(() => {
     if (!usuario || !canManageUsers(usuario.email)) return;
@@ -554,9 +585,36 @@ export function AdminClient() {
       );
       await loadOverview({ syncHighlights: false });
     } catch (error) {
-      setScoreMessage(error instanceof Error ? error.message : "Não foi possível corrigir o placar.");
+      setScoreMessage(
+        error instanceof Error ? error.message : "Não foi possível corrigir o placar.",
+      );
     } finally {
       setScoreSaving(false);
+    }
+  }
+
+  async function handleBracketVisibilityChange(visible: boolean) {
+    const previous = adminConfig;
+    const next = { ...adminConfig, chaveamento_visible: visible };
+    setAdminConfig(next);
+    setConfigSaving(true);
+    setConfigMessage(null);
+
+    try {
+      const saved = await saveAdminConfig(next);
+      setAdminConfig(saved);
+      setConfigMessage(
+        saved.chaveamento_visible
+          ? "A aba de Chaveamento está visível para participantes."
+          : "A aba de Chaveamento está oculta para participantes.",
+      );
+    } catch (error) {
+      setAdminConfig(previous);
+      setConfigMessage(
+        error instanceof Error ? error.message : "Não foi possível salvar a configuração.",
+      );
+    } finally {
+      setConfigSaving(false);
     }
   }
 
@@ -645,7 +703,7 @@ export function AdminClient() {
       </header>
 
       <Tabs defaultValue="pending">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-7">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-8">
           <TabsTrigger value="pending" className="gap-2">
             <ClockAlert className="h-4 w-4" />
             Pendências
@@ -661,6 +719,10 @@ export function AdminClient() {
           <TabsTrigger value="score" className="gap-2">
             <PencilLine className="h-4 w-4" />
             Placar
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Config
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-2">
             <Users className="h-4 w-4" />
@@ -765,6 +827,41 @@ export function AdminClient() {
               </Button>
             </div>
           </form>
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-5">
+          <section className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6">
+            <SectionHeader
+              icon={Settings}
+              title="Configurações do bolão"
+              description="Controle recursos visíveis para os participantes."
+            />
+
+            <div className="flex flex-col gap-4 rounded-lg border border-border bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <Label htmlFor="bracket-visibility" className="font-bold">
+                  Aba de Chaveamento em /palpites
+                </Label>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Quando desligada, participantes não veem a aba. Admins continuam vendo para
+                  validação.
+                </p>
+              </div>
+              <Switch
+                id="bracket-visibility"
+                checked={adminConfig.chaveamento_visible}
+                disabled={configLoading || configSaving}
+                onCheckedChange={handleBracketVisibilityChange}
+                aria-label="Controlar visibilidade da aba de Chaveamento"
+              />
+            </div>
+
+            {configMessage ? (
+              <p className="mt-4 rounded-lg border border-border bg-background/50 p-3 text-sm">
+                {configMessage}
+              </p>
+            ) : null}
+          </section>
         </TabsContent>
 
         <TabsContent value="specials" className="mt-5">
