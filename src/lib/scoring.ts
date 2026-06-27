@@ -10,6 +10,7 @@ export type GuessOutcome = "chinelada" | "strong" | "result" | "goals" | "miss";
 
 export type ScoringJogo = {
   id: string;
+  fase_id?: number | null;
   gols1: number | null;
   gols2: number | null;
   encerrado: boolean;
@@ -32,6 +33,22 @@ export type PontuacaoJogo = {
   outcome: GuessOutcome;
 };
 
+const PHASE_POINT_MULTIPLIERS: Record<number, number> = {
+  2: 1.2,
+  3: 1.4,
+  4: 1.6,
+  5: 1.8,
+  7: 2,
+};
+
+export function getPhasePointMultiplier(faseId: number | null | undefined) {
+  return faseId == null ? 1 : (PHASE_POINT_MULTIPLIERS[faseId] ?? 1);
+}
+
+export function getPhaseAdjustedPoints(basePoints: number, faseId: number | null | undefined) {
+  return Math.floor(basePoints * getPhasePointMultiplier(faseId));
+}
+
 function resultSignal(gols1: number, gols2: number) {
   return Math.sign(gols1 - gols2);
 }
@@ -40,14 +57,22 @@ function goalDiff(gols1: number, gols2: number) {
   return Math.abs(gols1 - gols2);
 }
 
+function buildScore(outcome: GuessOutcome, chinelada: boolean, faseId: number | null | undefined) {
+  return {
+    pontos: getPhaseAdjustedPoints(POINTS[outcome], faseId),
+    chinelada,
+    outcome,
+  };
+}
+
 export function calcularPontuacaoJogo(jogo: ScoringJogo, palpite: ScoringPalpite): PontuacaoJogo {
   if (!jogo.encerrado || jogo.gols1 == null || jogo.gols2 == null || jogo.id !== palpite.jogo_id) {
-    return { pontos: 0, chinelada: false, outcome: "miss" };
+    return buildScore("miss", false, jogo.fase_id);
   }
 
   const acertouPlacar = palpite.gols1 === jogo.gols1 && palpite.gols2 === jogo.gols2;
   if (acertouPlacar) {
-    return { pontos: POINTS.chinelada, chinelada: true, outcome: "chinelada" };
+    return buildScore("chinelada", true, jogo.fase_id);
   }
 
   const acertouResultado =
@@ -57,18 +82,18 @@ export function calcularPontuacaoJogo(jogo: ScoringJogo, palpite: ScoringPalpite
     goalDiff(palpite.gols1, palpite.gols2) === goalDiff(jogo.gols1, jogo.gols2);
 
   if (acertouResultado && (acertouGolDeUmTime || acertouDiferenca)) {
-    return { pontos: POINTS.strong, chinelada: false, outcome: "strong" };
+    return buildScore("strong", false, jogo.fase_id);
   }
 
   if (acertouResultado) {
-    return { pontos: POINTS.result, chinelada: false, outcome: "result" };
+    return buildScore("result", false, jogo.fase_id);
   }
 
   if (acertouGolDeUmTime) {
-    return { pontos: POINTS.goals, chinelada: false, outcome: "goals" };
+    return buildScore("goals", false, jogo.fase_id);
   }
 
-  return { pontos: POINTS.miss, chinelada: false, outcome: "miss" };
+  return buildScore("miss", false, jogo.fase_id);
 }
 
 export function calcularPontuacaoUsuarioNoJogo(

@@ -47,9 +47,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { formatLocalGameDateTime, formatLocalTime } from "@/lib/local-datetime";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
+import { getPhaseAdjustedPoints, type GuessOutcome } from "@/lib/scoring";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { GuessOutcome } from "@/lib/scoring";
 
 type TabValue = "dashboard" | "estatisticas" | "transmissao";
 
@@ -434,9 +434,7 @@ function MatchStatisticsSection({ jogo }: { jogo: JogoPalpitesResponse["jogo"] }
   );
 }
 
-function orderStatistics(
-  statistics: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>,
-) {
+function orderStatistics(statistics: NonNullable<JogoPalpitesResponse["jogo"]["estatisticas"]>) {
   return [...statistics].sort((statisticA, statisticB) => {
     const orderA = STATISTIC_ORDER_INDEX.get(normalizeStatisticName(statisticA.name));
     const orderB = STATISTIC_ORDER_INDEX.get(normalizeStatisticName(statisticB.name));
@@ -840,7 +838,7 @@ function FinishedDashboardTab({ data }: { data: ReturnType<typeof buildDashboard
                       {meta.label}
                     </span>
                   </span>
-                  <span className="num shrink-0 text-xs font-black">+{meta.points} pts</span>
+                  <span className="num shrink-0 text-xs font-black">+{item.points} pts</span>
                 </div>
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <span className="num font-display text-3xl font-black">{item.count}</span>
@@ -1328,6 +1326,7 @@ function buildDashboard(data: JogoPalpitesResponse) {
     const count = outcomeCount.get(item.outcome) ?? 0;
     return {
       outcome: item.outcome,
+      points: getPhaseAdjustedPoints(item.points, data.jogo.fase_id),
       count,
       percent: data.palpites.length ? Math.round((count / data.palpites.length) * 100) : 0,
     };

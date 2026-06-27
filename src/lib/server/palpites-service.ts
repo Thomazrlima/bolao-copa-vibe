@@ -47,6 +47,13 @@ type GrupoRow = {
 
 const OUTCOMES: GuessOutcome[] = ["chinelada", "strong", "result", "goals", "miss"];
 
+function canShowPublicGuesses(
+  game: Pick<JogoRow, "fase_id" | "encerrado" | "placar_status"> | undefined,
+) {
+  if (!game) return true;
+  return game.fase_id <= 1 || game.encerrado || game.placar_status === "live";
+}
+
 export async function getPalpitesDashboard(supabase: SupabaseClient, userId: string) {
   const [gamesResult, guessesResult, phasesResult, rankingResult, groupsResult] = await Promise.all(
     [
@@ -78,13 +85,19 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
   const games = (gamesResult.data ?? []) as JogoRow[];
   const publicGuesses = (guessesResult.data ?? []) as PalpiteRow[];
   const userGuesses = await getPalpitesDoUsuario(supabase, userId);
-  const guesses = [...publicGuesses.filter((guess) => guess.user_id !== userId), ...userGuesses];
   const phases = (phasesResult.data ?? []) as FaseRow[];
   const ranking = (rankingResult.data ?? []) as RankingRow[];
   const groups = (groupsResult.data ?? []) as GrupoRow[];
   const phaseById = new Map(phases.map((phase) => [phase.id, phase.nome]));
   const groupByTeam = new Map(groups.map((group) => [group.time, group.grupo]));
   const gameById = new Map(games.map((game) => [game.id, game]));
+  const visiblePublicGuesses = publicGuesses.filter((guess) =>
+    canShowPublicGuesses(gameById.get(guess.jogo_id)),
+  );
+  const guesses = [
+    ...visiblePublicGuesses.filter((guess) => guess.user_id !== userId),
+    ...userGuesses,
+  ];
   const myGuessByGame = new Map(
     guesses.filter((guess) => guess.user_id === userId).map((guess) => [guess.jogo_id, guess]),
   );
@@ -218,7 +231,13 @@ export async function upsertPalpite(
 
 function scoreGuess(game: JogoRow, guess: PalpiteRow) {
   return calcularPontuacaoJogo(
-    { id: game.id, gols1: game.gols1, gols2: game.gols2, encerrado: game.encerrado },
+    {
+      id: game.id,
+      fase_id: game.fase_id,
+      gols1: game.gols1,
+      gols2: game.gols2,
+      encerrado: game.encerrado,
+    },
     {
       user_id: guess.user_id,
       jogo_id: guess.jogo_id,

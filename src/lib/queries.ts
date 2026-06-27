@@ -143,6 +143,39 @@ export type PalpitesDashboardResponse = {
   };
 };
 
+export type ChaveamentoConfronto = {
+  fase_id: number;
+  fase: string;
+  slot: number;
+  time1: string | null;
+  time2: string | null;
+  vencedor: string | null;
+  pontos: number;
+  acertou: boolean | null;
+  calculado_em: string | null;
+};
+
+export type ChaveamentoFase = {
+  fase_id: number;
+  nome: string;
+  total_confrontos: number;
+  pontuavel: boolean;
+  confrontos: ChaveamentoConfronto[];
+};
+
+export type PalpiteChaveamentoResponse = {
+  disponivel: boolean;
+  aberto: boolean;
+  prazo_envio: string | null;
+  inicial_fase_id: number | null;
+  salvo: boolean;
+  completo: boolean;
+  pontos: number;
+  acertos: number;
+  total_pontuavel: number;
+  fases: ChaveamentoFase[];
+};
+
 export type SelecaoPerfilResponse = {
   selecao: {
     nome: string;
@@ -348,6 +381,33 @@ export async function getSelecaoPerfil(slug: string) {
 export async function getPalpitesDashboard() {
   const dashboard = await requestJson<PalpitesDashboardResponse>("/api/palpites");
   return MOCK_PENDING_GUESSES_ENABLED ? withMockPendingGuesses(dashboard) : dashboard;
+}
+
+export async function getPalpiteChaveamento() {
+  const body = await requestJson<{ chaveamento: PalpiteChaveamentoResponse }>(
+    "/api/palpites/chaveamento",
+  );
+  return body.chaveamento;
+}
+
+export async function savePalpiteChaveamento(
+  confrontos: Array<{
+    fase_id: number;
+    slot: number;
+    time1: string;
+    time2: string;
+    vencedor: string;
+  }>,
+) {
+  const body = await requestJson<{ chaveamento: PalpiteChaveamentoResponse }>(
+    "/api/palpites/chaveamento",
+    {
+      method: "PUT",
+      body: JSON.stringify({ confrontos }),
+    },
+  );
+
+  return body.chaveamento;
 }
 
 export async function savePalpite(jogoId: string, palpite: { gols1: number; gols2: number }) {

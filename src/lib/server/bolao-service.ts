@@ -139,6 +139,18 @@ function nowAsStoredBrasiliaMs() {
   );
 }
 
+function isKnockoutGame(game: Pick<JogoRow, "fase_id"> | null | undefined) {
+  return Number(game?.fase_id ?? 1) > 1;
+}
+
+function canShowPublicGuesses(game: Pick<JogoRow, "fase_id" | "encerrado" | "placar_status">) {
+  return !isKnockoutGame(game) || game.encerrado || game.placar_status === "live";
+}
+
+function isNotNull<T>(value: T | null): value is T {
+  return value != null;
+}
+
 export async function getRankingUsuarios(supabase: SupabaseClient) {
   const liveResult = await supabase.rpc("obter_ranking_ao_vivo");
   const fallbackResult = liveResult.error
@@ -402,16 +414,22 @@ export async function getPerfilUsuario(
   const specialsRow = (
     Array.isArray(specialsResult.data) ? specialsResult.data[0] : specialsResult.data
   ) as PerfilEspeciaisRow | null | undefined;
+  const isCurrentUser = authUser?.id === id;
 
   const palpites = guesses
     .map((guess) => {
       const game = gameById.get(guess.jogo_id);
+      if (game && !isCurrentUser && !canShowPublicGuesses(game)) {
+        return null;
+      }
+
       const gameStarted = game ? new Date(game.data).getTime() <= nowAsStoredBrasiliaMs() : false;
       const gameIsLive = Boolean(game && !game.encerrado && game.placar_status === "live");
       const scoring = game
         ? calcularPontuacaoJogo(
             {
               id: game.id,
+              fase_id: game.fase_id,
               gols1: game.gols1,
               gols2: game.gols2,
               encerrado: game.encerrado,
@@ -450,6 +468,7 @@ export async function getPerfilUsuario(
         outcome,
       };
     })
+    .filter(isNotNull)
     .sort((a, b) => b.data.localeCompare(a.data));
   if (palpites.length === 0 && profileRow.chineladas > 0) {
     stats.chinelada = profileRow.chineladas;
@@ -458,7 +477,7 @@ export async function getPerfilUsuario(
   return {
     ...profileRow,
     avatar_url: avatarPaths.get(id) ?? null,
-    is_current_user: authUser?.id === id,
+    is_current_user: isCurrentUser,
     badges,
     estatisticas: stats,
     especiais: {
@@ -469,7 +488,11 @@ export async function getPerfilUsuario(
   };
 }
 
-export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string) {
+export async function getPalpitesDoJogo(
+  supabase: SupabaseClient,
+  jogoId: string,
+  currentUserId: string | null = null,
+) {
   const [{ data: jogo, error: jogoError }, guessesResult] = await Promise.all([
     supabase
       .from("jogos")
@@ -504,16 +527,19 @@ export async function getPalpitesDoJogo(supabase: SupabaseClient, jogoId: string
     throw new ServiceError("Jogo não encontrado.", 404);
   }
 
-  const userIds = [...new Set(guesses.map((guess) => guess.user_id))];
+  const game = jogo as JogoRow;
+  const visibleGuesses = canShowPublicGuesses(game)
+    ? guesses
+    : guesses.filter((guess) => guess.user_id === currentUserId);
+  const userIds = [...new Set(visibleGuesses.map((guess) => guess.user_id))];
   const users = await getRankingUsuariosPorIds(supabase, userIds);
   const userById = new Map(users.map((user) => [user.id, user]));
-  const game = jogo as JogoRow;
   const gameIsLive = !game.encerrado && game.placar_status === "live";
   const shouldCalculateScore = game.encerrado || gameIsLive;
 
   return {
     jogo: game,
-    palpites: guesses
+    palpites: visibleGuesses
       .map((guess) => {
         const scoring = calcularPontuacaoJogo(
           { ...game, encerrado: shouldCalculateScore },
@@ -758,6 +784,7 @@ function buildSelectionConfidence(
   for (const guess of guesses) {
     const game = gameById.get(guess.jogo_id);
     if (!game) continue;
+    if (!canShowPublicGuesses(game)) continue;
 
     const isHome = game.time1 === selectionName;
     const teamGoals = isHome ? guess.gols1 : guess.gols2;

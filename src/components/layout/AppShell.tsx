@@ -163,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <motion.main
         key={pathname}
-        initial={reduceMotion ? false : { opacity: 0, x: direction * 16 }}
+        initial={false}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
         className="mx-auto w-full max-w-7xl flex-1 px-3 pb-12 pt-5 sm:px-6 lg:py-8"

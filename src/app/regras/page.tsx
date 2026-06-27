@@ -1,5 +1,16 @@
 import type { Metadata } from "next";
-import { Check, CircleHelp, Crown, Flame, Goal, Sparkles, Trophy } from "lucide-react";
+import {
+  Check,
+  CircleHelp,
+  Crown,
+  Flame,
+  Goal,
+  Lock,
+  Sparkles,
+  TimerReset,
+  Trophy,
+  TrendingUp,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -80,6 +91,14 @@ const RULES = [
   },
 ] as const;
 
+const KNOCKOUT_MULTIPLIERS = [
+  { phase: "16 avos", multiplier: "1.2x" },
+  { phase: "Oitavas", multiplier: "1.4x" },
+  { phase: "Quartas", multiplier: "1.6x" },
+  { phase: "Semifinal", multiplier: "1.8x" },
+  { phase: "Final", multiplier: "2.0x" },
+] as const;
+
 export default function RegrasPage() {
   return (
     <div className="mx-auto max-w-4xl">
@@ -139,6 +158,48 @@ export default function RegrasPage() {
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="mb-7 overflow-hidden rounded-2xl border border-border bg-card sm:mb-9">
+        <div className="border-b border-border px-4 py-5 sm:px-6">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-primary">
+            Mata-mata
+          </p>
+          <h3 className="mt-1 font-display text-xl font-black uppercase tracking-tight sm:text-2xl">
+            Palpites fechados, pontos turbinados
+          </h3>
+        </div>
+
+        <div className="grid gap-px bg-border sm:grid-cols-3">
+          <RuleNote
+            icon={Lock}
+            title="Palpites ocultos"
+            description="Antes da bola rolar, cada participante vê apenas o próprio palpite. Todo mundo enxerga tudo quando o jogo fica ao vivo."
+          />
+          <RuleNote
+            icon={TimerReset}
+            title="Prorrogação conta"
+            description="Se tiver tempo extra, vale o placar ao fim dos 120 minutos. Disputa de pênaltis não soma gols ao placar do bolão."
+          />
+          <RuleNote
+            icon={TrendingUp}
+            title="Multiplicador"
+            description="A base de pontos continua igual, mas recebe multiplicador por fase e sempre arredonda para baixo."
+          />
+        </div>
+
+        <div className="grid gap-px bg-border sm:grid-cols-5">
+          {KNOCKOUT_MULTIPLIERS.map((item) => (
+            <div key={item.phase} className="bg-background/80 p-4 text-center">
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                {item.phase}
+              </div>
+              <div className="num mt-1 font-display text-2xl font-black text-primary">
+                {item.multiplier}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -211,6 +272,26 @@ export default function RegrasPage() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function RuleNote({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof Lock;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="bg-background/80 p-4 sm:p-5">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" aria-hidden="true" />
+      </div>
+      <h4 className="font-display text-base font-black uppercase tracking-tight">{title}</h4>
+      <p className="mt-2 text-sm leading-relaxed text-foreground/80">{description}</p>
     </div>
   );
 }

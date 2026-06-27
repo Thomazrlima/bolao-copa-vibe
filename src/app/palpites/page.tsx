@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   ChevronsUpDown,
   Clock3,
+  GitBranch,
   LockKeyhole,
   LogIn,
   Pencil,
@@ -81,10 +82,14 @@ import {
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
   getRanking,
+  getPalpiteChaveamento,
   getPalpitesDashboard,
   getPalpitesEspeciais,
   savePalpite,
+  savePalpiteChaveamento,
   savePalpiteEspecial,
+  type ChaveamentoConfronto,
+  type PalpiteChaveamentoResponse,
   type PalpitesDashboardResponse,
   type RankingUsuario,
 } from "@/lib/queries";
@@ -108,6 +113,14 @@ import { cn } from "@/lib/utils";
 
 type Score = { home: number | null; away: number | null };
 type DashboardGame = PalpitesDashboardResponse["jogos"][number];
+type ChaveamentoConfrontoInput = {
+  fase_id: number;
+  slot: number;
+  time1: string;
+  time2: string;
+  vencedor: string;
+};
+type PalpiteSection = "open" | "specials" | "bracket" | "history" | "dashboard";
 type PalpiteFilters = {
   dateFrom: string;
   dateTo: string;
@@ -181,8 +194,8 @@ const outcomeChartConfig = {
 export default function PalpitesPage() {
   const reduceMotion = useReducedMotion();
   const [data, setData] = useState<PalpitesDashboardResponse | null>(null);
-  const [activeSection, setActiveSection] = useState("open");
-  const activeSectionIndex = ["open", "specials", "history", "dashboard"].indexOf(activeSection);
+  const [bracket, setBracket] = useState<PalpiteChaveamentoResponse | null>(null);
+  const [activeSection, setActiveSection] = useState<PalpiteSection>("open");
   const [scores, setScores] = useState<Record<string, Score>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +207,7 @@ export default function PalpitesPage() {
   const [savedSpecialIds, setSavedSpecialIds] = useState<Set<string>>(new Set());
   const [savingSpecialId, setSavingSpecialId] = useState<string | null>(null);
   const [recentlySavedSpecialId, setRecentlySavedSpecialId] = useState<string | null>(null);
+  const [savingBracket, setSavingBracket] = useState(false);
   const [participants, setParticipants] = useState<RankingUsuario[]>([]);
   const [openFilters, setOpenFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
   const [historyFilters, setHistoryFilters] = useState<PalpiteFilters>(EMPTY_PALPITE_FILTERS);
@@ -214,12 +228,14 @@ export default function PalpitesPage() {
       setError(null);
 
       try {
-        const [loaded, specialResponses, ranking] = await Promise.all([
+        const [loaded, specialResponses, ranking, loadedBracket] = await Promise.all([
           getPalpitesDashboard(),
           includeSpecials ? getPalpitesEspeciais() : Promise.resolve(null),
           getRanking(),
+          getPalpiteChaveamento(),
         ]);
         setData(loaded);
+        setBracket(loadedBracket);
         setParticipants(ranking);
         setScores((current) =>
           Object.fromEntries(
@@ -283,6 +299,29 @@ export default function PalpitesPage() {
     onRefresh: load,
     enabled: !unauthenticated,
   });
+
+  const sections = useMemo(
+    () => [
+      { value: "open" as const, label: "Abertos", icon: CalendarClock },
+      { value: "specials" as const, label: "Especiais", icon: WandSparkles },
+      ...(bracket?.disponivel
+        ? [{ value: "bracket" as const, label: "Chaveamento", icon: GitBranch }]
+        : []),
+      { value: "history" as const, label: "HistÃ³rico", icon: CheckCircle2 },
+      { value: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
+    ],
+    [bracket?.disponivel],
+  );
+  const activeSectionIndex = Math.max(
+    0,
+    sections.findIndex((section) => section.value === activeSection),
+  );
+
+  useEffect(() => {
+    if (!sections.some((section) => section.value === activeSection)) {
+      setActiveSection("open");
+    }
+  }, [activeSection, sections]);
 
   const openGames = useMemo(() => data?.jogos.filter((game) => !game.encerrado) ?? [], [data]);
   const historyGames = useMemo(
@@ -386,6 +425,28 @@ export default function PalpitesPage() {
       );
     } finally {
       setSavingSpecialId(null);
+    }
+  }
+
+  async function persistBracket(confrontos: ChaveamentoConfrontoInput[]) {
+    setSavingBracket(true);
+    setError(null);
+
+    try {
+      const updated = await savePalpiteChaveamento(confrontos);
+      setBracket(updated);
+      toast.success("Chaveamento salvo", {
+        description: "Suas escolhas do mata-mata foram registradas.",
+      });
+      await load({ preserveDrafts: true, includeSpecials: false });
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "NÃ£o foi possÃ­vel salvar o chaveamento.",
+      );
+    } finally {
+      setSavingBracket(false);
     }
   }
 
