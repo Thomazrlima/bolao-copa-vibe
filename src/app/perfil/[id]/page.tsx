@@ -231,6 +231,22 @@ export default function PerfilPage() {
         </div>
       </section>
 
+      {!profile.is_current_user && (
+        <div className="mt-4 rounded-xl border border-primary/30 bg-primary/10 p-4 text-primary">
+          <div className="flex gap-3">
+            <CircleHelp className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-bold">Alguns palpites podem estar ocultos</p>
+              <p className="mt-1 text-sm text-primary/80">
+                Para proteger o bolão, palpites de jogos que ainda não ficaram ao vivo aparecem
+                apenas para quem fez o palpite. Eles são liberados automaticamente durante o ao vivo
+                e seguem visíveis depois do encerramento.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="mt-5">
         <h2 className="mb-3 font-display text-lg font-black">Desempenho</h2>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">

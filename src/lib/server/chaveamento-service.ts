@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { buildKnockoutBracket, type GrupoRow, type JogoGrupo } from "@/lib/knockout";
 import { ServiceError } from "@/lib/server/bolao-service";
 
 type FaseRow = {
@@ -13,6 +14,8 @@ type JogoRow = {
   time1: string;
   time2: string;
   data: string;
+  gols1: number | null;
+  gols2: number | null;
   encerrado: boolean;
   placar_status: "upcoming" | "live" | "finished" | null;
 };
@@ -91,7 +94,11 @@ function sortGamesByBracketSlot(a: JogoRow, b: JogoRow) {
   );
 }
 
-function buildPhasePlan(initialPhaseId: number, initialMatchCount: number, phaseById: Map<number, string>) {
+function buildPhasePlan(
+  initialPhaseId: number,
+  initialMatchCount: number,
+  phaseById: Map<number, string>,
+) {
   const phases = [];
   let count = initialMatchCount;
 
@@ -114,10 +121,10 @@ function buildSavedByKey(rows: PalpiteChaveamentoRow[]) {
 }
 
 async function loadChaveamentoContext(supabase: SupabaseClient, userId: string) {
-  const [gamesResult, phasesResult, savedResult] = await Promise.all([
+  const [gamesResult, phasesResult, savedResult, groupsResult] = await Promise.all([
     supabase
       .from("jogos")
-      .select("id,fase_id,time1,time2,data,encerrado,placar_status")
+      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status")
       .order("fase_id", { ascending: true })
       .order("data", { ascending: true }),
     supabase.from("fases").select("id,nome"),
@@ -129,23 +136,53 @@ async function loadChaveamentoContext(supabase: SupabaseClient, userId: string) 
       .eq("user_id", userId)
       .order("fase_id", { ascending: true })
       .order("slot", { ascending: true }),
+    supabase
+      .from("grupos")
+      .select("grupo,time,pontuacao,saldo_gols,gols_pro,gols_contra")
+      .order("grupo", { ascending: true }),
   ]);
 
   assertNoError(gamesResult.error);
   assertNoError(phasesResult.error);
   assertNoError(savedResult.error);
+  assertNoError(groupsResult.error);
 
   const games = (gamesResult.data ?? []) as JogoRow[];
   const phases = (phasesResult.data ?? []) as FaseRow[];
   const saved = (savedResult.data ?? []) as PalpiteChaveamentoRow[];
+  const groups = (groupsResult.data ?? []) as GrupoRow[];
 
-  return { games, phases, saved };
+  return { games, phases, saved, groups };
+}
+
+function buildProjectedInitialGames(groups: GrupoRow[], games: JogoRow[]): JogoRow[] {
+  const bracket = buildKnockoutBracket(
+    groups,
+    games.filter((game) => game.fase_id === 1) as JogoGrupo[],
+  );
+  return bracket.r32.flatMap((match, index) => {
+    if (!match.time1 || !match.time2) return [];
+    return [
+      {
+        id: match.id,
+        fase_id: 2,
+        time1: match.time1.time,
+        time2: match.time2.time,
+        data: "",
+        gols1: null,
+        gols2: null,
+        encerrado: false,
+        placar_status: "upcoming" as const,
+      },
+    ];
+  });
 }
 
 function buildChaveamentoPayload(
   games: JogoRow[],
   phases: FaseRow[],
   saved: PalpiteChaveamentoRow[],
+  groups: GrupoRow[],
 ) {
   const phaseById = new Map(phases.map((phase) => [phase.id, phase.nome]));
   const groupGames = games.filter((game) => game.fase_id === 1);
@@ -159,17 +196,26 @@ function buildChaveamentoPayload(
       isConcreteTeamName(game.time1) &&
       isConcreteTeamName(game.time2),
   );
+  const firstKnockoutGame = games
+    .filter((game) => game.fase_id > 1 && game.fase_id !== 6)
+    .sort(sortGamesByBracketSlot)[0];
   const initialPhaseId = Math.min(...concreteKnockoutGames.map((game) => game.fase_id));
   const hasInitialPhase = Number.isFinite(initialPhaseId);
-  const initialGames = hasInitialPhase
+  const officialInitialGames = hasInitialPhase
     ? concreteKnockoutGames
         .filter((game) => game.fase_id === initialPhaseId)
         .sort(sortGamesByBracketSlot)
     : [];
+  const projectedInitialGames = buildProjectedInitialGames(groups, games);
+  const initialGames =
+    officialInitialGames.length >= 2 ? officialInitialGames : projectedInitialGames;
+  const effectiveInitialPhaseId = officialInitialGames.length >= 2 ? initialPhaseId : 2;
   const phasesPlan = hasInitialPhase
-    ? buildPhasePlan(initialPhaseId, initialGames.length, phaseById)
-    : [];
-  const deadline = initialGames[0]?.data ?? null;
+    ? buildPhasePlan(effectiveInitialPhaseId, initialGames.length, phaseById)
+    : projectedInitialGames.length >= 2
+      ? buildPhasePlan(2, projectedInitialGames.length, phaseById)
+      : [];
+  const deadline = officialInitialGames[0]?.data ?? firstKnockoutGame?.data ?? null;
   const available = groupsFinished && initialGames.length >= 2;
   const open = Boolean(available && deadline && Date.parse(deadline) > nowAsStoredBrasiliaMs());
   const savedByKey = buildSavedByKey(saved);
@@ -181,7 +227,7 @@ function buildChaveamentoPayload(
     disponivel: available,
     aberto: open,
     prazo_envio: deadline,
-    inicial_fase_id: hasInitialPhase ? initialPhaseId : null,
+    inicial_fase_id: phasesPlan.length > 0 ? phasesPlan[0].fase_id : null,
     salvo: saved.length > 0,
     completo: phasesPlan.reduce((sum, phase) => sum + phase.total_confrontos, 0) === saved.length,
     pontos: saved.reduce((sum, row) => sum + Number(row.pontos ?? 0), 0),
@@ -191,7 +237,7 @@ function buildChaveamentoPayload(
       ...phase,
       confrontos: Array.from({ length: phase.total_confrontos }, (_, slot) => {
         const initialGame =
-          phase.fase_id === initialPhaseId ? initialGames[slot] : (null as JogoRow | null);
+          phase.fase_id === phasesPlan[0]?.fase_id ? initialGames[slot] : (null as JogoRow | null);
         const savedMatch = savedByKey.get(matchKey(phase.fase_id, slot));
 
         return {
@@ -219,7 +265,7 @@ export async function getPalpiteChaveamento(supabase: SupabaseClient, userId: st
     context = await loadChaveamentoContext(supabase, userId);
   }
 
-  return buildChaveamentoPayload(context.games, context.phases, context.saved);
+  return buildChaveamentoPayload(context.games, context.phases, context.saved, context.groups);
 }
 
 export async function salvarPalpiteChaveamento(
@@ -228,7 +274,12 @@ export async function salvarPalpiteChaveamento(
   confrontos: ChaveamentoConfrontoInput[],
 ) {
   const context = await loadChaveamentoContext(supabase, userId);
-  const currentPayload = buildChaveamentoPayload(context.games, context.phases, context.saved);
+  const currentPayload = buildChaveamentoPayload(
+    context.games,
+    context.phases,
+    context.saved,
+    context.groups,
+  );
 
   if (!currentPayload.disponivel) {
     throw new ServiceError("O chaveamento ainda nÃ£o estÃ¡ disponÃ­vel.", 409);
@@ -266,7 +317,10 @@ export async function salvarPalpiteChaveamento(
       throw new ServiceError("HÃ¡ confrontos incompletos no chaveamento.", 400);
     }
 
-    if (match.time1 === match.time2 || (match.vencedor !== match.time1 && match.vencedor !== match.time2)) {
+    if (
+      match.time1 === match.time2 ||
+      (match.vencedor !== match.time1 && match.vencedor !== match.time2)
+    ) {
       throw new ServiceError("Escolha um vencedor vÃ¡lido para cada confronto.", 400);
     }
   }

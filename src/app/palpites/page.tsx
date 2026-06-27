@@ -73,6 +73,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teamCodeFromName } from "@/data/iso2";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { ChaveamentoSection } from "@/components/palpites/ChaveamentoSection";
 import {
   CAMPEAO_BOLAO_QUESTION_ID,
   ESPECIAIS,
@@ -307,7 +308,7 @@ export default function PalpitesPage() {
       ...(bracket?.disponivel
         ? [{ value: "bracket" as const, label: "Chaveamento", icon: GitBranch }]
         : []),
-      { value: "history" as const, label: "HistÃ³rico", icon: CheckCircle2 },
+      { value: "history" as const, label: "Histórico", icon: CheckCircle2 },
       { value: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
     ],
     [bracket?.disponivel],
@@ -441,9 +442,7 @@ export default function PalpitesPage() {
       await load({ preserveDrafts: true, includeSpecials: false });
     } catch (saveError) {
       setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "NÃ£o foi possÃ­vel salvar o chaveamento.",
+        saveError instanceof Error ? saveError.message : "Não foi possível salvar o chaveamento.",
       );
     } finally {
       setSavingBracket(false);
@@ -507,46 +506,35 @@ export default function PalpitesPage() {
         position={data.resumo.posicao}
       />
 
-      <Tabs value={activeSection} onValueChange={setActiveSection} className="mt-6">
-        <TabsList className="relative grid h-auto w-full grid-cols-4 rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]">
+      <Tabs
+        value={activeSection}
+        onValueChange={(value) => setActiveSection(value as PalpiteSection)}
+        className="mt-6"
+      >
+        <TabsList
+          className="relative grid h-auto w-full rounded-xl border border-border bg-card/80 p-1 sm:w-fit sm:min-w-[590px]"
+          style={{ gridTemplateColumns: `repeat(${sections.length}, minmax(0, 1fr))` }}
+        >
           <motion.span
             aria-hidden="true"
             className="absolute inset-y-1 left-1 rounded-md bg-primary"
-            style={{ width: "calc((100% - 0.5rem) / 4)" }}
+            style={{ width: `calc((100% - 0.5rem) / ${sections.length})` }}
             animate={{ x: `${Math.max(activeSectionIndex, 0) * 100}%` }}
             transition={{
               duration: reduceMotion ? 0 : 0.34,
               ease: [0.22, 1, 0.36, 1],
             }}
           />
-          <TabsTrigger
-            value="open"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <CalendarClock className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Abertos</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="specials"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <WandSparkles className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Especiais</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="history"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <CheckCircle2 className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Histórico</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="dashboard"
-            className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
-          >
-            <BarChart3 className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
-            <span className="relative z-10">Dashboard</span>
-          </TabsTrigger>
+          {sections.map(({ value, label, icon: Icon }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="relative gap-1.5 py-2.5 text-xs data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none sm:text-sm"
+            >
+              <Icon className="relative z-10 hidden h-3.5 w-3.5 sm:block" />
+              <span className="relative z-10 truncate">{label}</span>
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         <TabsContent value="open" className="mt-6">
@@ -604,6 +592,12 @@ export default function PalpitesPage() {
             onSave={persistSpecial}
           />
         </TabsContent>
+
+        {bracket?.disponivel && (
+          <TabsContent value="bracket" className="mt-6">
+            <ChaveamentoSection bracket={bracket} saving={savingBracket} onSave={persistBracket} />
+          </TabsContent>
+        )}
 
         <TabsContent value="history" className="mt-6">
           <SectionHeading
