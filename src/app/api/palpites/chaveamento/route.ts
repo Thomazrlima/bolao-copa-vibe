@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import {
-  getPalpiteChaveamento,
-  salvarPalpiteChaveamento,
-} from "@/lib/server/chaveamento-service";
+import { getPalpiteChaveamento, salvarPalpiteChaveamento } from "@/lib/server/chaveamento-service";
 import { ServiceError } from "@/lib/server/bolao-service";
 import { createClient } from "@/lib/supabase/server";
 
@@ -52,7 +49,7 @@ export async function PUT(request: Request) {
 
   if (!payload.success) {
     return NextResponse.json(
-      { error: "Envie o chaveamento completo com confrontos vÃ¡lidos." },
+      { error: "Envie pelo menos um confronto vÃ¡lido do chaveamento." },
       { status: 400 },
     );
   }

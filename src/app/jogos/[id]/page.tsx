@@ -46,6 +46,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { formatLocalGameDateTime, formatLocalTime } from "@/lib/local-datetime";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import { getCurrentUsuario, getPalpitesDoJogo, type JogoPalpitesResponse } from "@/lib/queries";
 import { getPhaseAdjustedPoints, type GuessOutcome } from "@/lib/scoring";
 import { createClient } from "@/lib/supabase/client";
@@ -229,6 +230,7 @@ export default function JogoDetalhePage() {
                   gols2={jogo.gols2}
                   encerrado={jogo.encerrado}
                   live={isLive}
+                  liveStatus={jogo.sportsdb_status}
                 />
                 <TeamTitle name={jogo.time2} align="right" />
               </div>
@@ -789,11 +791,10 @@ function HiddenGuessesNotice({
       <div className="flex gap-3">
         <CircleHelp className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <p className="font-bold">Palpites protegidos até a bola rolar</p>
+          <p className="font-bold">Palpites do mata-mata protegidos</p>
           <p className="mt-1 text-sm text-primary/80">
-            Antes do jogo ficar ao vivo, cada participante vê apenas o próprio palpite. A lista dos
-            outros jogadores aparece automaticamente durante o ao vivo e continua disponível após o
-            encerramento.
+            Em jogos de mata-mata, antes do jogo ficar ao vivo, cada participante vê apenas o
+            próprio palpite. Jogos que não são de mata-mata mostram os palpites normalmente.
           </p>
         </div>
       </div>
@@ -1273,11 +1274,13 @@ function ScoreBox({
   gols2,
   encerrado,
   live,
+  liveStatus,
 }: {
   gols1: number | null;
   gols2: number | null;
   encerrado: boolean;
   live: boolean;
+  liveStatus: string | null;
 }) {
   return (
     <div className="text-center">
@@ -1296,7 +1299,7 @@ function ScoreBox({
         </div>
       )}
       <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {encerrado ? "Encerrado" : live ? "Ao vivo" : "Agendado"}
+        {encerrado ? "Encerrado" : live ? liveMatchStatusLabel(liveStatus) : "Agendado"}
       </p>
     </div>
   );
@@ -1374,6 +1377,8 @@ function buildDashboard(data: JogoPalpitesResponse) {
   return {
     finished: data.jogo.encerrado,
     publicGuessesVisible:
+      data.jogo.fase_id <= 1 ||
+      data.jogo.fase_id === 6 ||
       data.jogo.encerrado ||
       data.jogo.placar_status === "live" ||
       data.jogo.placar_status === "finished",

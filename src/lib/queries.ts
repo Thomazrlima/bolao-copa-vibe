@@ -44,6 +44,8 @@ export type PerfilPalpite = {
   encerrado: boolean;
   iniciado: boolean;
   ao_vivo: boolean;
+  placar_status: "upcoming" | "live" | "finished" | null;
+  sportsdb_status: string | null;
   resultado: { gols1: number; gols2: number } | null;
   pontos: number | null;
   outcome: GuessOutcome | null;
@@ -83,6 +85,7 @@ export type JogoPalpitesResponse = {
     gols2: number | null;
     encerrado: boolean;
     placar_status: "upcoming" | "live" | "finished" | null;
+    sportsdb_status: string | null;
     transmissao_url: string | null;
     estatisticas: Array<{
       name: string;
@@ -141,6 +144,10 @@ export type PalpitesDashboardResponse = {
     outcomes: Array<{ outcome: GuessOutcome; count: number }>;
     evolucao: Array<{ game: string; points: number }>;
   };
+};
+
+export type AppConfigResponse = {
+  chaveamento_visible: boolean;
 };
 
 export type ChaveamentoConfronto = {
@@ -381,6 +388,25 @@ export async function getSelecaoPerfil(slug: string) {
 export async function getPalpitesDashboard() {
   const dashboard = await requestJson<PalpitesDashboardResponse>("/api/palpites");
   return MOCK_PENDING_GUESSES_ENABLED ? withMockPendingGuesses(dashboard) : dashboard;
+}
+
+export async function getAppConfig() {
+  try {
+    return await requestJson<AppConfigResponse>("/api/config");
+  } catch {
+    return { chaveamento_visible: true };
+  }
+}
+
+export async function getAdminConfig() {
+  return requestJson<AppConfigResponse>("/api/admin/config");
+}
+
+export async function saveAdminConfig(payload: AppConfigResponse) {
+  return requestJson<AppConfigResponse>("/api/admin/config", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getPalpiteChaveamento() {

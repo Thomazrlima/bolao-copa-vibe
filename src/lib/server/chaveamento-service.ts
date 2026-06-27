@@ -34,6 +34,8 @@ type PalpiteChaveamentoRow = {
   atualizado_em: string;
 };
 
+type InitialGameSlot = JogoRow | null;
+
 export type ChaveamentoConfrontoInput = {
   fase_id: number;
   slot: number;
@@ -44,6 +46,14 @@ export type ChaveamentoConfrontoInput = {
 
 const BRACKET_PHASE_ORDER = [2, 3, 4, 5, 7];
 const NON_SCORING_PHASES = new Set([2, 6]);
+const BRACKET_DEADLINE = "2026-07-29T14:00:00";
+const EXPECTED_INITIAL_MATCHES_BY_PHASE = new Map([
+  [2, 16],
+  [3, 8],
+  [4, 4],
+  [5, 2],
+  [7, 1],
+]);
 
 function assertNoError(error: { message: string } | null | undefined) {
   if (error) throw new ServiceError(error.message);
@@ -69,6 +79,14 @@ function nowAsStoredBrasiliaMs() {
   return Date.parse(
     `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.000Z`,
   );
+}
+
+function storedBrasiliaMs(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return Date.parse(value);
+
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  return Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}.000Z`);
 }
 
 function cleanTeamName(value: string | null | undefined) {
@@ -120,6 +138,42 @@ function buildSavedByKey(rows: PalpiteChaveamentoRow[]) {
   return new Map(rows.map((row) => [matchKey(row.fase_id, row.slot), row]));
 }
 
+function finishedGroups(groups: GrupoRow[], games: JogoRow[]) {
+  const groupTeams = new Map<string, Set<string>>();
+  groups.forEach((group) => {
+    const teams = groupTeams.get(group.grupo) ?? new Set<string>();
+    teams.add(group.time);
+    groupTeams.set(group.grupo, teams);
+  });
+
+  return new Set(
+    [...groupTeams.entries()].flatMap(([group, teams]) => {
+      const groupGames = games.filter((game) => teams.has(game.time1) && teams.has(game.time2));
+      const finished =
+        groupGames.length > 0 &&
+        groupGames.every((game) => game.encerrado || game.placar_status === "finished");
+
+      return finished ? [group] : [];
+    }),
+  );
+}
+
+function labelGroups(label: string) {
+  return [...label.matchAll(/Grupo\s+([A-L])/gi)].map((match) => match[1].toUpperCase());
+}
+
+function projectedMatchIsDefined(
+  match: ReturnType<typeof buildKnockoutBracket>["r32"][number],
+  completedGroups: Set<string>,
+  allGroupsFinished: boolean,
+) {
+  if (!match.time1 || !match.time2) return false;
+  if (/melhor\s+3/i.test(`${match.label1} ${match.label2}`)) return allGroupsFinished;
+
+  const requiredGroups = [...labelGroups(match.label1), ...labelGroups(match.label2)];
+  return requiredGroups.length > 0 && requiredGroups.every((group) => completedGroups.has(group));
+}
+
 async function loadChaveamentoContext(supabase: SupabaseClient, userId: string) {
   const [gamesResult, phasesResult, savedResult, groupsResult] = await Promise.all([
     supabase
@@ -155,26 +209,27 @@ async function loadChaveamentoContext(supabase: SupabaseClient, userId: string) 
   return { games, phases, saved, groups };
 }
 
-function buildProjectedInitialGames(groups: GrupoRow[], games: JogoRow[]): JogoRow[] {
-  const bracket = buildKnockoutBracket(
-    groups,
-    games.filter((game) => game.fase_id === 1) as JogoGrupo[],
-  );
-  return bracket.r32.flatMap((match, index) => {
-    if (!match.time1 || !match.time2) return [];
-    return [
-      {
-        id: match.id,
-        fase_id: 2,
-        time1: match.time1.time,
-        time2: match.time2.time,
-        data: "",
-        gols1: null,
-        gols2: null,
-        encerrado: false,
-        placar_status: "upcoming" as const,
-      },
-    ];
+function buildProjectedInitialGames(groups: GrupoRow[], games: JogoRow[]): InitialGameSlot[] {
+  const groupGames = games.filter((game) => game.fase_id === 1);
+  const completedGroups = finishedGroups(groups, groupGames);
+  const allGroupsFinished =
+    completedGroups.size >= new Set(groups.map((group) => group.grupo)).size;
+  const bracket = buildKnockoutBracket(groups, groupGames as JogoGrupo[]);
+  return bracket.r32.map((match) => {
+    if (!projectedMatchIsDefined(match, completedGroups, allGroupsFinished)) return null;
+    if (!match.time1 || !match.time2) return null;
+
+    return {
+      id: match.id,
+      fase_id: 2,
+      time1: match.time1.time,
+      time2: match.time2.time,
+      data: "",
+      gols1: null,
+      gols2: null,
+      encerrado: false,
+      placar_status: "upcoming" as const,
+    };
   });
 }
 
@@ -185,10 +240,6 @@ function buildChaveamentoPayload(
   groups: GrupoRow[],
 ) {
   const phaseById = new Map(phases.map((phase) => [phase.id, phase.nome]));
-  const groupGames = games.filter((game) => game.fase_id === 1);
-  const groupsFinished =
-    groupGames.length > 0 &&
-    groupGames.every((game) => game.encerrado || game.placar_status === "finished");
   const concreteKnockoutGames = games.filter(
     (game) =>
       game.fase_id > 1 &&
@@ -196,9 +247,6 @@ function buildChaveamentoPayload(
       isConcreteTeamName(game.time1) &&
       isConcreteTeamName(game.time2),
   );
-  const firstKnockoutGame = games
-    .filter((game) => game.fase_id > 1 && game.fase_id !== 6)
-    .sort(sortGamesByBracketSlot)[0];
   const initialPhaseId = Math.min(...concreteKnockoutGames.map((game) => game.fase_id));
   const hasInitialPhase = Number.isFinite(initialPhaseId);
   const officialInitialGames = hasInitialPhase
@@ -208,16 +256,16 @@ function buildChaveamentoPayload(
     : [];
   const projectedInitialGames = buildProjectedInitialGames(groups, games);
   const initialGames =
-    officialInitialGames.length >= 2 ? officialInitialGames : projectedInitialGames;
-  const effectiveInitialPhaseId = officialInitialGames.length >= 2 ? initialPhaseId : 2;
-  const phasesPlan = hasInitialPhase
-    ? buildPhasePlan(effectiveInitialPhaseId, initialGames.length, phaseById)
-    : projectedInitialGames.length >= 2
-      ? buildPhasePlan(2, projectedInitialGames.length, phaseById)
-      : [];
-  const deadline = officialInitialGames[0]?.data ?? firstKnockoutGame?.data ?? null;
-  const available = groupsFinished && initialGames.length >= 2;
-  const open = Boolean(available && deadline && Date.parse(deadline) > nowAsStoredBrasiliaMs());
+    officialInitialGames.length > 0 ? officialInitialGames : projectedInitialGames;
+  const definedInitialGames = initialGames.filter((game): game is JogoRow => Boolean(game));
+  const effectiveInitialPhaseId = officialInitialGames.length > 0 ? initialPhaseId : 2;
+  const expectedInitialMatches =
+    EXPECTED_INITIAL_MATCHES_BY_PHASE.get(effectiveInitialPhaseId) ?? definedInitialGames.length;
+  const visualInitialMatchCount = Math.max(initialGames.length, expectedInitialMatches);
+  const phasesPlan = buildPhasePlan(effectiveInitialPhaseId, visualInitialMatchCount, phaseById);
+  const deadline = BRACKET_DEADLINE;
+  const available = definedInitialGames.length > 0 || phasesPlan.length > 0;
+  const open = Boolean(available && storedBrasiliaMs(deadline) > nowAsStoredBrasiliaMs());
   const savedByKey = buildSavedByKey(saved);
   const totalPontuavel = phasesPlan
     .filter((phase) => phase.pontuavel)
@@ -299,8 +347,8 @@ export async function salvarPalpiteChaveamento(
     });
   });
 
-  if (confrontos.length !== expected.size) {
-    throw new ServiceError("Preencha o chaveamento completo antes de salvar.", 400);
+  if (confrontos.length < 1) {
+    throw new ServiceError("Escolha pelo menos um confronto antes de salvar.", 400);
   }
 
   const normalized = confrontos.map((match) => ({
@@ -310,12 +358,19 @@ export async function salvarPalpiteChaveamento(
     time2: cleanTeamName(match.time2),
     vencedor: cleanTeamName(match.vencedor),
   }));
+  const submittedKeys = new Set<string>();
 
   for (const match of normalized) {
-    const expectedMatch = expected.get(matchKey(match.fase_id, match.slot));
+    const key = matchKey(match.fase_id, match.slot);
+    const expectedMatch = expected.get(key);
     if (!expectedMatch || !match.time1 || !match.time2 || !match.vencedor) {
       throw new ServiceError("HÃ¡ confrontos incompletos no chaveamento.", 400);
     }
+
+    if (submittedKeys.has(key)) {
+      throw new ServiceError("HÃ¡ confrontos duplicados no chaveamento.", 400);
+    }
+    submittedKeys.add(key);
 
     if (
       match.time1 === match.time2 ||

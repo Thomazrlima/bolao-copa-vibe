@@ -82,6 +82,8 @@ import {
 } from "@/lib/especiais";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import {
+  getAppConfig,
+  getCurrentUsuario,
   getRanking,
   getPalpiteChaveamento,
   getPalpitesDashboard,
@@ -89,11 +91,14 @@ import {
   savePalpite,
   savePalpiteChaveamento,
   savePalpiteEspecial,
+  type AppConfigResponse,
   type ChaveamentoConfronto,
   type PalpiteChaveamentoResponse,
   type PalpitesDashboardResponse,
   type RankingUsuario,
+  type Usuario,
 } from "@/lib/queries";
+import { canManageUsers } from "@/lib/admin-users";
 import type { GuessOutcome } from "@/lib/scoring";
 import {
   formatPalpiteTimeRemaining,
@@ -110,6 +115,7 @@ import {
   localDateKey,
   localTodayKey,
 } from "@/lib/local-datetime";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import { cn } from "@/lib/utils";
 
 type Score = { home: number | null; away: number | null };
@@ -196,6 +202,8 @@ export default function PalpitesPage() {
   const reduceMotion = useReducedMotion();
   const [data, setData] = useState<PalpitesDashboardResponse | null>(null);
   const [bracket, setBracket] = useState<PalpiteChaveamentoResponse | null>(null);
+  const [appConfig, setAppConfig] = useState<AppConfigResponse>({ chaveamento_visible: true });
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [activeSection, setActiveSection] = useState<PalpiteSection>("open");
   const [scores, setScores] = useState<Record<string, Score>>({});
   const [loading, setLoading] = useState(true);
@@ -229,14 +237,19 @@ export default function PalpitesPage() {
       setError(null);
 
       try {
-        const [loaded, specialResponses, ranking, loadedBracket] = await Promise.all([
-          getPalpitesDashboard(),
-          includeSpecials ? getPalpitesEspeciais() : Promise.resolve(null),
-          getRanking(),
-          getPalpiteChaveamento(),
-        ]);
+        const [loaded, specialResponses, ranking, loadedBracket, loadedConfig, currentUser] =
+          await Promise.all([
+            getPalpitesDashboard(),
+            includeSpecials ? getPalpitesEspeciais() : Promise.resolve(null),
+            getRanking(),
+            getPalpiteChaveamento(),
+            getAppConfig(),
+            getCurrentUsuario(),
+          ]);
         setData(loaded);
         setBracket(loadedBracket);
+        setAppConfig(loadedConfig);
+        setUsuario(currentUser);
         setParticipants(ranking);
         setScores((current) =>
           Object.fromEntries(
@@ -305,13 +318,13 @@ export default function PalpitesPage() {
     () => [
       { value: "open" as const, label: "Abertos", icon: CalendarClock },
       { value: "specials" as const, label: "Especiais", icon: WandSparkles },
-      ...(bracket?.disponivel
+      ...(bracket?.disponivel && (appConfig.chaveamento_visible || canManageUsers(usuario?.email))
         ? [{ value: "bracket" as const, label: "Chaveamento", icon: GitBranch }]
         : []),
       { value: "history" as const, label: "Histórico", icon: CheckCircle2 },
       { value: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
     ],
-    [bracket?.disponivel],
+    [appConfig.chaveamento_visible, bracket?.disponivel, usuario?.email],
   );
   const activeSectionIndex = Math.max(
     0,
@@ -593,11 +606,16 @@ export default function PalpitesPage() {
           />
         </TabsContent>
 
-        {bracket?.disponivel && (
-          <TabsContent value="bracket" className="mt-6">
-            <ChaveamentoSection bracket={bracket} saving={savingBracket} onSave={persistBracket} />
-          </TabsContent>
-        )}
+        {bracket?.disponivel &&
+          (appConfig.chaveamento_visible || canManageUsers(usuario?.email)) && (
+            <TabsContent value="bracket" className="mt-6">
+              <ChaveamentoSection
+                bracket={bracket}
+                saving={savingBracket}
+                onSave={persistBracket}
+              />
+            </TabsContent>
+          )}
 
         <TabsContent value="history" className="mt-6">
           <SectionHeading
@@ -1327,7 +1345,10 @@ function OpenMatchCard({
             {urgencyMeta.label}
           </span>
         ) : (
-          <StatusBadge status={game.ao_vivo ? "live" : "scheduled"} />
+          <StatusBadge
+            status={game.ao_vivo ? "live" : "scheduled"}
+            liveLabel={game.ao_vivo ? liveMatchStatusLabel(game.sportsdb_status) : null}
+          />
         )}
       </div>
 

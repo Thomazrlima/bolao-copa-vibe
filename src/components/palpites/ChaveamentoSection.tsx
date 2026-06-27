@@ -35,6 +35,22 @@ type ConnectorSegment = {
   active: boolean;
 };
 
+type BracketSide = "left" | "right" | "center";
+
+type DisplayHeader = {
+  id: string;
+  phase: DerivedPhase;
+  phaseIndex: number;
+  column: number;
+};
+
+type DisplayMatch = {
+  match: DerivedMatch;
+  column: number;
+  rowStart: number;
+  rowSpan: number;
+};
+
 type Props = {
   bracket: PalpiteChaveamentoResponse;
   saving?: boolean;
@@ -102,6 +118,77 @@ function completeMatches(phases: DerivedPhase[]) {
   );
 }
 
+function phaseSide(phaseIndex: number, slot: number, phases: DerivedPhase[]): BracketSide {
+  const finalPhaseIndex = phases.length - 1;
+  if (phaseIndex >= finalPhaseIndex) return "center";
+
+  return slot < phases[phaseIndex].confrontos.length / 2 ? "left" : "right";
+}
+
+function bracketColumn(phaseIndex: number, side: BracketSide, totalPhases: number) {
+  const centerColumn = totalPhases;
+  if (side === "center") return centerColumn;
+  if (side === "left") return phaseIndex + 1;
+
+  return centerColumn + (totalPhases - phaseIndex - 1);
+}
+
+function buildDisplayHeaders(phases: DerivedPhase[]): DisplayHeader[] {
+  const finalPhaseIndex = phases.length - 1;
+  const headers = phases.flatMap((phase, phaseIndex) => {
+    if (phaseIndex === finalPhaseIndex) {
+      return [
+        {
+          id: `${phase.fase_id}:center`,
+          phase,
+          phaseIndex,
+          column: bracketColumn(phaseIndex, "center", phases.length),
+        },
+      ];
+    }
+
+    return [
+      {
+        id: `${phase.fase_id}:left`,
+        phase,
+        phaseIndex,
+        column: bracketColumn(phaseIndex, "left", phases.length),
+      },
+      {
+        id: `${phase.fase_id}:right`,
+        phase,
+        phaseIndex,
+        column: bracketColumn(phaseIndex, "right", phases.length),
+      },
+    ];
+  });
+
+  return headers.sort((first, second) => first.column - second.column);
+}
+
+function buildDisplayMatches(phases: DerivedPhase[], boardRowCount: number): DisplayMatch[] {
+  const finalPhaseIndex = phases.length - 1;
+
+  return phases.flatMap((phase, phaseIndex) =>
+    phase.confrontos.map((match) => {
+      const side = phaseSide(phaseIndex, match.slot, phases);
+      const sideMatchCount = Math.max(1, phase.confrontos.length / (side === "center" ? 1 : 2));
+      const localSlot = side === "right" ? match.slot - sideMatchCount : match.slot;
+      const rowSpan =
+        phaseIndex === finalPhaseIndex
+          ? boardRowCount
+          : Math.max(1, boardRowCount / sideMatchCount);
+
+      return {
+        match,
+        column: bracketColumn(phaseIndex, side, phases.length),
+        rowStart: localSlot * rowSpan + 2,
+        rowSpan,
+      };
+    }),
+  );
+}
+
 export function ChaveamentoSection({
   bracket,
   saving = false,
@@ -120,11 +207,17 @@ export function ChaveamentoSection({
   }, [bracket]);
 
   const phases = useMemo(() => derivePhases(bracket, winners), [bracket, winners]);
-  const initialMatchCount = Math.max(1, phases[0]?.confrontos.length ?? 1);
+  const bracketColumnCount = Math.max(1, phases.length * 2 - 1);
+  const boardRowCount = Math.max(1, phases[0]?.confrontos.length ?? 1);
+  const displayHeaders = useMemo(() => buildDisplayHeaders(phases), [phases]);
+  const displayMatches = useMemo(
+    () => buildDisplayMatches(phases, boardRowCount),
+    [phases, boardRowCount],
+  );
   const picks = completeMatches(phases);
   const expected = phases.reduce((sum, phase) => sum + phase.total_confrontos, 0);
   const progress = expected ? Math.round((picks.length / expected) * 100) : 0;
-  const canSave = bracket.aberto && picks.length === expected && !saving;
+  const canSave = bracket.aberto && picks.length > 0 && !saving;
   const scoringMatches = phases
     .filter((phase) => phase.pontuavel)
     .reduce((sum, phase) => sum + phase.total_confrontos, 0);
@@ -158,24 +251,52 @@ export function ChaveamentoSection({
           const topRect = topElement.getBoundingClientRect();
           const bottomRect = bottomElement.getBoundingClientRect();
           const parentRect = parentElement.getBoundingClientRect();
-          const startX = topRect.right - boardRect.left;
-          const endX = parentRect.left - boardRect.left;
-          const stemX = startX + (endX - startX) * 0.62;
+          const parentCenterX = parentRect.left + parentRect.width / 2;
+          const topCenterX = topRect.left + topRect.width / 2;
+          const bottomCenterX = bottomRect.left + bottomRect.width / 2;
+          const topStartsLeft = topCenterX < parentCenterX;
+          const bottomStartsLeft = bottomCenterX < parentCenterX;
+          const topStartX = (topStartsLeft ? topRect.right : topRect.left) - boardRect.left;
+          const bottomStartX =
+            (bottomStartsLeft ? bottomRect.right : bottomRect.left) - boardRect.left;
+          const topEndX = (topStartsLeft ? parentRect.left : parentRect.right) - boardRect.left;
+          const bottomEndX =
+            (bottomStartsLeft ? parentRect.left : parentRect.right) - boardRect.left;
           const topY = topRect.top + topRect.height / 2 - boardRect.top;
           const bottomY = bottomRect.top + bottomRect.height / 2 - boardRect.top;
           const parentY = parentRect.top + parentRect.height / 2 - boardRect.top;
           const id = `${phase.fase_id}:${parentMatch.slot}`;
           const connectorActive = Boolean(topMatch.vencedor && bottomMatch.vencedor);
 
+          if (topStartsLeft !== bottomStartsLeft) {
+            nextSegments.push(
+              {
+                id: `${id}:top`,
+                d: `M ${topStartX} ${topY} H ${topEndX}`,
+                active: Boolean(topMatch.vencedor),
+              },
+              {
+                id: `${id}:bottom`,
+                d: `M ${bottomStartX} ${bottomY} H ${bottomEndX}`,
+                active: Boolean(bottomMatch.vencedor),
+              },
+            );
+            return;
+          }
+
+          const startX = topStartX;
+          const endX = topEndX;
+          const stemX = startX + (endX - startX) * 0.62;
+
           nextSegments.push(
             {
               id: `${id}:top`,
-              d: `M ${startX} ${topY} H ${stemX}`,
+              d: `M ${topStartX} ${topY} H ${stemX}`,
               active: Boolean(topMatch.vencedor),
             },
             {
               id: `${id}:bottom`,
-              d: `M ${startX} ${bottomY} H ${stemX}`,
+              d: `M ${bottomStartX} ${bottomY} H ${stemX}`,
               active: Boolean(bottomMatch.vencedor),
             },
             {
@@ -264,7 +385,7 @@ export function ChaveamentoSection({
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
-                {previewMode ? "Preview visual" : "Palpite de chave"}
+                {previewMode ? "Preview visual" : "Palpite de chaveamento"}
               </p>
               <h3 className="mt-1 font-display text-lg font-black leading-tight sm:text-2xl">
                 Monte seu caminho até a final
@@ -333,8 +454,8 @@ export function ChaveamentoSection({
           ref={boardRef}
           className="relative grid min-w-fit gap-x-[var(--bracket-gap)] gap-y-3 [--bracket-column-w:min(286px,calc(100vw-2.5rem))] [--bracket-gap:1rem] sm:[--bracket-column-w:272px] sm:[--bracket-gap:1.25rem]"
           style={{
-            gridTemplateColumns: `repeat(${phases.length}, var(--bracket-column-w))`,
-            gridTemplateRows: `auto repeat(${initialMatchCount}, auto)`,
+            gridTemplateColumns: `repeat(${bracketColumnCount}, var(--bracket-column-w))`,
+            gridTemplateRows: `auto repeat(${boardRowCount}, auto)`,
           }}
         >
           <svg
@@ -356,11 +477,11 @@ export function ChaveamentoSection({
             ))}
           </svg>
 
-          {phases.map((phase, phaseIndex) => (
+          {displayHeaders.map(({ id, phase, phaseIndex, column }) => (
             <div
-              key={phase.fase_id}
+              key={id}
               className="relative z-10 flex items-center rounded-xl border border-border bg-card/95 px-3 py-2.5 text-left"
-              style={{ gridColumn: phaseIndex + 1, gridRow: 1 }}
+              style={{ gridColumn: column, gridRow: 1 }}
             >
               <span className="mr-2 grid h-7 w-7 place-items-center rounded-lg bg-primary/12 font-display text-xs font-black text-primary">
                 {phaseIndex + 1}
@@ -377,31 +498,32 @@ export function ChaveamentoSection({
             </div>
           ))}
 
-          {phases.flatMap((phase, phaseIndex) =>
-            phase.confrontos.map((match) => {
-              const groupSize = 2 ** phaseIndex;
-              const rowStart = match.slot * groupSize + 2;
-              const gridStyle: CSSProperties = {
-                gridColumn: phaseIndex + 1,
-                gridRow: `${rowStart} / span ${groupSize}`,
-              };
+          {displayMatches.map(({ match, column, rowStart, rowSpan }) => {
+            const gridStyle: CSSProperties = {
+              gridColumn: column,
+              gridRow: `${rowStart} / span ${rowSpan}`,
+            };
 
-              return (
-                <div
-                  key={matchKey(match.fase_id, match.slot)}
-                  ref={(element) => {
-                    const key = matchKey(match.fase_id, match.slot);
-                    if (element) cardRefs.current.set(key, element);
-                    else cardRefs.current.delete(key);
-                  }}
-                  className="relative z-10 self-center"
-                  style={gridStyle}
-                >
-                  <BracketPickCard match={match} open={bracket.aberto} onSelect={selectWinner} />
-                </div>
-              );
-            }),
-          )}
+            return (
+              <div
+                key={matchKey(match.fase_id, match.slot)}
+                ref={(element) => {
+                  const key = matchKey(match.fase_id, match.slot);
+                  if (element) cardRefs.current.set(key, element);
+                  else cardRefs.current.delete(key);
+                }}
+                className="relative z-10 self-center"
+                style={gridStyle}
+              >
+                <BracketPickCard
+                  match={match}
+                  open={bracket.aberto}
+                  showFallback={match.fase_id === bracket.inicial_fase_id}
+                  onSelect={selectWinner}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -436,10 +558,12 @@ function BracketMetric({ label, value }: { label: string; value: string | number
 function BracketPickCard({
   match,
   open,
+  showFallback,
   onSelect,
 }: {
   match: DerivedMatch;
   open: boolean;
+  showFallback: boolean;
   onSelect: (match: DerivedMatch, team: string) => void;
 }) {
   const canPick = open && Boolean(match.time1 && match.time2);
@@ -460,8 +584,8 @@ function BracketPickCard({
       <div className="px-3 py-2.5">
         <TeamPickSide
           team={match.time1}
-          fallback="A definir"
-          selected={match.vencedor === match.time1}
+          fallback={showFallback ? "A definir" : ""}
+          selected={Boolean(match.time1) && match.vencedor === match.time1}
           disabled={!canPick}
           onSelect={() => match.time1 && onSelect(match, match.time1)}
         />
@@ -472,8 +596,8 @@ function BracketPickCard({
         </div>
         <TeamPickSide
           team={match.time2}
-          fallback="A definir"
-          selected={match.vencedor === match.time2}
+          fallback={showFallback ? "A definir" : ""}
+          selected={Boolean(match.time2) && match.vencedor === match.time2}
           disabled={!canPick}
           onSelect={() => match.time2 && onSelect(match, match.time2)}
         />
@@ -504,9 +628,9 @@ function TeamPickSide({
         "flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-lg border border-transparent px-2 py-1 text-left transition-[background-color,border-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected
           ? "border-primary/50 bg-primary/10 text-primary shadow-[0_0_14px_-8px_var(--primary)]"
-          : "hover:border-primary/40 hover:bg-primary/10",
+          : team && !disabled && "hover:border-primary/40 hover:bg-primary/10",
         team && !disabled && "cursor-pointer hover:translate-x-0.5",
-        (!team || disabled) && "cursor-not-allowed text-muted-foreground hover:border-transparent",
+        (!team || disabled) && "cursor-not-allowed text-muted-foreground",
       )}
     >
       {team ? (

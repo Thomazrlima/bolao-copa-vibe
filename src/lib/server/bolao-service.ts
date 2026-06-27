@@ -53,6 +53,7 @@ type JogoRow = {
   gols2: number | null;
   encerrado: boolean;
   placar_status?: "upcoming" | "live" | "finished" | null;
+  sportsdb_status?: string | null;
   transmissao_url?: string | null;
   estatisticas?: Array<{
     name: string;
@@ -140,7 +141,8 @@ function nowAsStoredBrasiliaMs() {
 }
 
 function isKnockoutGame(game: Pick<JogoRow, "fase_id"> | null | undefined) {
-  return Number(game?.fase_id ?? 1) > 1;
+  const faseId = Number(game?.fase_id ?? 1);
+  return faseId > 1 && faseId !== 6;
 }
 
 function canShowPublicGuesses(game: Pick<JogoRow, "fase_id" | "encerrado" | "placar_status">) {
@@ -460,6 +462,8 @@ export async function getPerfilUsuario(
         encerrado: game?.encerrado ?? false,
         iniciado: gameStarted,
         ao_vivo: gameIsLive,
+        placar_status: game?.placar_status ?? null,
+        sportsdb_status: game?.sportsdb_status ?? null,
         resultado:
           game && (game.encerrado || gameIsLive) && game.gols1 != null && game.gols2 != null
             ? { gols1: game.gols1, gols2: game.gols2 }
@@ -497,7 +501,7 @@ export async function getPalpitesDoJogo(
     supabase
       .from("jogos")
       .select(
-        "id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status,transmissao_url,estatisticas,estatisticas_sincronizadas_em",
+        "id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status,sportsdb_status,transmissao_url,estatisticas,estatisticas_sincronizadas_em",
       )
       .eq("id", jogoId)
       .maybeSingle(),

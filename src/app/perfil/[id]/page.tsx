@@ -35,6 +35,7 @@ import { getPerfil, type PerfilPalpite, type PerfilUsuario } from "@/lib/queries
 import { RANKING_BADGES } from "@/lib/ranking-badges";
 import { cn } from "@/lib/utils";
 import { formatLocalGameDateTime } from "@/lib/local-datetime";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import type { GuessOutcome } from "@/lib/scoring";
 
 const STAT_CARDS: Array<{
@@ -236,11 +237,11 @@ export default function PerfilPage() {
           <div className="flex gap-3">
             <CircleHelp className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p className="font-bold">Alguns palpites podem estar ocultos</p>
+              <p className="font-bold">Alguns palpites de mata-mata podem estar ocultos</p>
               <p className="mt-1 text-sm text-primary/80">
-                Para proteger o bolão, palpites de jogos que ainda não ficaram ao vivo aparecem
-                apenas para quem fez o palpite. Eles são liberados automaticamente durante o ao vivo
-                e seguem visíveis depois do encerramento.
+                Para proteger o bolão, palpites de jogos de mata-mata que ainda não ficaram ao vivo
+                aparecem apenas para quem fez o palpite. Jogos que não são de mata-mata aparecem
+                normalmente.
               </p>
             </div>
           </div>
@@ -475,7 +476,7 @@ function GuessCard({ guess }: { guess: PerfilPalpite }) {
         {isLive ? (
           <span className="flex items-center gap-1 rounded-full bg-live/15 px-2 py-1 text-live">
             <Radio className="h-3.5 w-3.5" />
-            Ao vivo
+            {liveMatchStatusLabel(guess.sportsdb_status)}
           </span>
         ) : outcome ? (
           <span className={cn("flex items-center gap-1", outcome.className.split(" ").at(-1))}>

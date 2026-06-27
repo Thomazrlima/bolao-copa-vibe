@@ -51,7 +51,8 @@ function canShowPublicGuesses(
   game: Pick<JogoRow, "fase_id" | "encerrado" | "placar_status"> | undefined,
 ) {
   if (!game) return true;
-  return game.fase_id <= 1 || game.encerrado || game.placar_status === "live";
+  const isProtectedKnockoutGame = game.fase_id > 1 && game.fase_id !== 6;
+  return !isProtectedKnockoutGame || game.encerrado || game.placar_status === "live";
 }
 
 export async function getPalpitesDashboard(supabase: SupabaseClient, userId: string) {
@@ -135,6 +136,7 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
     return [{ guess, game, scoring: scoreGuess(game, guess) }];
   });
   const myFinished = finishedGuesses.filter(({ guess }) => guess.user_id === userId);
+  const myAccuracyGuesses = myFinished.filter(({ scoring }) => isAccuracyEligible(scoring.outcome));
   const myOpen = mappedGames.filter((game) => !game.encerrado);
   const currentUser = ranking.find((participant) => participant.id === userId);
   const position = ranking.findIndex((participant) => participant.id === userId) + 1;
@@ -177,8 +179,8 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
       posicao: position || null,
       pontos: currentUser?.pontos ?? 0,
       chineladas: currentUser?.chineladas ?? 0,
-      encerrados: myFinished.length,
-      acertos: myFinished.filter(({ scoring }) => scoring.outcome !== "miss").length,
+      encerrados: myAccuracyGuesses.length,
+      acertos: myAccuracyGuesses.filter(({ scoring }) => isAccuracyHit(scoring.outcome)).length,
       outcomes: OUTCOMES.map((outcome) => ({
         outcome,
         count: myFinished.filter(({ scoring }) => scoring.outcome === outcome).length,
@@ -260,7 +262,11 @@ function buildRoundAccuracy(
   const labels = new Map(
     games.map((game) => [
       game.id,
-      game.rodada ? `R${game.rodada}` : (phaseById.get(game.fase_id) ?? "Copa"),
+      game.rodada
+        ? `R${game.rodada}`
+        : game.fase_id > 1
+          ? "MATA-MATA"
+          : (phaseById.get(game.fase_id) ?? "Copa"),
     ]),
   );
   const grouped = new Map<
@@ -269,22 +275,41 @@ function buildRoundAccuracy(
   >();
 
   finishedGuesses.forEach(({ guess, game, scoring }) => {
+    if (!isAccuracyEligible(scoring.outcome)) return;
+
     const label = labels.get(game.id) ?? "Copa";
     const row = grouped.get(label) ?? { total: 0, correct: 0, userTotal: 0, userCorrect: 0 };
     row.total += 1;
-    if (scoring.outcome !== "miss") row.correct += 1;
+    if (isAccuracyHit(scoring.outcome)) row.correct += 1;
     if (guess.user_id === userId) {
       row.userTotal += 1;
-      if (scoring.outcome !== "miss") row.userCorrect += 1;
+      if (isAccuracyHit(scoring.outcome)) row.userCorrect += 1;
     }
     grouped.set(label, row);
   });
 
-  return [...grouped.entries()].map(([round, row]) => ({
-    round,
-    geral: percentage(row.correct, row.total),
-    voce: percentage(row.userCorrect, row.userTotal),
-  }));
+  return [...grouped.entries()]
+    .map(([round, row]) => ({
+      round,
+      geral: percentage(row.correct, row.total),
+      voce: percentage(row.userCorrect, row.userTotal),
+    }))
+    .sort((a, b) => roundAccuracyOrder(a.round) - roundAccuracyOrder(b.round));
+}
+
+function isAccuracyEligible(outcome: GuessOutcome) {
+  return outcome !== "goals";
+}
+
+function isAccuracyHit(outcome: GuessOutcome) {
+  return outcome !== "miss" && outcome !== "goals";
+}
+
+function roundAccuracyOrder(round: string) {
+  const groupRound = round.match(/^R(\d+)$/i);
+  if (groupRound) return Number(groupRound[1]);
+  if (round === "MATA-MATA") return 100;
+  return 200;
 }
 
 function buildPointsEvolution(

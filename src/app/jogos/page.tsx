@@ -29,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import {
   formatLocalDateKey,
   formatLocalGameTime,
@@ -515,7 +516,10 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
               <span className="hidden text-muted-foreground sm:inline">R{jogo.rodada}</span>
             )}
           </div>
-          <StatusBadge status={status} />
+          <StatusBadge
+            status={status}
+            liveLabel={status === "live" ? liveMatchStatusLabel(jogo.sportsdb_status) : null}
+          />
         </div>
 
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
@@ -551,7 +555,7 @@ function MatchCard({ jogo, groupByTeam }: { jogo: Jogo; groupByTeam: Map<string,
 
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/80 pt-3">
           <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            {stateLabel(state, jogo.data)}
+            {stateLabel(state, jogo.data, jogo.sportsdb_status)}
           </span>
           <Button asChild variant="secondary" size="sm">
             <Link href={`/jogos/${jogo.id}`}>Ver detalhes</Link>
@@ -601,9 +605,9 @@ function isNotStarted(jogo: Jogo) {
   );
 }
 
-function stateLabel(state: MatchState, iso: string) {
+function stateLabel(state: MatchState, iso: string, sportsdbStatus?: string | null) {
   if (state === "finished") return "Partida encerrada";
-  if (state === "live") return "Partida em andamento";
+  if (state === "live") return liveMatchStatusLabel(sportsdbStatus);
   if (state === "today") return `Acontece hoje às ${formatLocalGameTime(iso)}`;
   return `Próximo jogo · ${formatLocalShortDate(iso)}`;
 }

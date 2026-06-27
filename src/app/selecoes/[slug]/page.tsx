@@ -32,6 +32,7 @@ import {
   formatLocalTime,
 } from "@/lib/local-datetime";
 import { formatStatisticValue, getStatisticLabel } from "@/lib/match-statistics";
+import { liveMatchStatusLabel } from "@/lib/live-match-status";
 import { getSelecaoPerfil, type SelecaoPerfilResponse } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
@@ -131,7 +132,12 @@ export default function SelecaoPage() {
                     </span>
                   ) : null}
                   {data.selecao.posicao ? <span>{data.selecao.posicao}º lugar</span> : null}
-                  {liveMatch ? <StatusBadge status="live" /> : null}
+                  {liveMatch ? (
+                    <StatusBadge
+                      status="live"
+                      liveLabel={liveMatchStatusLabel(liveMatch.sportsdb_status)}
+                    />
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -365,7 +371,10 @@ function SelectionMatchCard({ jogo, selectionName }: { jogo: Match; selectionNam
               {formatLocalGameTime(jogo.data)}
             </p>
           </div>
-          <StatusBadge status={status} />
+          <StatusBadge
+            status={status}
+            liveLabel={status === "live" ? liveMatchStatusLabel(jogo.sportsdb_status) : null}
+          />
         </div>
 
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
