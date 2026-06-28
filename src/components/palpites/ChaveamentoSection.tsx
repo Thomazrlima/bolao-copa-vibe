@@ -29,6 +29,8 @@ type DerivedPhase = Omit<PalpiteChaveamentoResponse["fases"][number], "confronto
   confrontos: DerivedMatch[];
 };
 
+type DraftWinners = Record<string, string | null>;
+
 type ConnectorSegment = {
   id: string;
   d: string;
@@ -72,10 +74,20 @@ function initialWinners(bracket: PalpiteChaveamentoResponse) {
   );
 }
 
-function derivePhases(
-  bracket: PalpiteChaveamentoResponse,
-  winners: Record<string, string>,
-): DerivedPhase[] {
+function winnersSignature(bracket: PalpiteChaveamentoResponse) {
+  return bracket.fases
+    .flatMap((phase) =>
+      phase.confrontos.map(
+        (match) =>
+          `${matchKey(match.fase_id, match.slot)}:${match.time1 ?? ""}:${match.time2 ?? ""}:${
+            match.vencedor ?? ""
+          }`,
+      ),
+    )
+    .join("|");
+}
+
+function derivePhases(bracket: PalpiteChaveamentoResponse, winners: DraftWinners): DerivedPhase[] {
   let previousWinners: Array<string | null> = [];
 
   return bracket.fases.map((phase, phaseIndex) => {
@@ -84,7 +96,10 @@ function derivePhases(
       const generatedTime2 = phaseIndex > 0 ? (previousWinners[match.slot * 2 + 1] ?? null) : null;
       const time1 = generatedTime1 ?? match.time1;
       const time2 = generatedTime2 ?? match.time2;
-      const chosen = winners[matchKey(match.fase_id, match.slot)] ?? match.vencedor;
+      const key = matchKey(match.fase_id, match.slot);
+      const chosen = Object.prototype.hasOwnProperty.call(winners, key)
+        ? winners[key]
+        : match.vencedor;
       const vencedor = chosen && (chosen === time1 || chosen === time2) ? chosen : null;
 
       return {
@@ -195,16 +210,21 @@ export function ChaveamentoSection({
   previewMode = false,
   onSave,
 }: Props) {
-  const [winners, setWinners] = useState<Record<string, string>>(() => initialWinners(bracket));
+  const [winners, setWinners] = useState<DraftWinners>(() => initialWinners(bracket));
+  const [hasLocalChanges, setHasLocalChanges] = useState(false);
   const [recentlySaved, setRecentlySaved] = useState(false);
   const [connectorSegments, setConnectorSegments] = useState<ConnectorSegment[]>([]);
   const boardRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef(new Map<string, HTMLElement>());
+  const savedWinnersSignature = useMemo(() => winnersSignature(bracket), [bracket]);
+  const lastSyncedWinnersSignatureRef = useRef(savedWinnersSignature);
 
   useEffect(() => {
+    if (hasLocalChanges || lastSyncedWinnersSignatureRef.current === savedWinnersSignature) return;
+
     setWinners(initialWinners(bracket));
-    setRecentlySaved(false);
-  }, [bracket]);
+    lastSyncedWinnersSignatureRef.current = savedWinnersSignature;
+  }, [bracket, hasLocalChanges, savedWinnersSignature]);
 
   const phases = useMemo(() => derivePhases(bracket, winners), [bracket, winners]);
   const bracketColumnCount = Math.max(1, phases.length * 2 - 1);
@@ -351,19 +371,31 @@ export function ChaveamentoSection({
       );
 
       if (current[key] === team) {
-        delete next[key];
+        next[key] = null;
       } else {
         next[key] = team;
       }
 
       return next;
     });
+    setHasLocalChanges(true);
     setRecentlySaved(false);
   }
 
   async function save() {
     if (!canSave) return;
-    await onSave(picks);
+
+    try {
+      await onSave(picks);
+    } catch {
+      return;
+    }
+
+    setHasLocalChanges(false);
+    lastSyncedWinnersSignatureRef.current = winnersSignature({
+      ...bracket,
+      fases: phases,
+    });
     setRecentlySaved(true);
   }
 

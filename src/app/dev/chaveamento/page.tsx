@@ -48,6 +48,7 @@ export default function ChaveamentoDevPage() {
       });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Não foi possível salvar.");
+      throw saveError;
     } finally {
       setSaving(false);
     }

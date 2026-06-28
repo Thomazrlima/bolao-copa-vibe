@@ -457,6 +457,7 @@ export default function PalpitesPage() {
       setError(
         saveError instanceof Error ? saveError.message : "Não foi possível salvar o chaveamento.",
       );
+      throw saveError;
     } finally {
       setSavingBracket(false);
     }
