@@ -611,7 +611,7 @@ function BracketPickCard({
     >
       <div className="flex items-center justify-between border-b border-border/70 bg-background/35 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
         <span>{match.fase}</span>
-        <span>Jogo {match.slot + 1}</span>
+        <span>{match.codigo_mata_mata ?? `Jogo ${match.slot + 1}`}</span>
       </div>
       <div className="px-3 py-2.5">
         <TeamPickSide

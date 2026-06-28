@@ -153,6 +153,7 @@ export type AppConfigResponse = {
 export type ChaveamentoConfronto = {
   fase_id: number;
   fase: string;
+  codigo_mata_mata: string | null;
   slot: number;
   time1: string | null;
   time2: string | null;

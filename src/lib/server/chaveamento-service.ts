@@ -11,6 +11,7 @@ type FaseRow = {
 type JogoRow = {
   id: string;
   fase_id: number;
+  codigo_mata_mata: string | null;
   time1: string;
   time2: string;
   data: string;
@@ -47,6 +48,38 @@ export type ChaveamentoConfrontoInput = {
 const BRACKET_PHASE_ORDER = [2, 3, 4, 5, 7];
 const NON_SCORING_PHASES = new Set([2, 6]);
 const BRACKET_DEADLINE = "2026-06-29T14:00:00";
+const BRACKET_CODES_BY_PHASE = new Map([
+  [
+    2,
+    [
+      "M73",
+      "M75",
+      "M74",
+      "M77",
+      "M83",
+      "M84",
+      "M81",
+      "M82",
+      "M76",
+      "M78",
+      "M79",
+      "M80",
+      "M86",
+      "M88",
+      "M85",
+      "M87",
+    ],
+  ],
+  [3, ["M89", "M90", "M93", "M94", "M91", "M92", "M95", "M96"]],
+  [4, ["M97", "M98", "M99", "M100"]],
+  [5, ["M101", "M102"]],
+  [7, ["M104"]],
+]);
+const BRACKET_CODE_ORDER = new Map(
+  [...BRACKET_CODES_BY_PHASE.values()]
+    .flatMap((codes) => codes)
+    .map((code, index) => [code, index]),
+);
 const EXPECTED_INITIAL_MATCHES_BY_PHASE = new Map([
   [2, 16],
   [3, 8],
@@ -104,8 +137,22 @@ function matchKey(faseId: number, slot: number) {
   return `${faseId}:${slot}`;
 }
 
+function bracketCodeOrder(value: string | null | undefined) {
+  const bracketOrder = value ? BRACKET_CODE_ORDER.get(value) : undefined;
+  if (bracketOrder != null) return bracketOrder;
+
+  const match = value?.match(/^M(\d+)$/);
+  if (!match) return Number.POSITIVE_INFINITY;
+  return 1000 + Number(match[1]);
+}
+
+function expectedBracketCode(faseId: number, slot: number) {
+  return BRACKET_CODES_BY_PHASE.get(faseId)?.[slot] ?? null;
+}
+
 function sortGamesByBracketSlot(a: JogoRow, b: JogoRow) {
   return (
+    bracketCodeOrder(a.codigo_mata_mata) - bracketCodeOrder(b.codigo_mata_mata) ||
     a.data.localeCompare(b.data) ||
     a.time1.localeCompare(b.time1, "pt-BR") ||
     a.time2.localeCompare(b.time2, "pt-BR")
@@ -136,6 +183,47 @@ function buildPhasePlan(
 
 function buildSavedByKey(rows: PalpiteChaveamentoRow[]) {
   return new Map(rows.map((row) => [matchKey(row.fase_id, row.slot), row]));
+}
+
+function teamPairKey(time1: string | null | undefined, time2: string | null | undefined) {
+  const first = cleanTeamName(time1);
+  const second = cleanTeamName(time2);
+  if (!first || !second) return null;
+
+  return [first, second].sort((a, b) => a.localeCompare(b, "pt-BR")).join("::");
+}
+
+function savedTeamPairKey(
+  faseId: number,
+  time1: string | null | undefined,
+  time2: string | null | undefined,
+) {
+  const pairKey = teamPairKey(time1, time2);
+  return pairKey ? `${faseId}:${pairKey}` : null;
+}
+
+function buildSavedByTeamPair(rows: PalpiteChaveamentoRow[]) {
+  const savedByTeamPair = new Map<string, PalpiteChaveamentoRow>();
+
+  rows.forEach((row) => {
+    const key = savedTeamPairKey(row.fase_id, row.time1, row.time2);
+    if (key) savedByTeamPair.set(key, row);
+  });
+
+  return savedByTeamPair;
+}
+
+function savedMatchFitsTeams(
+  savedMatch: PalpiteChaveamentoRow | undefined,
+  time1: string | null | undefined,
+  time2: string | null | undefined,
+) {
+  if (!savedMatch) return false;
+
+  const expectedTeamPair = teamPairKey(time1, time2);
+  if (!expectedTeamPair) return true;
+
+  return teamPairKey(savedMatch.time1, savedMatch.time2) === expectedTeamPair;
 }
 
 function finishedGroups(groups: GrupoRow[], games: JogoRow[]) {
@@ -178,8 +266,9 @@ async function loadChaveamentoContext(supabase: SupabaseClient, userId: string) 
   const [gamesResult, phasesResult, savedResult, groupsResult] = await Promise.all([
     supabase
       .from("jogos")
-      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,placar_status")
+      .select("id,fase_id,codigo_mata_mata,time1,time2,data,gols1,gols2,encerrado,placar_status")
       .order("fase_id", { ascending: true })
+      .order("codigo_mata_mata", { ascending: true, nullsFirst: false })
       .order("data", { ascending: true }),
     supabase.from("fases").select("id,nome"),
     supabase
@@ -215,13 +304,18 @@ function buildProjectedInitialGames(groups: GrupoRow[], games: JogoRow[]): Initi
   const allGroupsFinished =
     completedGroups.size >= new Set(groups.map((group) => group.grupo)).size;
   const bracket = buildKnockoutBracket(groups, groupGames as JogoGrupo[]);
-  return bracket.r32.map((match) => {
+  const matchesByCode = new Map(bracket.r32.map((match) => [match.id, match]));
+
+  return (BRACKET_CODES_BY_PHASE.get(2) ?? []).map((code) => {
+    const match = matchesByCode.get(code);
+    if (!match) return null;
     if (!projectedMatchIsDefined(match, completedGroups, allGroupsFinished)) return null;
     if (!match.time1 || !match.time2) return null;
 
     return {
       id: match.id,
       fase_id: 2,
+      codigo_mata_mata: match.id,
       time1: match.time1.time,
       time2: match.time2.time,
       data: "",
@@ -267,9 +361,51 @@ function buildChaveamentoPayload(
   const available = definedInitialGames.length > 0 || phasesPlan.length > 0;
   const open = Boolean(available && storedBrasiliaMs(deadline) > nowAsStoredBrasiliaMs());
   const savedByKey = buildSavedByKey(saved);
+  const savedByTeamPair = buildSavedByTeamPair(saved);
   const totalPontuavel = phasesPlan
     .filter((phase) => phase.pontuavel)
     .reduce((sum, phase) => sum + phase.total_confrontos, 0);
+  let previousWinners: Array<string | null> = [];
+  const fases = phasesPlan.map((phase, phaseIndex) => {
+    const confrontos = Array.from({ length: phase.total_confrontos }, (_, slot) => {
+      const initialGame =
+        phase.fase_id === phasesPlan[0]?.fase_id ? initialGames[slot] : (null as JogoRow | null);
+      const generatedTime1 = phaseIndex > 0 ? (previousWinners[slot * 2] ?? null) : null;
+      const generatedTime2 = phaseIndex > 0 ? (previousWinners[slot * 2 + 1] ?? null) : null;
+      const plannedTime1 = initialGame?.time1 ?? generatedTime1;
+      const plannedTime2 = initialGame?.time2 ?? generatedTime2;
+      const savedByPlannedPairKey = savedTeamPairKey(phase.fase_id, plannedTime1, plannedTime2);
+      const savedByPlannedPair = savedByPlannedPairKey
+        ? savedByTeamPair.get(savedByPlannedPairKey)
+        : undefined;
+      const savedBySlot = savedByKey.get(matchKey(phase.fase_id, slot));
+      const savedMatch =
+        savedByPlannedPair ??
+        (savedMatchFitsTeams(savedBySlot, plannedTime1, plannedTime2) ? savedBySlot : undefined);
+      const time1 = plannedTime1 ?? savedMatch?.time1 ?? null;
+      const time2 = plannedTime2 ?? savedMatch?.time2 ?? null;
+      const vencedor =
+        savedMatch?.vencedor === time1 || savedMatch?.vencedor === time2
+          ? savedMatch.vencedor
+          : null;
+
+      return {
+        fase_id: phase.fase_id,
+        fase: phase.nome,
+        codigo_mata_mata: initialGame?.codigo_mata_mata ?? expectedBracketCode(phase.fase_id, slot),
+        slot,
+        time1,
+        time2,
+        vencedor,
+        pontos: Number(savedMatch?.pontos ?? 0),
+        acertou: savedMatch?.acertou ?? null,
+        calculado_em: savedMatch?.calculado_em ?? null,
+      };
+    });
+
+    previousWinners = confrontos.map((match) => match.vencedor);
+    return { ...phase, confrontos };
+  });
 
   return {
     disponivel: available,
@@ -281,26 +417,7 @@ function buildChaveamentoPayload(
     pontos: saved.reduce((sum, row) => sum + Number(row.pontos ?? 0), 0),
     acertos: saved.filter((row) => row.acertou).length,
     total_pontuavel: totalPontuavel,
-    fases: phasesPlan.map((phase) => ({
-      ...phase,
-      confrontos: Array.from({ length: phase.total_confrontos }, (_, slot) => {
-        const initialGame =
-          phase.fase_id === phasesPlan[0]?.fase_id ? initialGames[slot] : (null as JogoRow | null);
-        const savedMatch = savedByKey.get(matchKey(phase.fase_id, slot));
-
-        return {
-          fase_id: phase.fase_id,
-          fase: phase.nome,
-          slot,
-          time1: savedMatch?.time1 ?? initialGame?.time1 ?? null,
-          time2: savedMatch?.time2 ?? initialGame?.time2 ?? null,
-          vencedor: savedMatch?.vencedor ?? null,
-          pontos: Number(savedMatch?.pontos ?? 0),
-          acertou: savedMatch?.acertou ?? null,
-          calculado_em: savedMatch?.calculado_em ?? null,
-        };
-      }),
-    })),
+    fases,
   };
 }
 
