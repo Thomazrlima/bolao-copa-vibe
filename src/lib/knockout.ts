@@ -55,6 +55,11 @@ export type KnockoutBracket = {
 
 const GROUP_ORDER = "ABCDEFGHIJKL".split("");
 const THIRD_WINNER_SLOTS = ["A", "B", "D", "E", "G", "I", "K", "L"] as const;
+// Fair-play override for ties because we do not store yellow/red-card counts.
+const FAIR_PLAY_TIEBREAK_ORDER = new Map([
+  ["Gana", 1],
+  ["Equador", 2],
+]);
 
 const THIRD_PLACE_MATRIX_SOURCE = `
 EFGHIJKL:EJIFHGLK
@@ -616,6 +621,13 @@ export function sortStandings(a: Standing, b: Standing, jogos: JogoGrupo[]) {
 
   if (b.saldo_gols !== a.saldo_gols) return b.saldo_gols - a.saldo_gols;
   if (b.gols_pro !== a.gols_pro) return b.gols_pro - a.gols_pro;
+
+  const fairPlayA = FAIR_PLAY_TIEBREAK_ORDER.get(a.time);
+  const fairPlayB = FAIR_PLAY_TIEBREAK_ORDER.get(b.time);
+  if (fairPlayA != null && fairPlayB != null && fairPlayA !== fairPlayB) {
+    return fairPlayA - fairPlayB;
+  }
+
   return a.time.localeCompare(b.time);
 }
 
