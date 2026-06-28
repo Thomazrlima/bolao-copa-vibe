@@ -46,7 +46,7 @@ export type ChaveamentoConfrontoInput = {
 
 const BRACKET_PHASE_ORDER = [2, 3, 4, 5, 7];
 const NON_SCORING_PHASES = new Set([2, 6]);
-const BRACKET_DEADLINE = "2026-07-29T14:00:00";
+const BRACKET_DEADLINE = "2026-06-29T14:00:00";
 const EXPECTED_INITIAL_MATCHES_BY_PHASE = new Map([
   [2, 16],
   [3, 8],
