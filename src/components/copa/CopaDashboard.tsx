@@ -82,19 +82,20 @@ export function CopaDashboard({
     onRefresh: loadData,
   });
 
-  const groups = useMemo(() => groupStandings(grupos, jogos), [grupos, jogos]);
+  const groupGames = useMemo(() => jogos.filter((jogo) => jogo.fase_id === 1), [jogos]);
+  const groups = useMemo(() => groupStandings(grupos, groupGames), [grupos, groupGames]);
   const thirds = useMemo(
     () =>
       groups
         .map(({ standings }) => standings[2])
         .filter(Boolean)
-        .sort((a, b) => sortStandings(a, b, jogos)),
-    [groups, jogos],
+        .sort((a, b) => sortStandings(a, b, groupGames)),
+    [groups, groupGames],
   );
   const bracket = useMemo(() => buildKnockoutBracket(grupos, jogos), [grupos, jogos]);
   const finishedGames = useMemo(
-    () => jogos.filter((jogo) => jogo.gols1 != null && jogo.gols2 != null).length,
-    [jogos],
+    () => groupGames.filter((jogo) => jogo.gols1 != null && jogo.gols2 != null).length,
+    [groupGames],
   );
 
   return (
@@ -513,8 +514,8 @@ function BracketView({ bracket }: { bracket: KnockoutBracket }) {
     <div>
       <SectionHeader
         eyebrow="Fase eliminatória"
-        title="Chave projetada"
-        description="Os confrontos dos 16-avos refletem a classificação acima e a matriz oficial dos melhores terceiros."
+        title="Chave do mata-mata"
+        description="Confrontos oficiais, placares e caminho até a final."
       />
 
       <div className="mb-6 overflow-hidden rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/14 via-card to-card p-4 ring-yellow sm:p-5">
@@ -525,7 +526,7 @@ function BracketView({ bracket }: { bracket: KnockoutBracket }) {
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
-                Projeção atual
+                Chave atual
               </p>
               <h4 className="mt-1 font-display text-lg font-black leading-tight sm:text-2xl">
                 32 classificados, um caminho até a final
@@ -655,20 +656,42 @@ function Round({
 
 function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => void }) {
   const isFinal = match.fase === "Final";
+  const hasScore = match.gols1 != null && match.gols2 != null;
   const content = (
     <>
       <div className="flex items-center justify-between border-b border-border/70 bg-background/35 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
-        <span>{match.id}</span>
+        {match.jogoId ? (
+          <Link
+            href={`/jogos/${match.jogoId}`}
+            className="rounded-sm transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {match.id}
+          </Link>
+        ) : (
+          <span>{match.id}</span>
+        )}
         <span>{match.fase}</span>
       </div>
       <div className="px-3 py-2.5">
-        <TeamSide team={match.time1} fallback={match.label1} />
+        <TeamSide
+          team={match.time1}
+          fallback={match.label1}
+          score={match.gols1}
+          showScore={hasScore}
+          winner={match.winnerSide === "time1"}
+        />
         <div className="my-2 flex items-center gap-2">
           <span className="h-px flex-1 bg-border" />
           <span className="text-[8px] font-black uppercase text-muted-foreground">x</span>
           <span className="h-px flex-1 bg-border" />
         </div>
-        <TeamSide team={match.time2} fallback={match.label2} />
+        <TeamSide
+          team={match.time2}
+          fallback={match.label2}
+          score={match.gols2}
+          showScore={hasScore}
+          winner={match.winnerSide === "time2"}
+        />
       </div>
     </>
   );
@@ -703,14 +726,35 @@ function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => v
   return <article className={className}>{content}</article>;
 }
 
-function TeamSide({ team, fallback }: { team: TeamSlot | null; fallback: string }) {
+function TeamSide({
+  team,
+  fallback,
+  score,
+  showScore,
+  winner,
+}: {
+  team: TeamSlot | null;
+  fallback: string;
+  score?: number | null;
+  showScore?: boolean;
+  winner?: boolean;
+}) {
+  const details = team ? teamDetails(team) : null;
+  const badge = team ? teamBadge(team) : null;
+
   return (
-    <div className={cn("flex min-w-0 items-center gap-2.5", !team && "text-muted-foreground")}>
+    <div
+      className={cn(
+        "-mx-1 flex min-w-0 items-center gap-2 rounded-lg px-1 py-1",
+        !team && "text-muted-foreground",
+        winner && "bg-primary/10",
+      )}
+    >
       {team ? (
         <SelectionLink
           name={team.time}
           flagSize="md"
-          className="max-w-[min(100%,11rem)]"
+          className="max-w-[min(100%,9.5rem)]"
           nameClassName="font-bold"
         />
       ) : (
@@ -720,20 +764,44 @@ function TeamSide({ team, fallback }: { team: TeamSlot | null; fallback: string 
       )}
       <div className="min-w-0 flex-1">
         {!team ? <p className="truncate text-sm">{fallback}</p> : null}
-        {team && (
+        {details && (
           <p className="mt-0.5 truncate text-[9px] uppercase tracking-wider text-muted-foreground">
-            {team.posicao}º do Grupo {team.grupo} · {team.pontuacao} pts
+            {details}
           </p>
         )}
       </div>
-      {team && (
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/12 font-display text-[10px] font-black text-primary">
-          {team.posicao}
-          {team.grupo}
+      {showScore && (
+        <span
+          className={cn(
+            "grid h-7 min-w-7 shrink-0 place-items-center rounded-lg px-2 font-display text-xs font-black num",
+            winner ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+          )}
+        >
+          {score ?? "-"}
+        </span>
+      )}
+      {badge && (
+        <span className="grid h-7 min-w-7 shrink-0 place-items-center rounded-lg bg-primary/12 px-1.5 font-display text-[10px] font-black text-primary">
+          {badge}
         </span>
       )}
     </div>
   );
+}
+
+function teamDetails(team: TeamSlot) {
+  if (!team.grupo) return team.origem ?? null;
+
+  const groupText = team.posicao
+    ? `${formatOrdinal(team.posicao)} do Grupo ${team.grupo}`
+    : `Grupo ${team.grupo}`;
+
+  return team.pontuacao == null ? groupText : `${groupText} · ${team.pontuacao} pts`;
+}
+
+function teamBadge(team: TeamSlot) {
+  if (!team.grupo) return null;
+  return team.posicao ? `${team.posicao}${team.grupo}` : team.grupo;
 }
 
 function ViewSkeleton({ view }: { view: View }) {
@@ -751,4 +819,8 @@ export function CopaDashboardSkeleton() {
 
 function formatSigned(value: number) {
   return value > 0 ? `+${value}` : value;
+}
+
+function formatOrdinal(value: number) {
+  return `${value}º`;
 }

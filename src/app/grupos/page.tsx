@@ -21,8 +21,9 @@ export default async function CopaPage() {
       .order("gols_pro", { ascending: false }),
     supabase
       .from("jogos")
-      .select("id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status")
-      .eq("fase_id", 1)
+      .select(
+        "id,fase_id,codigo_mata_mata,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status",
+      )
       .order("data", { ascending: true }),
   ]);
 

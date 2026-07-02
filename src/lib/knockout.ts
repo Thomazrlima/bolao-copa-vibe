@@ -10,6 +10,7 @@ export type GrupoRow = {
 export type JogoGrupo = {
   id: string;
   fase_id: number;
+  codigo_mata_mata?: string | null;
   time1: string;
   time2: string;
   data: string;
@@ -25,12 +26,13 @@ export type Standing = GrupoRow & {
 };
 
 export type TeamSlot = {
-  grupo: string;
+  grupo: string | null;
   time: string;
-  posicao: 1 | 2 | 3;
-  pontuacao: number;
-  saldo_gols: number;
-  gols_pro: number;
+  posicao: number | null;
+  pontuacao: number | null;
+  saldo_gols: number | null;
+  gols_pro: number | null;
+  origem?: string | null;
 };
 
 export type KnockoutMatch = {
@@ -40,6 +42,15 @@ export type KnockoutMatch = {
   time2: TeamSlot | null;
   label1: string;
   label2: string;
+  jogoId?: string | null;
+  data?: string | null;
+  gols1?: number | null;
+  gols2?: number | null;
+  encerrado?: boolean;
+  placar_status?: "upcoming" | "live" | "finished" | null;
+  winnerSide?: "time1" | "time2" | null;
+  winnerName?: string | null;
+  source?: "official" | "projected";
 };
 
 export type KnockoutBracket = {
@@ -649,20 +660,25 @@ export function groupStandings(grupos: GrupoRow[], jogos: JogoGrupo[]) {
 }
 
 export function buildKnockoutBracket(grupos: GrupoRow[], jogos: JogoGrupo[]): KnockoutBracket {
-  const groups = groupStandings(grupos, jogos);
+  const groupGames = jogos.filter((jogo) => jogo.fase_id === 1);
+  const groups = groupStandings(grupos, groupGames);
   const standingsByGroup = new Map(groups.map((group) => [group.group, group.standings]));
+  const teamSlotByName = buildTeamSlotByName(groups);
+  const officialGamesByCode = buildOfficialGamesByCode(jogos);
+  const winnersByCode = new Map<string, TeamSlot>();
+  const losersByCode = new Map<string, TeamSlot>();
   const thirds = groups
     .map(({ standings }) => standings[2])
     .filter(Boolean)
-    .sort((a, b) => sortStandings(a, b, jogos))
+    .sort((a, b) => sortStandings(a, b, groupGames))
     .slice(0, 8)
     .map((standing) => toTeamSlot(standing, 3));
   const matrizKey = thirds
-    .map((third) => third.grupo)
+    .map((third) => third.grupo!)
     .sort((a, b) => GROUP_ORDER.indexOf(a) - GROUP_ORDER.indexOf(b))
     .join("");
   const matrixRow = THIRD_PLACE_MATRIX.get(matrizKey) ?? [];
-  const thirdByGroup = new Map(thirds.map((third) => [third.grupo, third]));
+  const thirdByGroup = new Map(thirds.map((third) => [third.grupo!, third]));
   const thirdOpponentByWinner = new Map(
     THIRD_WINNER_SLOTS.map((group, index) => [group, thirdByGroup.get(matrixRow[index]) ?? null]),
   );
@@ -672,7 +688,49 @@ export function buildKnockoutBracket(grupos: GrupoRow[], jogos: JogoGrupo[]): Kn
     return standing ? toTeamSlot(standing, position) : null;
   };
 
-  const r32: KnockoutMatch[] = [
+  const resolveMatch = (
+    base: KnockoutMatch,
+    source1?: MatchSource,
+    source2?: MatchSource,
+  ): KnockoutMatch => {
+    const officialGame = officialGamesByCode.get(base.id);
+    const derivedTime1 = readSourceTeam(source1, winnersByCode, losersByCode);
+    const derivedTime2 = readSourceTeam(source2, winnersByCode, losersByCode);
+    const officialTime1 = officialGame
+      ? toOfficialTeamSlot(officialGame.time1, teamSlotByName)
+      : null;
+    const officialTime2 = officialGame
+      ? toOfficialTeamSlot(officialGame.time2, teamSlotByName)
+      : null;
+    const time1 = officialTime1 ?? derivedTime1 ?? (officialGame ? null : base.time1);
+    const time2 = officialTime2 ?? derivedTime2 ?? (officialGame ? null : base.time2);
+    const winnerSide = getWinnerSide(officialGame);
+    const winner = winnerSide === "time1" ? time1 : winnerSide === "time2" ? time2 : null;
+    const loser = winnerSide === "time1" ? time2 : winnerSide === "time2" ? time1 : null;
+    const resolved = {
+      ...base,
+      time1,
+      time2,
+      label1: officialGame ? officialLabel(officialGame.time1, base.label1) : base.label1,
+      label2: officialGame ? officialLabel(officialGame.time2, base.label2) : base.label2,
+      jogoId: officialGame?.id ?? null,
+      data: officialGame?.data ?? null,
+      gols1: officialGame?.gols1 ?? null,
+      gols2: officialGame?.gols2 ?? null,
+      encerrado: officialGame?.encerrado ?? false,
+      placar_status: officialGame?.placar_status ?? null,
+      winnerSide,
+      winnerName: winner?.time ?? null,
+      source: officialGame ? "official" : "projected",
+    } satisfies KnockoutMatch;
+
+    if (winner) winnersByCode.set(base.id, winner);
+    if (loser) losersByCode.set(base.id, loser);
+
+    return resolved;
+  };
+
+  const projectedR32: KnockoutMatch[] = [
     match("M73", "16-avos", at("A", 2), at("B", 2), "2º Grupo A", "2º Grupo B"),
     match(
       "M74",
@@ -747,35 +805,198 @@ export function buildKnockoutBracket(grupos: GrupoRow[], jogos: JogoGrupo[]): Kn
     match("M88", "16-avos", at("D", 2), at("G", 2), "2º Grupo D", "2º Grupo G"),
   ];
 
+  const r32 = projectedR32.map((base) => resolveMatch(base));
   const r16 = [
-    match("M89", "Oitavas", null, null, "Vencedor M73", "Vencedor M75"),
-    match("M90", "Oitavas", null, null, "Vencedor M74", "Vencedor M77"),
-    match("M91", "Oitavas", null, null, "Vencedor M76", "Vencedor M78"),
-    match("M92", "Oitavas", null, null, "Vencedor M79", "Vencedor M80"),
-    match("M93", "Oitavas", null, null, "Vencedor M83", "Vencedor M84"),
-    match("M94", "Oitavas", null, null, "Vencedor M81", "Vencedor M82"),
-    match("M95", "Oitavas", null, null, "Vencedor M86", "Vencedor M88"),
-    match("M96", "Oitavas", null, null, "Vencedor M85", "Vencedor M87"),
+    resolveMatch(
+      match("M89", "Oitavas", null, null, "Vencedor M73", "Vencedor M75"),
+      winnerOf("M73"),
+      winnerOf("M75"),
+    ),
+    resolveMatch(
+      match("M90", "Oitavas", null, null, "Vencedor M74", "Vencedor M77"),
+      winnerOf("M74"),
+      winnerOf("M77"),
+    ),
+    resolveMatch(
+      match("M91", "Oitavas", null, null, "Vencedor M76", "Vencedor M78"),
+      winnerOf("M76"),
+      winnerOf("M78"),
+    ),
+    resolveMatch(
+      match("M92", "Oitavas", null, null, "Vencedor M79", "Vencedor M80"),
+      winnerOf("M79"),
+      winnerOf("M80"),
+    ),
+    resolveMatch(
+      match("M93", "Oitavas", null, null, "Vencedor M83", "Vencedor M84"),
+      winnerOf("M83"),
+      winnerOf("M84"),
+    ),
+    resolveMatch(
+      match("M94", "Oitavas", null, null, "Vencedor M81", "Vencedor M82"),
+      winnerOf("M81"),
+      winnerOf("M82"),
+    ),
+    resolveMatch(
+      match("M95", "Oitavas", null, null, "Vencedor M86", "Vencedor M88"),
+      winnerOf("M86"),
+      winnerOf("M88"),
+    ),
+    resolveMatch(
+      match("M96", "Oitavas", null, null, "Vencedor M85", "Vencedor M87"),
+      winnerOf("M85"),
+      winnerOf("M87"),
+    ),
   ];
+
+  const quartas = [
+    resolveMatch(
+      match("M97", "Quartas", null, null, "Vencedor M89", "Vencedor M90"),
+      winnerOf("M89"),
+      winnerOf("M90"),
+    ),
+    resolveMatch(
+      match("M98", "Quartas", null, null, "Vencedor M93", "Vencedor M94"),
+      winnerOf("M93"),
+      winnerOf("M94"),
+    ),
+    resolveMatch(
+      match("M99", "Quartas", null, null, "Vencedor M91", "Vencedor M92"),
+      winnerOf("M91"),
+      winnerOf("M92"),
+    ),
+    resolveMatch(
+      match("M100", "Quartas", null, null, "Vencedor M95", "Vencedor M96"),
+      winnerOf("M95"),
+      winnerOf("M96"),
+    ),
+  ];
+
+  const semifinais = [
+    resolveMatch(
+      match("M101", "Semifinal", null, null, "Vencedor M97", "Vencedor M98"),
+      winnerOf("M97"),
+      winnerOf("M98"),
+    ),
+    resolveMatch(
+      match("M102", "Semifinal", null, null, "Vencedor M99", "Vencedor M100"),
+      winnerOf("M99"),
+      winnerOf("M100"),
+    ),
+  ];
+  const terceiro = resolveMatch(
+    match("M103", "Disputa de 3º", null, null, "Perdedor M101", "Perdedor M102"),
+    loserOf("M101"),
+    loserOf("M102"),
+  );
+  const final = resolveMatch(
+    match("M104", "Final", null, null, "Vencedor M101", "Vencedor M102"),
+    winnerOf("M101"),
+    winnerOf("M102"),
+  );
 
   return {
     terceirosClassificados: thirds,
     matrizKey: matrizKey.length === 8 ? matrizKey : null,
     r32,
     r16,
-    quartas: [
-      match("M97", "Quartas", null, null, "Vencedor M89", "Vencedor M90"),
-      match("M98", "Quartas", null, null, "Vencedor M93", "Vencedor M94"),
-      match("M99", "Quartas", null, null, "Vencedor M91", "Vencedor M92"),
-      match("M100", "Quartas", null, null, "Vencedor M95", "Vencedor M96"),
-    ],
-    semifinais: [
-      match("M101", "Semifinal", null, null, "Vencedor M97", "Vencedor M98"),
-      match("M102", "Semifinal", null, null, "Vencedor M99", "Vencedor M100"),
-    ],
-    terceiro: match("M103", "Disputa de 3º", null, null, "Perdedor M101", "Perdedor M102"),
-    final: match("M104", "Final", null, null, "Vencedor M101", "Vencedor M102"),
+    quartas,
+    semifinais,
+    terceiro,
+    final,
   };
+}
+
+type MatchSource = {
+  code: string;
+  result: "winner" | "loser";
+};
+
+function winnerOf(code: string): MatchSource {
+  return { code, result: "winner" };
+}
+
+function loserOf(code: string): MatchSource {
+  return { code, result: "loser" };
+}
+
+function buildTeamSlotByName(groups: { group: string; standings: Standing[] }[]) {
+  return new Map(
+    groups.flatMap(({ standings }) =>
+      standings.map((standing, index) => [standing.time, toTeamSlot(standing, index + 1)] as const),
+    ),
+  );
+}
+
+function buildOfficialGamesByCode(jogos: JogoGrupo[]) {
+  return new Map(
+    jogos.flatMap((jogo) => {
+      if (jogo.fase_id <= 1) return [];
+
+      const code = normalizeKnockoutCode(jogo.codigo_mata_mata);
+      return code ? [[code, jogo] as const] : [];
+    }),
+  );
+}
+
+function normalizeKnockoutCode(value: string | null | undefined) {
+  const code = value?.trim().toUpperCase();
+  return code && /^M\d+$/.test(code) ? code : null;
+}
+
+function readSourceTeam(
+  source: MatchSource | undefined,
+  winnersByCode: Map<string, TeamSlot>,
+  losersByCode: Map<string, TeamSlot>,
+) {
+  if (!source) return null;
+  return source.result === "winner"
+    ? (winnersByCode.get(source.code) ?? null)
+    : (losersByCode.get(source.code) ?? null);
+}
+
+function toOfficialTeamSlot(
+  value: string | null | undefined,
+  teamSlotByName: Map<string, TeamSlot>,
+) {
+  const name = cleanTeamName(value);
+  if (!name || !isConcreteTeamName(name)) return null;
+
+  return (
+    teamSlotByName.get(name) ?? {
+      grupo: null,
+      time: name,
+      posicao: null,
+      pontuacao: null,
+      saldo_gols: null,
+      gols_pro: null,
+      origem: "Definido no banco",
+    }
+  );
+}
+
+function cleanTeamName(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function isConcreteTeamName(value: string) {
+  return !/^(a definir|tbd|vencedor|perdedor|melhor\s+3|[123]º?\s+grupo)/i.test(value);
+}
+
+function officialLabel(value: string | null | undefined, fallback: string) {
+  return cleanTeamName(value) ?? fallback;
+}
+
+function getWinnerSide(jogo: JogoGrupo | undefined) {
+  if (!jogo || !isFinishedGame(jogo) || jogo.gols1 == null || jogo.gols2 == null) return null;
+  if (jogo.gols1 === jogo.gols2) return null;
+
+  return jogo.gols1 > jogo.gols2 ? "time1" : "time2";
+}
+
+function isFinishedGame(jogo: JogoGrupo) {
+  return jogo.encerrado || jogo.placar_status === "finished";
 }
 
 function compareDirect(a: Standing, b: Standing, jogos: JogoGrupo[]) {
@@ -797,7 +1018,7 @@ function compareDirect(a: Standing, b: Standing, jogos: JogoGrupo[]) {
   return 0;
 }
 
-function toTeamSlot(standing: Standing, posicao: 1 | 2 | 3): TeamSlot {
+function toTeamSlot(standing: Standing, posicao: number): TeamSlot {
   return {
     grupo: standing.grupo,
     time: standing.time,
