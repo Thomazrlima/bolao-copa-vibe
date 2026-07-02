@@ -14,10 +14,12 @@ import {
 type JogoSync = {
   id: string;
   sportsdb_event_id: string | null;
+  fase_id: number;
   time1: string;
   time2: string;
   data: string;
   encerrado: boolean;
+  vencedor?: string | null;
   estatisticas: SportsDbEventStatistic[] | null;
 };
 
@@ -214,25 +216,44 @@ async function synchronizeGames(
   diagnostics: SyncDiagnostic[],
 ) {
   const nowIso = nowAsStoredBrasiliaIso();
-  const activeResult = await supabase
+  const scoreBackfillResult = await supabase
     .from("jogos")
-    .select("id,sportsdb_event_id,time1,time2,data,encerrado,estatisticas")
-    .lte("data", nowIso)
-    .eq("encerrado", false)
+    .select("id,sportsdb_event_id,fase_id,time1,time2,data,encerrado,vencedor,estatisticas")
+    .gt("fase_id", 1)
+    .eq("encerrado", true)
+    .is("vencedor", null)
     .not("sportsdb_event_id", "is", null)
     .order("data", { ascending: true })
     .limit(7);
 
+  if (scoreBackfillResult.error) throw new Error(scoreBackfillResult.error.message);
+
+  const scoreBackfillJogos = (scoreBackfillResult.data ?? []) as JogoSync[];
+  const activeLimit = Math.max(0, 7 - scoreBackfillJogos.length);
+  const activeResult =
+    activeLimit > 0
+      ? await supabase
+          .from("jogos")
+          .select("id,sportsdb_event_id,fase_id,time1,time2,data,encerrado,vencedor,estatisticas")
+          .lte("data", nowIso)
+          .eq("encerrado", false)
+          .not("sportsdb_event_id", "is", null)
+          .order("data", { ascending: true })
+          .limit(activeLimit)
+      : { data: [], error: null };
+
   if (activeResult.error) throw new Error(activeResult.error.message);
 
+  const scoreRefreshCount =
+    (activeResult.data?.length ?? 0) + (scoreBackfillResult.data?.length ?? 0);
   // O cron roda duas vezes por minuto e a chave gratuita permite 30 chamadas/minuto.
-  const remainingRequests = Math.max(0, 15 - (activeResult.data?.length ?? 0) * 2);
+  const remainingRequests = Math.max(0, 15 - scoreRefreshCount * 2);
   const finishedLimit = Math.min(5, remainingRequests);
   const finishedResult =
     finishedLimit > 0
       ? await supabase
           .from("jogos")
-          .select("id,sportsdb_event_id,time1,time2,data,encerrado,estatisticas")
+          .select("id,sportsdb_event_id,fase_id,time1,time2,data,encerrado,vencedor,estatisticas")
           .eq("encerrado", true)
           .is("estatisticas", null)
           .not("sportsdb_event_id", "is", null)
@@ -245,7 +266,7 @@ async function synchronizeGames(
   const activeJogos = (activeResult.data ?? []) as JogoSync[];
   const finishedJogos = (finishedResult.data ?? []) as JogoSync[];
   const summary: SyncSummary = {
-    jogos_elegiveis: activeJogos.length + finishedJogos.length,
+    jogos_elegiveis: activeJogos.length + scoreBackfillJogos.length + finishedJogos.length,
     jogos_sincronizados: 0,
     jogos_encerrados: 0,
     estatisticas_sincronizadas: 0,
@@ -255,7 +276,7 @@ async function synchronizeGames(
   };
   const mappedSelections = new Map<string, SportsDbSelectionCandidate>();
 
-  for (const jogo of activeJogos) {
+  for (const jogo of [...scoreBackfillJogos, ...activeJogos]) {
     if (!jogo.sportsdb_event_id) continue;
 
     let scoreLookup;
@@ -276,6 +297,10 @@ async function synchronizeGames(
       p_gols2: score.gols2,
       p_encerrado: score.encerrado,
       p_status: score.status,
+      p_penaltis1: score.penaltis1,
+      p_penaltis2: score.penaltis2,
+      p_vencedor:
+        score.vencedor === "home" ? jogo.time1 : score.vencedor === "away" ? jogo.time2 : null,
     });
 
     if (updateError) throw new Error(updateError.message);
@@ -324,7 +349,7 @@ async function synchronizeSelectionMappings(
 
   const gamesResult = await supabase
     .from("jogos")
-    .select("id,sportsdb_event_id,time1,time2,data,encerrado,estatisticas")
+    .select("id,sportsdb_event_id,fase_id,time1,time2,data,encerrado,vencedor,estatisticas")
     .not("sportsdb_event_id", "is", null)
     .order("data", { ascending: true })
     .limit(72);

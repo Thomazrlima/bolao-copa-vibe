@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { CopaDashboard, CopaDashboardSkeleton } from "@/components/copa/CopaDashboard";
+import { enrichMissingPenaltyWinners } from "@/lib/server/knockout-penalty-enrichment";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -22,17 +23,15 @@ export default async function CopaPage() {
     supabase
       .from("jogos")
       .select(
-        "id,fase_id,codigo_mata_mata,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status",
+        "id,sportsdb_event_id,fase_id,codigo_mata_mata,time1,time2,data,gols1,gols2,penaltis1,penaltis2,vencedor,encerrado,rodada,placar_status",
       )
       .order("data", { ascending: true }),
   ]);
+  const jogos = await enrichMissingPenaltyWinners(jogosResult.data ?? []);
 
   return (
     <Suspense fallback={<CopaDashboardSkeleton />}>
-      <CopaDashboard
-        initialGrupos={gruposResult.data ?? []}
-        initialJogos={jogosResult.data ?? []}
-      />
+      <CopaDashboard initialGrupos={gruposResult.data ?? []} initialJogos={jogos} />
     </Suspense>
   );
 }

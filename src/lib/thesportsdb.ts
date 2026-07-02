@@ -6,6 +6,9 @@ export type SportsDbEvent = {
   strAwayTeam?: string | null;
   intHomeScore?: string | null;
   intAwayScore?: string | null;
+  intHomeScoreExtra?: string | null;
+  intAwayScoreExtra?: string | null;
+  strResult?: string | null;
   strStatus?: string | null;
   strProgress?: string | null;
 };
@@ -14,6 +17,9 @@ export type SportsDbScore = {
   eventId: string;
   gols1: number | null;
   gols2: number | null;
+  penaltis1: number | null;
+  penaltis2: number | null;
+  vencedor: "home" | "away" | null;
   encerrado: boolean;
   status: string | null;
   homeTeam: {
@@ -76,12 +82,56 @@ function parseNumber(value: string | null | undefined) {
 
 function isFinished(status: string | null) {
   if (!status) return false;
-  return /^(ft|aet|pen|match finished|finished|full time)$/i.test(status.trim());
+  return /^(ft|aet|ap|pen|match finished|finished|full time|after penalties)$/i.test(status.trim());
 }
 
 function cleanText(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function isPenaltyResult(event: SportsDbEvent, status: string | null) {
+  return (
+    /^(ap|pen|after penalties)$/i.test(status?.trim() ?? "") ||
+    /penalt/i.test(event.strResult ?? "")
+  );
+}
+
+function penaltyWinner(event: SportsDbEvent, status: string | null) {
+  if (!isPenaltyResult(event, status)) return { penaltis1: null, penaltis2: null, vencedor: null };
+
+  const penaltis1 = parseNumber(event.intHomeScoreExtra);
+  const penaltis2 = parseNumber(event.intAwayScoreExtra);
+  const penaltyScore =
+    penaltis1 != null && penaltis2 != null
+      ? { penaltis1, penaltis2 }
+      : { penaltis1: null, penaltis2: null };
+
+  if (
+    penaltyScore.penaltis1 != null &&
+    penaltyScore.penaltis2 != null &&
+    penaltyScore.penaltis1 !== penaltyScore.penaltis2
+  ) {
+    return {
+      ...penaltyScore,
+      vencedor:
+        penaltyScore.penaltis1 > penaltyScore.penaltis2 ? ("home" as const) : ("away" as const),
+    };
+  }
+
+  const result = event.strResult?.trim().toLocaleLowerCase("en-US") ?? "";
+  const home = event.strHomeTeam?.trim().toLocaleLowerCase("en-US");
+  const away = event.strAwayTeam?.trim().toLocaleLowerCase("en-US");
+
+  return {
+    ...penaltyScore,
+    vencedor:
+      home && result.includes(home)
+        ? ("home" as const)
+        : away && result.includes(away)
+          ? ("away" as const)
+          : null,
+  };
 }
 
 export async function lookupSportsDbScore(eventId: string): Promise<SportsDbScore | null> {
@@ -105,12 +155,16 @@ export async function lookupSportsDbScoreWithRaw(
   if (!event) return { data: null, raw: body };
 
   const status = event.strStatus ?? event.strProgress ?? null;
+  const penalties = penaltyWinner(event, status);
 
   return {
     data: {
       eventId,
       gols1: parseNumber(event.intHomeScore),
       gols2: parseNumber(event.intAwayScore),
+      penaltis1: penalties.penaltis1,
+      penaltis2: penalties.penaltis2,
+      vencedor: penalties.vencedor,
       encerrado: isFinished(status),
       status,
       homeTeam: {

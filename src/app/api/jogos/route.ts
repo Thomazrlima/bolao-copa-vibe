@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { enrichMissingPenaltyWinners } from "@/lib/server/knockout-penalty-enrichment";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -8,7 +9,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("jogos")
     .select(
-      "id,sportsdb_event_id,worldcup2026_game_id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status,sportsdb_status,sincronizado_em",
+      "id,sportsdb_event_id,worldcup2026_game_id,fase_id,codigo_mata_mata,time1,time2,data,gols1,gols2,penaltis1,penaltis2,vencedor,encerrado,rodada,placar_status,sportsdb_status,sincronizado_em",
     )
     .order("data", { ascending: true });
 
@@ -16,5 +17,7 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ jogos: data ?? [] });
+  const jogos = await enrichMissingPenaltyWinners(data ?? []);
+
+  return NextResponse.json({ jogos });
 }

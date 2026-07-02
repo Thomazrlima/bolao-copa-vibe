@@ -9,6 +9,7 @@ export type GrupoRow = {
 
 export type JogoGrupo = {
   id: string;
+  sportsdb_event_id?: string | null;
   fase_id: number;
   codigo_mata_mata?: string | null;
   time1: string;
@@ -16,6 +17,9 @@ export type JogoGrupo = {
   data: string;
   gols1: number | null;
   gols2: number | null;
+  penaltis1?: number | null;
+  penaltis2?: number | null;
+  vencedor?: string | null;
   encerrado: boolean;
   rodada?: number | null;
   placar_status?: "upcoming" | "live" | "finished" | null;
@@ -46,6 +50,8 @@ export type KnockoutMatch = {
   data?: string | null;
   gols1?: number | null;
   gols2?: number | null;
+  penaltis1?: number | null;
+  penaltis2?: number | null;
   encerrado?: boolean;
   placar_status?: "upcoming" | "live" | "finished" | null;
   winnerSide?: "time1" | "time2" | null;
@@ -717,6 +723,8 @@ export function buildKnockoutBracket(grupos: GrupoRow[], jogos: JogoGrupo[]): Kn
       data: officialGame?.data ?? null,
       gols1: officialGame?.gols1 ?? null,
       gols2: officialGame?.gols2 ?? null,
+      penaltis1: officialGame?.penaltis1 ?? null,
+      penaltis2: officialGame?.penaltis2 ?? null,
       encerrado: officialGame?.encerrado ?? false,
       placar_status: officialGame?.placar_status ?? null,
       winnerSide,
@@ -990,9 +998,17 @@ function officialLabel(value: string | null | undefined, fallback: string) {
 
 function getWinnerSide(jogo: JogoGrupo | undefined) {
   if (!jogo || !isFinishedGame(jogo) || jogo.gols1 == null || jogo.gols2 == null) return null;
-  if (jogo.gols1 === jogo.gols2) return null;
+  if (jogo.gols1 !== jogo.gols2) return jogo.gols1 > jogo.gols2 ? "time1" : "time2";
 
-  return jogo.gols1 > jogo.gols2 ? "time1" : "time2";
+  const winner = cleanTeamName(jogo.vencedor);
+  if (winner === jogo.time1) return "time1";
+  if (winner === jogo.time2) return "time2";
+
+  if (jogo.penaltis1 != null && jogo.penaltis2 != null && jogo.penaltis1 !== jogo.penaltis2) {
+    return jogo.penaltis1 > jogo.penaltis2 ? "time1" : "time2";
+  }
+
+  return null;
 }
 
 function isFinishedGame(jogo: JogoGrupo) {

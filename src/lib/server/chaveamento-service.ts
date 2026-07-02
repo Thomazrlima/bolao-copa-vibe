@@ -17,6 +17,9 @@ type JogoRow = {
   data: string;
   gols1: number | null;
   gols2: number | null;
+  penaltis1: number | null;
+  penaltis2: number | null;
+  vencedor: string | null;
   encerrado: boolean;
   placar_status: "upcoming" | "live" | "finished" | null;
 };
@@ -266,7 +269,9 @@ async function loadChaveamentoContext(supabase: SupabaseClient, userId: string) 
   const [gamesResult, phasesResult, savedResult, groupsResult] = await Promise.all([
     supabase
       .from("jogos")
-      .select("id,fase_id,codigo_mata_mata,time1,time2,data,gols1,gols2,encerrado,placar_status")
+      .select(
+        "id,fase_id,codigo_mata_mata,time1,time2,data,gols1,gols2,penaltis1,penaltis2,vencedor,encerrado,placar_status",
+      )
       .order("fase_id", { ascending: true })
       .order("codigo_mata_mata", { ascending: true, nullsFirst: false })
       .order("data", { ascending: true }),
@@ -321,6 +326,9 @@ function buildProjectedInitialGames(groups: GrupoRow[], games: JogoRow[]): Initi
       data: "",
       gols1: null,
       gols2: null,
+      penaltis1: null,
+      penaltis2: null,
+      vencedor: null,
       encerrado: false,
       placar_status: "upcoming" as const,
     };

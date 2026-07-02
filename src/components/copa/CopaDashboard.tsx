@@ -93,14 +93,18 @@ export function CopaDashboard({
     [groups, groupGames],
   );
   const bracket = useMemo(() => buildKnockoutBracket(grupos, jogos), [grupos, jogos]);
-  const finishedGames = useMemo(
-    () => groupGames.filter((jogo) => jogo.gols1 != null && jogo.gols2 != null).length,
-    [groupGames],
+  const heroStats = useMemo(
+    () => ({
+      groups: new Set(grupos.map((grupo) => grupo.grupo)).size,
+      qualified: countBracketTeams(bracket.r32),
+      finished: jogos.filter((jogo) => jogo.encerrado || jogo.placar_status === "finished").length,
+      total: jogos.length,
+    }),
+    [bracket.r32, grupos, jogos],
   );
-
   return (
     <>
-      <CopaHero finishedGames={finishedGames} />
+      <CopaHero stats={heroStats} />
       <ViewSwitcher view={view} />
 
       {error && (
@@ -132,7 +136,11 @@ export function CopaDashboard({
   );
 }
 
-function CopaHero({ finishedGames }: { finishedGames: number }) {
+function CopaHero({
+  stats,
+}: {
+  stats: { groups: number; qualified: number; finished: number; total: number };
+}) {
   return (
     <header className="relative mb-4 overflow-hidden rounded-2xl border border-primary/30 bg-card">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_88%_12%,color-mix(in_oklab,var(--primary)_24%,transparent),transparent_34%)]" />
@@ -152,9 +160,9 @@ function CopaHero({ finishedGames }: { finishedGames: number }) {
         </div>
 
         <div className="grid grid-cols-3 gap-2 sm:min-w-[390px]">
-          <HeroStat value="12" label="grupos" />
-          <HeroStat value="32" label="avançam" />
-          <HeroStat value={`${finishedGames}/72`} label="resultados" />
+          <HeroStat value={String(stats.groups)} label="grupos" />
+          <HeroStat value={String(stats.qualified)} label="avançam" />
+          <HeroStat value={`${stats.finished}/${stats.total}`} label="resultados" />
         </div>
       </div>
     </header>
@@ -677,6 +685,7 @@ function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => v
           team={match.time1}
           fallback={match.label1}
           score={match.gols1}
+          penaltyScore={match.penaltis1}
           showScore={hasScore}
           winner={match.winnerSide === "time1"}
         />
@@ -689,6 +698,7 @@ function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => v
           team={match.time2}
           fallback={match.label2}
           score={match.gols2}
+          penaltyScore={match.penaltis2}
           showScore={hasScore}
           winner={match.winnerSide === "time2"}
         />
@@ -730,12 +740,14 @@ function TeamSide({
   team,
   fallback,
   score,
+  penaltyScore,
   showScore,
   winner,
 }: {
   team: TeamSlot | null;
   fallback: string;
   score?: number | null;
+  penaltyScore?: number | null;
   showScore?: boolean;
   winner?: boolean;
 }) {
@@ -777,7 +789,7 @@ function TeamSide({
             winner ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
           )}
         >
-          {score ?? "-"}
+          {formatScoreWithPenalty(score, penaltyScore)}
         </span>
       )}
       {badge && (
@@ -823,4 +835,16 @@ function formatSigned(value: number) {
 
 function formatOrdinal(value: number) {
   return `${value}º`;
+}
+
+function formatScoreWithPenalty(
+  score: number | null | undefined,
+  penaltyScore: number | null | undefined,
+) {
+  if (score == null) return "-";
+  return penaltyScore == null ? String(score) : `${score} (${penaltyScore})`;
+}
+
+function countBracketTeams(matches: KnockoutMatch[]) {
+  return matches.reduce((total, match) => total + (match.time1 ? 1 : 0) + (match.time2 ? 1 : 0), 0);
 }
