@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Check, Clock3, GitBranch, LockKeyhole, Pencil, Save, Trophy } from "lucide-react";
+import { Check, Clock3, GitBranch, LockKeyhole, Pencil, Save, Trophy, X } from "lucide-react";
 
 import { Flag } from "@/components/common/Flag";
 import { Button } from "@/components/ui/button";
@@ -599,25 +599,45 @@ function BracketPickCard({
   onSelect: (match: DerivedMatch, team: string) => void;
 }) {
   const canPick = open && Boolean(match.time1 && match.time2);
+  const scored = match.acertou != null;
 
   return (
     <article
       className={cn(
-        "relative w-full overflow-visible rounded-xl border bg-card text-left shadow-[0_14px_30px_-28px_rgba(0,0,0,0.95)]",
-        match.vencedor
-          ? "border-primary shadow-[0_8px_30px_-18px_var(--primary)]"
-          : "border-border focus-within:border-primary/60",
+        "relative w-full overflow-visible rounded-xl border bg-card text-left shadow-[0_14px_30px_-28px_rgba(0,0,0,0.95)] transition-colors",
+        !scored &&
+          (match.vencedor
+            ? "border-primary shadow-[0_8px_30px_-18px_var(--primary)]"
+            : "border-border focus-within:border-primary/60"),
+        match.acertou === true &&
+          "border-success/70 bg-success/10 shadow-[0_8px_30px_-18px_var(--success)]",
+        match.acertou === false &&
+          "border-destructive/70 bg-destructive/10 shadow-[0_8px_30px_-18px_var(--destructive)]",
       )}
     >
-      <div className="flex items-center justify-between border-b border-border/70 bg-background/35 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+      <div
+        className={cn(
+          "flex items-center justify-between border-b border-border/70 bg-background/35 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground",
+          match.acertou === true && "border-success/25 bg-success/10 text-success",
+          match.acertou === false && "border-destructive/25 bg-destructive/10 text-destructive",
+        )}
+      >
         <span>{match.fase}</span>
-        <span>{match.codigo_mata_mata ?? `Jogo ${match.slot + 1}`}</span>
+        <span className="flex items-center gap-1.5">
+          {match.codigo_mata_mata ?? `Jogo ${match.slot + 1}`}
+          {match.acertou === true ? (
+            <Check className="h-3.5 w-3.5" aria-label="Palpite correto" />
+          ) : match.acertou === false ? (
+            <X className="h-3.5 w-3.5" aria-label="Palpite incorreto" />
+          ) : null}
+        </span>
       </div>
       <div className="px-3 py-2.5">
         <TeamPickSide
           team={match.time1}
           fallback={showFallback ? "A definir" : ""}
           selected={Boolean(match.time1) && match.vencedor === match.time1}
+          result={match.acertou}
           disabled={!canPick}
           onSelect={() => match.time1 && onSelect(match, match.time1)}
         />
@@ -630,6 +650,7 @@ function BracketPickCard({
           team={match.time2}
           fallback={showFallback ? "A definir" : ""}
           selected={Boolean(match.time2) && match.vencedor === match.time2}
+          result={match.acertou}
           disabled={!canPick}
           onSelect={() => match.time2 && onSelect(match, match.time2)}
         />
@@ -642,12 +663,14 @@ function TeamPickSide({
   team,
   fallback,
   selected,
+  result,
   disabled,
   onSelect,
 }: {
   team: string | null;
   fallback: string;
   selected: boolean;
+  result: boolean | null;
   disabled: boolean;
   onSelect: () => void;
 }) {
@@ -658,9 +681,16 @@ function TeamPickSide({
       onClick={onSelect}
       className={cn(
         "flex min-h-9 w-full min-w-0 items-center gap-2.5 rounded-lg border border-transparent px-2 py-1 text-left transition-[background-color,border-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected
-          ? "border-primary/50 bg-primary/10 text-primary shadow-[0_0_14px_-8px_var(--primary)]"
-          : team && !disabled && "hover:border-primary/40 hover:bg-primary/10",
+        selected &&
+          result == null &&
+          "border-primary/50 bg-primary/10 text-primary shadow-[0_0_14px_-8px_var(--primary)]",
+        selected &&
+          result === true &&
+          "border-success/50 bg-success/10 text-success shadow-[0_0_14px_-8px_var(--success)]",
+        selected &&
+          result === false &&
+          "border-destructive/50 bg-destructive/10 text-destructive shadow-[0_0_14px_-8px_var(--destructive)]",
+        !selected && team && !disabled && "hover:border-primary/40 hover:bg-primary/10",
         team && !disabled && "cursor-pointer hover:translate-x-0.5",
         (!team || disabled) && "cursor-not-allowed text-muted-foreground",
       )}
@@ -670,7 +700,13 @@ function TeamPickSide({
           <Flag code={teamCodeFromName(team)} name={team} size="md" static />
           <span className="min-w-0 flex-1 truncate text-sm font-bold">{team}</span>
           {selected && (
-            <span className="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/15 font-display text-[10px] font-black text-primary">
+            <span
+              className={cn(
+                "ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/15 font-display text-[10px] font-black text-primary",
+                result === true && "bg-success/15 text-success",
+                result === false && "bg-destructive/15 text-destructive",
+              )}
+            >
               <Trophy className="h-3.5 w-3.5" />
             </span>
           )}

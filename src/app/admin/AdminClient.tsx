@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClockAlert,
   ExternalLink,
+  GitBranch,
   Loader2,
   PencilLine,
   Radio,
@@ -69,6 +70,7 @@ type BugReport = {
 };
 
 type ReportFilter = "open" | "closed";
+type KnockoutScoringPhase = "3" | "4" | "5" | "7";
 
 type AdminGame = {
   id: string;
@@ -201,6 +203,9 @@ export function AdminClient() {
   const [scoreGols2, setScoreGols2] = useState("");
   const [scoreSaving, setScoreSaving] = useState(false);
   const [scoreMessage, setScoreMessage] = useState<string | null>(null);
+  const [knockoutScoringPhase, setKnockoutScoringPhase] = useState<KnockoutScoringPhase>("3");
+  const [knockoutScoringSaving, setKnockoutScoringSaving] = useState(false);
+  const [knockoutScoringMessage, setKnockoutScoringMessage] = useState<string | null>(null);
   const [adminConfig, setAdminConfig] = useState<AppConfigResponse>({
     chaveamento_visible: true,
   });
@@ -593,6 +598,45 @@ export function AdminClient() {
     }
   }
 
+  async function handleRecalculateKnockoutScoring() {
+    setKnockoutScoringSaving(true);
+    setKnockoutScoringMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/mata-mata/pontuacao", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fase_id: Number(knockoutScoringPhase) }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        resultado?: {
+          palpites_calculados: number;
+          usuarios_atualizados: number;
+        };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Não foi possível recalcular o mata-mata.");
+      }
+
+      setKnockoutScoringMessage(
+        `${knockoutPhaseLabel(knockoutScoringPhase)} atualizada. ${
+          body.resultado?.palpites_calculados ?? 0
+        } palpite(s) de chaveamento processado(s) e ${
+          body.resultado?.usuarios_atualizados ?? 0
+        } participante(s) atualizado(s).`,
+      );
+      await loadOverview({ syncHighlights: false });
+    } catch (error) {
+      setKnockoutScoringMessage(
+        error instanceof Error ? error.message : "Não foi possível recalcular o mata-mata.",
+      );
+    } finally {
+      setKnockoutScoringSaving(false);
+    }
+  }
+
   async function handleBracketVisibilityChange(visible: boolean) {
     const previous = adminConfig;
     const next = { ...adminConfig, chaveamento_visible: visible };
@@ -879,20 +923,29 @@ export function AdminClient() {
         </TabsContent>
 
         <TabsContent value="score" className="mt-5">
-          <ScoreCorrectionSection
-            games={finishedGames}
-            selectedGameId={scoreGameId}
-            gols1={scoreGols1}
-            gols2={scoreGols2}
-            loading={overviewLoading}
-            saving={scoreSaving}
-            message={scoreMessage}
-            onRefresh={() => void loadOverview({ syncHighlights: false })}
-            onSelectGame={selectScoreGame}
-            onChangeGols1={setScoreGols1}
-            onChangeGols2={setScoreGols2}
-            onSave={handleCorrectScore}
-          />
+          <div className="space-y-5">
+            <ScoreCorrectionSection
+              games={finishedGames}
+              selectedGameId={scoreGameId}
+              gols1={scoreGols1}
+              gols2={scoreGols2}
+              loading={overviewLoading}
+              saving={scoreSaving}
+              message={scoreMessage}
+              onRefresh={() => void loadOverview({ syncHighlights: false })}
+              onSelectGame={selectScoreGame}
+              onChangeGols1={setScoreGols1}
+              onChangeGols2={setScoreGols2}
+              onSave={handleCorrectScore}
+            />
+            <KnockoutScoringSection
+              selectedPhase={knockoutScoringPhase}
+              saving={knockoutScoringSaving}
+              message={knockoutScoringMessage}
+              onPhaseChange={setKnockoutScoringPhase}
+              onRecalculate={() => void handleRecalculateKnockoutScoring()}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="users" className="mt-5">
@@ -1240,6 +1293,81 @@ function ScoreCorrectionSection({
       </Button>
     </form>
   );
+}
+
+function KnockoutScoringSection({
+  selectedPhase,
+  saving,
+  message,
+  onPhaseChange,
+  onRecalculate,
+}: {
+  selectedPhase: KnockoutScoringPhase;
+  saving: boolean;
+  message: string | null;
+  onPhaseChange: (phase: KnockoutScoringPhase) => void;
+  onRecalculate: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <SectionHeader
+          icon={GitBranch}
+          title="Pontuação do mata-mata"
+          description="Recalcule manualmente os pontos do chaveamento para uma fase específica."
+          className="mb-0"
+        />
+        <div className="grid gap-2 sm:grid-cols-[220px_auto]">
+          <Select
+            value={selectedPhase}
+            onValueChange={(value) => onPhaseChange(value as KnockoutScoringPhase)}
+            disabled={saving}
+          >
+            <SelectTrigger className="min-w-0">
+              <SelectValue placeholder="Selecione a fase" />
+            </SelectTrigger>
+            <SelectContent>
+              {KNOCKOUT_SCORING_PHASES.map((phase) => (
+                <SelectItem key={phase.value} value={phase.value}>
+                  {phase.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            onClick={onRecalculate}
+            disabled={saving}
+            className="w-full sm:w-auto"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <GitBranch className="h-4 w-4" />
+            )}
+            {saving ? "Recalculando..." : "Recalcular fase"}
+          </Button>
+        </div>
+      </div>
+
+      {message ? (
+        <p className="mt-4 rounded-lg border border-border bg-background/50 p-3 text-sm">
+          {message}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+const KNOCKOUT_SCORING_PHASES: Array<{ value: KnockoutScoringPhase; label: string }> = [
+  { value: "3", label: "Oitavas" },
+  { value: "4", label: "Quartas" },
+  { value: "5", label: "Semifinal" },
+  { value: "7", label: "Final" },
+];
+
+function knockoutPhaseLabel(phase: KnockoutScoringPhase) {
+  return KNOCKOUT_SCORING_PHASES.find((item) => item.value === phase)?.label ?? "Fase";
 }
 
 function SyncExecutionCard({ execution }: { execution: SyncExecution }) {

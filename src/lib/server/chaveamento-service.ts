@@ -430,13 +430,7 @@ function buildChaveamentoPayload(
 }
 
 export async function getPalpiteChaveamento(supabase: SupabaseClient, userId: string) {
-  let context = await loadChaveamentoContext(supabase, userId);
-
-  if (context.saved.length > 0) {
-    const recalcResult = await supabase.rpc("recalcular_pontuacao_chaveamento");
-    assertNoError(recalcResult.error);
-    context = await loadChaveamentoContext(supabase, userId);
-  }
+  const context = await loadChaveamentoContext(supabase, userId);
 
   return buildChaveamentoPayload(context.games, context.phases, context.saved, context.groups);
 }
@@ -534,9 +528,6 @@ export async function salvarPalpiteChaveamento(
   }));
   const insertResult = await supabase.from("palpites_chaveamento").insert(insertRows);
   assertNoError(insertResult.error);
-
-  const recalcResult = await supabase.rpc("recalcular_pontuacao_chaveamento");
-  assertNoError(recalcResult.error);
 
   return getPalpiteChaveamento(supabase, userId);
 }
