@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { DateRange } from "react-day-picker";
@@ -817,6 +818,10 @@ function SpecialsSection({
   const answered = ESPECIAIS.filter((question) => savedIds.has(question.id)).length;
   const completion = Math.round((answered / ESPECIAIS.length) * 100);
   const open = especiaisAreOpen(now);
+  const championAnswer = championQuestion ? answers[championQuestion.id] : undefined;
+  const championResult = championQuestion
+    ? getSpecialResult(championAnswer, correctAnswers[championQuestion.id])
+    : null;
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -855,15 +860,29 @@ function SpecialsSection({
       </div>
 
       {championQuestion && (
-        <article
-          className={cn(
-            "overflow-hidden rounded-xl border border-primary/40 bg-primary/10 shadow-[0_18px_45px_rgba(0,0,0,0.18)] transition-colors",
-            !open && "opacity-75",
-          )}
+        <SpecialQuestionShell
+          result={championResult}
+          highlight
+          disabled={!open}
+          className="shadow-[0_18px_45px_rgba(0,0,0,0.18)]"
         >
-          <div className="flex items-center justify-between gap-3 border-b border-primary/25 bg-primary/15 px-4 py-3">
+          <div
+            className={cn(
+              "flex items-center justify-between gap-3 border-b px-4 py-3",
+              championResult === true
+                ? "border-success/30 bg-success/15"
+                : "border-primary/25 bg-primary/15",
+            )}
+          >
             <div className="min-w-0">
-              <span className="text-[0.65rem] font-black uppercase text-primary">Destaque</span>
+              <span
+                className={cn(
+                  "text-[0.65rem] font-black uppercase",
+                  championResult === true ? "text-success" : "text-primary",
+                )}
+              >
+                Destaque
+              </span>
               <h4 className="mt-1 font-display text-xl font-black">{championQuestion.question}</h4>
             </div>
             {savedIds.has(championQuestion.id) && (
@@ -881,18 +900,18 @@ function SpecialsSection({
 
             <SpecialResultSummary
               questionId={championQuestion.id}
-              answer={answers[championQuestion.id]}
+              answer={championAnswer}
               correctAnswer={correctAnswers[championQuestion.id]}
               participants={participants}
-              className="mt-3 border-primary/20 bg-primary/10"
+              className={cn("mt-3", championResult === null && "border-primary/20 bg-primary/10")}
             />
 
             <div className="mt-4 flex flex-col gap-3 border-t border-primary/20 pt-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="min-w-0 truncate text-xs text-muted-foreground">
-                {answers[championQuestion.id]
+                {championAnswer
                   ? `Sua escolha: ${
                       participants.find(
-                        (participant) => participant.id === answers[championQuestion.id],
+                        (participant) => participant.id === championAnswer,
                       )?.nome_completo ?? "Usuário selecionado"
                     }`
                   : "Nenhum usuário selecionado"}
@@ -931,27 +950,40 @@ function SpecialsSection({
               </Button>
             </div>
           </div>
-        </article>
+        </SpecialQuestionShell>
       )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         {regularQuestions.map((question, index) => {
           const answer = answers[question.id];
+          const result = getSpecialResult(answer, correctAnswers[question.id]);
           const saved = savedIds.has(question.id);
           const saving = savingId === question.id;
           const recentlySaved = recentlySavedId === question.id;
 
           return (
-            <article
+            <SpecialQuestionShell
               key={question.id}
-              className={cn(
-                "overflow-hidden rounded-xl border bg-card transition-colors",
-                !open && "opacity-75",
-                saved ? "border-primary/35" : "border-border hover:border-primary/40",
-              )}
+              result={result}
+              saved={saved}
+              disabled={!open}
             >
-              <div className="flex items-start gap-3 border-b border-border bg-background/35 px-4 py-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/12 font-display text-xs font-black text-primary">
+              <div
+                className={cn(
+                  "flex items-start gap-3 border-b px-4 py-3",
+                  result === true
+                    ? "border-success/25 bg-success/10"
+                    : "border-border bg-background/35",
+                )}
+              >
+                <span
+                  className={cn(
+                    "grid h-8 w-8 shrink-0 place-items-center rounded-lg font-display text-xs font-black",
+                    result === true
+                      ? "bg-success text-background"
+                      : "bg-primary/12 text-primary",
+                  )}
+                >
                   {index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -1027,11 +1059,47 @@ function SpecialsSection({
                   </Button>
                 </div>
               </div>
-            </article>
+            </SpecialQuestionShell>
           );
         })}
       </div>
     </>
+  );
+}
+
+function SpecialQuestionShell({
+  children,
+  result,
+  saved,
+  highlight,
+  disabled,
+  className,
+}: {
+  children: ReactNode;
+  result: boolean | null;
+  saved?: boolean;
+  highlight?: boolean;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <article
+      className={cn(
+        "overflow-hidden rounded-xl border bg-card transition-colors",
+        result === true &&
+          "border-success/70 bg-success/10 shadow-[0_0_0_1px_color-mix(in_oklab,var(--success)_35%,transparent),0_18px_45px_color-mix(in_oklab,var(--success)_18%,transparent)]",
+        result !== true &&
+          (highlight
+            ? "border-primary/40 bg-primary/10"
+            : saved
+              ? "border-primary/35"
+              : "border-border hover:border-primary/40"),
+        disabled && result !== true && "opacity-75",
+        className,
+      )}
+    >
+      {children}
+    </article>
   );
 }
 
@@ -1056,7 +1124,11 @@ function SpecialResultSummary({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-background/45 px-3 py-2.5 text-xs",
+        "rounded-xl border px-3 py-2.5 text-xs",
+        correct === true &&
+          "border-success/45 bg-success/15 shadow-[0_0_22px_color-mix(in_oklab,var(--success)_14%,transparent)]",
+        correct === false && "border-destructive/35 bg-destructive/10",
+        correct === null && "border-border bg-background/45",
         className,
       )}
     >
@@ -1087,8 +1159,34 @@ function SpecialResultSummary({
           )}
         </span>
       </div>
+      {correct !== null && (
+        <div
+          className={cn(
+            "mt-2 flex items-start gap-2 rounded-lg border px-2.5 py-2 font-bold",
+            correct
+              ? "border-success/35 bg-success/15 text-success"
+              : "border-destructive/30 bg-destructive/10 text-destructive",
+          )}
+        >
+          {correct ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          ) : (
+            <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          )}
+          <span>
+            {correct
+              ? "Acertou esse palpite especial."
+              : "Esse palpite especial não bateu com o resultado."}
+          </span>
+        </div>
+      )}
     </div>
   );
+}
+
+function getSpecialResult(answer?: string, correctAnswer?: string) {
+  if (!correctAnswer || !answer) return null;
+  return answer === correctAnswer;
 }
 
 function formatSpecialResultAnswer(
