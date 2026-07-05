@@ -549,6 +549,7 @@ export function AdminClient() {
           body.ranking?.usuarios_atualizados ?? 0
         } participantes.`,
       );
+      await loadOverview({ syncHighlights: false });
     } catch (error) {
       setSpecialsMessage(
         error instanceof Error ? error.message : "Não foi possível salvar as respostas corretas.",

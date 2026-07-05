@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { canManageUsers } from "@/lib/admin-users";
 import { CAMPEAO_BOLAO_QUESTION_ID, ESPECIAIS, getEspecialQuestion } from "@/lib/especiais";
+import { createAdminClient, hasAdminCredentials } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const TABLE = "palpites_especiais_respostas_corretas";
@@ -23,6 +24,11 @@ const answersSchema = z.object({
 type ParticipantRow = {
   id: string;
   nome_completo: string;
+};
+
+type RankingRecalculation = {
+  jogos_recalculados: number;
+  usuarios_atualizados: number;
 };
 
 export async function GET() {
@@ -53,13 +59,20 @@ export async function PUT(request: Request) {
   const authResult = await requireAdmin();
   if (authResult instanceof NextResponse) return authResult;
 
+  if (!hasAdminCredentials()) {
+    return NextResponse.json(
+      { error: "ConfiguraÃ§Ã£o administrativa do Supabase ausente para salvar os especiais." },
+      { status: 500 },
+    );
+  }
+
   const payload = answersSchema.safeParse(await request.json().catch(() => null));
   if (!payload.success) {
     return NextResponse.json({ error: "Respostas inválidas." }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const { data: participants, error: participantsError } = await supabase
+  const admin = createAdminClient();
+  const { data: participants, error: participantsError } = await admin
     .from("ranking_usuarios")
     .select("id,nome_completo");
 
@@ -104,7 +117,7 @@ export async function PUT(request: Request) {
 
   const clearedIds = normalized.filter((item) => !item.resposta).map((item) => item.pergunta_id);
   if (clearedIds.length) {
-    const { error } = await supabase.from(TABLE).delete().in("pergunta_id", clearedIds);
+    const { error } = await admin.from(TABLE).delete().in("pergunta_id", clearedIds);
 
     if (error) {
       return NextResponse.json(
@@ -124,7 +137,7 @@ export async function PUT(request: Request) {
     }));
 
   if (rows.length) {
-    const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: "pergunta_id" });
+    const { error } = await admin.from(TABLE).upsert(rows, { onConflict: "pergunta_id" });
 
     if (error) {
       return NextResponse.json(
@@ -134,17 +147,17 @@ export async function PUT(request: Request) {
     }
   }
 
-  const rankingResult = await supabase.rpc("recalcular_ranking_completo_admin");
-  if (rankingResult.error) {
+  const ranking = await recalculateSpecialScores(admin);
+  if ("error" in ranking) {
     return NextResponse.json(
       {
-        error: `Respostas salvas, mas não foi possível atualizar o ranking: ${rankingResult.error.message}`,
+        error: `Respostas salvas, mas não foi possível atualizar o ranking: ${ranking.error}`,
       },
       { status: 500 },
     );
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from(TABLE)
     .select("pergunta_id,resposta,atualizado_em")
     .order("pergunta_id");
@@ -156,15 +169,36 @@ export async function PUT(request: Request) {
     );
   }
 
-  const rankingRow = Array.isArray(rankingResult.data) ? rankingResult.data[0] : rankingResult.data;
-
   return NextResponse.json({
     respostas: data ?? [],
-    ranking: {
-      jogos_recalculados: Number(rankingRow?.jogos_recalculados ?? 0),
-      usuarios_atualizados: Number(rankingRow?.usuarios_atualizados ?? 0),
-    },
+    ranking,
   });
+}
+
+async function recalculateSpecialScores(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<RankingRecalculation | { error: string }> {
+  const totalsResult = await supabase.rpc("recalcular_totais_usuarios");
+
+  if (!totalsResult.error) {
+    return {
+      jogos_recalculados: 0,
+      usuarios_atualizados: Number(totalsResult.data ?? 0),
+    };
+  }
+
+  const fullResult = await supabase.rpc("recalcular_ranking_completo");
+
+  if (fullResult.error) {
+    return { error: `${totalsResult.error.message}; ${fullResult.error.message}` };
+  }
+
+  const row = Array.isArray(fullResult.data) ? fullResult.data[0] : fullResult.data;
+
+  return {
+    jogos_recalculados: Number(row?.jogos_recalculados ?? 0),
+    usuarios_atualizados: Number(row?.usuarios_atualizados ?? 0),
+  };
 }
 
 async function requireAdmin() {
