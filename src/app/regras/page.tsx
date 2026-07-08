@@ -94,9 +94,9 @@ const RULES = [
 const KNOCKOUT_MULTIPLIERS = [
   { phase: "16 avos", multiplier: "1.2x" },
   { phase: "Oitavas", multiplier: "1.4x" },
-  { phase: "Quartas", multiplier: "1.6x" },
-  { phase: "Semifinal", multiplier: "1.8x" },
-  { phase: "Final", multiplier: "2.0x" },
+  { phase: "Quartas", multiplier: "2x" },
+  { phase: "Semifinal", multiplier: "3x" },
+  { phase: "Final", multiplier: "4x" },
 ] as const;
 
 export default function RegrasPage() {

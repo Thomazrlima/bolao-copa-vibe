@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { buildKnockoutBracket, type GrupoRow, type JogoGrupo } from "@/lib/knockout";
+import {
+  buildKnockoutBracket,
+  type GrupoRow,
+  type JogoGrupo,
+  type KnockoutMatch,
+} from "@/lib/knockout";
 import { ServiceError } from "@/lib/server/bolao-service";
 
 type FaseRow = {
@@ -78,11 +83,6 @@ const BRACKET_CODES_BY_PHASE = new Map([
   [5, ["M101", "M102"]],
   [7, ["M104"]],
 ]);
-const BRACKET_CODE_ORDER = new Map(
-  [...BRACKET_CODES_BY_PHASE.values()]
-    .flatMap((codes) => codes)
-    .map((code, index) => [code, index]),
-);
 const EXPECTED_INITIAL_MATCHES_BY_PHASE = new Map([
   [2, 16],
   [3, 8],
@@ -140,26 +140,13 @@ function matchKey(faseId: number, slot: number) {
   return `${faseId}:${slot}`;
 }
 
-function bracketCodeOrder(value: string | null | undefined) {
-  const bracketOrder = value ? BRACKET_CODE_ORDER.get(value) : undefined;
-  if (bracketOrder != null) return bracketOrder;
-
-  const match = value?.match(/^M(\d+)$/);
-  if (!match) return Number.POSITIVE_INFINITY;
-  return 1000 + Number(match[1]);
-}
-
 function expectedBracketCode(faseId: number, slot: number) {
   return BRACKET_CODES_BY_PHASE.get(faseId)?.[slot] ?? null;
 }
 
-function sortGamesByBracketSlot(a: JogoRow, b: JogoRow) {
-  return (
-    bracketCodeOrder(a.codigo_mata_mata) - bracketCodeOrder(b.codigo_mata_mata) ||
-    a.data.localeCompare(b.data) ||
-    a.time1.localeCompare(b.time1, "pt-BR") ||
-    a.time2.localeCompare(b.time2, "pt-BR")
-  );
+function normalizeKnockoutCode(value: string | null | undefined) {
+  const code = value?.trim().toUpperCase();
+  return code && /^M\d+$/.test(code) ? code : null;
 }
 
 function buildPhasePlan(
@@ -335,6 +322,129 @@ function buildProjectedInitialGames(groups: GrupoRow[], games: JogoRow[]): Initi
   });
 }
 
+function buildCanonicalInitialGames(
+  groups: GrupoRow[],
+  games: JogoRow[],
+  phaseId: number,
+  concreteKnockoutGames: JogoRow[],
+): InitialGameSlot[] {
+  const bracket = buildKnockoutBracket(groups, games as JogoGrupo[]);
+  const matches = bracketMatchesByPhase(bracket, phaseId);
+  if (!matches.length) return [];
+
+  const gamesByCode = new Map(
+    concreteKnockoutGames
+      .filter((game) => game.fase_id === phaseId)
+      .flatMap((game) => {
+        const code = normalizeKnockoutCode(game.codigo_mata_mata);
+        return code ? [[code, game] as const] : [];
+      }),
+  );
+  const gamesByTeamPair = new Map(
+    concreteKnockoutGames
+      .filter((game) => game.fase_id === phaseId)
+      .flatMap((game) => {
+        const key = savedTeamPairKey(game.fase_id, game.time1, game.time2);
+        return key ? [[key, game] as const] : [];
+      }),
+  );
+
+  return matches.map((match) => {
+    const time1 = match.time1?.time ?? null;
+    const time2 = match.time2?.time ?? null;
+    const teamPairKey = savedTeamPairKey(phaseId, time1, time2);
+    const officialGame =
+      gamesByCode.get(match.id) ?? (teamPairKey ? gamesByTeamPair.get(teamPairKey) : undefined);
+
+    if (officialGame) {
+      if (!time1 || !time2) return officialGame;
+
+      return {
+        ...officialGame,
+        codigo_mata_mata: match.id,
+        time1,
+        time2,
+        gols1: scoreForTeam(officialGame, time1, "gols"),
+        gols2: scoreForTeam(officialGame, time2, "gols"),
+        penaltis1: scoreForTeam(officialGame, time1, "penaltis"),
+        penaltis2: scoreForTeam(officialGame, time2, "penaltis"),
+        vencedor: winnerForCanonicalOrder(officialGame, time1, time2),
+      };
+    }
+
+    if (!time1 || !time2) return null;
+
+    return {
+      id: match.jogoId ?? match.id,
+      fase_id: phaseId,
+      codigo_mata_mata: match.id,
+      time1,
+      time2,
+      data: match.data ?? "",
+      gols1: match.gols1 ?? null,
+      gols2: match.gols2 ?? null,
+      penaltis1: match.penaltis1 ?? null,
+      penaltis2: match.penaltis2 ?? null,
+      vencedor: match.winnerName ?? null,
+      encerrado: match.encerrado ?? false,
+      placar_status: match.placar_status ?? "upcoming",
+    };
+  });
+}
+
+function scoreForTeam(game: JogoRow, team: string | null | undefined, field: "gols" | "penaltis") {
+  const name = cleanTeamName(team);
+  if (!name) return null;
+
+  if (name === cleanTeamName(game.time1)) {
+    return field === "gols" ? game.gols1 : game.penaltis1;
+  }
+
+  if (name === cleanTeamName(game.time2)) {
+    return field === "gols" ? game.gols2 : game.penaltis2;
+  }
+
+  return null;
+}
+
+function winnerForCanonicalOrder(game: JogoRow, time1: string, time2: string) {
+  const winner = cleanTeamName(game.vencedor);
+  if (winner === time1 || winner === time2) return winner;
+  if (!game.encerrado || game.gols1 == null || game.gols2 == null) return null;
+
+  const gols1 = scoreForTeam(game, time1, "gols");
+  const gols2 = scoreForTeam(game, time2, "gols");
+  if (gols1 != null && gols2 != null && gols1 !== gols2) return gols1 > gols2 ? time1 : time2;
+
+  const penaltis1 = scoreForTeam(game, time1, "penaltis");
+  const penaltis2 = scoreForTeam(game, time2, "penaltis");
+  if (penaltis1 != null && penaltis2 != null && penaltis1 !== penaltis2) {
+    return penaltis1 > penaltis2 ? time1 : time2;
+  }
+
+  return null;
+}
+
+function bracketMatchesByPhase(
+  bracket: ReturnType<typeof buildKnockoutBracket>,
+  phaseId: number,
+): KnockoutMatch[] {
+  switch (phaseId) {
+    case 2:
+      return bracket.r32;
+    case 3:
+      return bracket.r16;
+    case 4:
+      return bracket.quartas;
+    case 5:
+      return bracket.semifinais;
+    case 7:
+      return [bracket.final];
+    default:
+      return [];
+  }
+}
+
 function buildChaveamentoPayload(
   games: JogoRow[],
   phases: FaseRow[],
@@ -352,9 +462,7 @@ function buildChaveamentoPayload(
   const initialPhaseId = Math.min(...concreteKnockoutGames.map((game) => game.fase_id));
   const hasInitialPhase = Number.isFinite(initialPhaseId);
   const officialInitialGames = hasInitialPhase
-    ? concreteKnockoutGames
-        .filter((game) => game.fase_id === initialPhaseId)
-        .sort(sortGamesByBracketSlot)
+    ? buildCanonicalInitialGames(groups, games, initialPhaseId, concreteKnockoutGames)
     : [];
   const projectedInitialGames = buildProjectedInitialGames(groups, games);
   const initialGames =

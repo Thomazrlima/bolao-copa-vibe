@@ -7,9 +7,9 @@ as $$
   select case p_fase_id
     when 2 then 1.2
     when 3 then 1.4
-    when 4 then 1.6
-    when 5 then 1.8
-    when 7 then 2.0
+    when 4 then 2.0
+    when 5 then 3.0
+    when 7 then 4.0
     else 1.0
   end;
 $$;

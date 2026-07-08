@@ -46,6 +46,7 @@ type GrupoRow = {
 };
 
 const OUTCOMES: GuessOutcome[] = ["chinelada", "strong", "result", "goals", "miss"];
+const PALPITES_PAGE_SIZE = 1000;
 
 function canShowPublicGuesses(
   game: Pick<JogoRow, "fase_id" | "encerrado" | "placar_status"> | undefined,
@@ -56,35 +57,41 @@ function canShowPublicGuesses(
 }
 
 export async function getPalpitesDashboard(supabase: SupabaseClient, userId: string) {
-  const [gamesResult, guessesResult, phasesResult, rankingResult, groupsResult] = await Promise.all(
-    [
-      supabase
-        .from("jogos")
-        .select(
-          "id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status,sportsdb_status",
-        )
-        .order("data", { ascending: true }),
-      supabase
-        .from("palpites")
-        .select("user_id,jogo_id,gols1,gols2,pontos,chinelada,calculado_em,criado_em"),
-      supabase.from("fases").select("id,nome"),
-      supabase
-        .from("ranking_usuarios")
-        .select("id,nome_completo,pontos,chineladas")
-        .order("pontos", { ascending: false })
-        .order("chineladas", { ascending: false }),
-      supabase.from("grupos").select("grupo,time"),
-    ],
-  );
+  const [
+    gamesResult,
+    guessesResult,
+    guessesCountResult,
+    phasesResult,
+    rankingResult,
+    groupsResult,
+  ] = await Promise.all([
+    supabase
+      .from("jogos")
+      .select(
+        "id,fase_id,time1,time2,data,gols1,gols2,encerrado,rodada,placar_status,sportsdb_status",
+      )
+      .order("data", { ascending: true }),
+    getAllPalpites(supabase),
+    supabase.from("palpites").select("*", { count: "exact", head: true }),
+    supabase.from("fases").select("id,nome"),
+    supabase
+      .from("ranking_usuarios")
+      .select("id,nome_completo,pontos,chineladas")
+      .order("pontos", { ascending: false })
+      .order("chineladas", { ascending: false }),
+    supabase.from("grupos").select("grupo,time"),
+  ]);
 
   assertNoError(gamesResult.error);
-  assertNoError(guessesResult.error);
+  if ("error" in guessesResult) assertNoError(guessesResult.error);
+  assertNoError(guessesCountResult.error);
   assertNoError(phasesResult.error);
   assertNoError(rankingResult.error);
   assertNoError(groupsResult.error);
 
   const games = (gamesResult.data ?? []) as JogoRow[];
-  const publicGuesses = (guessesResult.data ?? []) as PalpiteRow[];
+  const publicGuesses = guessesResult.data;
+  const totalGuesses = guessesCountResult.count ?? publicGuesses.length;
   const userGuesses = await getPalpitesDoUsuario(supabase, userId);
   const phases = (phasesResult.data ?? []) as FaseRow[];
   const ranking = (rankingResult.data ?? []) as RankingRow[];
@@ -160,7 +167,7 @@ export async function getPalpitesDashboard(supabase: SupabaseClient, userId: str
     },
     geral: {
       participantes: new Set(guesses.map((guess) => guess.user_id)).size,
-      palpites: guesses.length,
+      palpites: totalGuesses,
       chineladas: finishedGuesses.filter(({ scoring }) => scoring.outcome === "chinelada").length,
       media_pontos:
         finishedGuesses.length > 0
@@ -229,6 +236,23 @@ export async function upsertPalpite(
 
   assertNoError(error);
   return data;
+}
+
+async function getAllPalpites(supabase: SupabaseClient) {
+  const rows: PalpiteRow[] = [];
+
+  for (let from = 0; ; from += PALPITES_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("palpites")
+      .select("user_id,jogo_id,gols1,gols2,pontos,chinelada,calculado_em,criado_em")
+      .range(from, from + PALPITES_PAGE_SIZE - 1);
+
+    if (error) return { data: rows, error };
+
+    const page = (data ?? []) as PalpiteRow[];
+    rows.push(...page);
+    if (page.length < PALPITES_PAGE_SIZE) return { data: rows, error: null };
+  }
 }
 
 function scoreGuess(game: JogoRow, guess: PalpiteRow) {

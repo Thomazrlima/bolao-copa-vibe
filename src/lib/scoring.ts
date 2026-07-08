@@ -36,9 +36,9 @@ export type PontuacaoJogo = {
 const PHASE_POINT_MULTIPLIERS: Record<number, number> = {
   2: 1.2,
   3: 1.4,
-  4: 1.6,
-  5: 1.8,
-  7: 2,
+  4: 2,
+  5: 3,
+  7: 4,
 };
 
 export function getPhasePointMultiplier(faseId: number | null | undefined) {

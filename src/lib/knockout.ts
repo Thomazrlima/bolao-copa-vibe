@@ -59,6 +59,15 @@ export type KnockoutMatch = {
   source?: "official" | "projected";
 };
 
+const PHASE_ID_BY_NAME = new Map<KnockoutMatch["fase"], number>([
+  ["16-avos", 2],
+  ["Oitavas", 3],
+  ["Quartas", 4],
+  ["Semifinal", 5],
+  ["Disputa de 3º", 6],
+  ["Final", 7],
+]);
+
 export type KnockoutBracket = {
   terceirosClassificados: TeamSlot[];
   matrizKey: string | null;
@@ -671,6 +680,7 @@ export function buildKnockoutBracket(grupos: GrupoRow[], jogos: JogoGrupo[]): Kn
   const standingsByGroup = new Map(groups.map((group) => [group.group, group.standings]));
   const teamSlotByName = buildTeamSlotByName(groups);
   const officialGamesByCode = buildOfficialGamesByCode(jogos);
+  const officialGamesByPhasePair = buildOfficialGamesByPhasePair(jogos);
   const winnersByCode = new Map<string, TeamSlot>();
   const losersByCode = new Map<string, TeamSlot>();
   const thirds = groups
@@ -699,32 +709,51 @@ export function buildKnockoutBracket(grupos: GrupoRow[], jogos: JogoGrupo[]): Kn
     source1?: MatchSource,
     source2?: MatchSource,
   ): KnockoutMatch => {
-    const officialGame = officialGamesByCode.get(base.id);
     const derivedTime1 = readSourceTeam(source1, winnersByCode, losersByCode);
     const derivedTime2 = readSourceTeam(source2, winnersByCode, losersByCode);
+    const expectedTime1 = derivedTime1 ?? base.time1;
+    const expectedTime2 = derivedTime2 ?? base.time2;
+    const officialGame =
+      officialGamesByCode.get(base.id) ??
+      findOfficialGameByPhasePair(
+        officialGamesByPhasePair,
+        base.fase,
+        expectedTime1,
+        expectedTime2,
+      );
     const officialTime1 = officialGame
       ? toOfficialTeamSlot(officialGame.time1, teamSlotByName)
       : null;
     const officialTime2 = officialGame
       ? toOfficialTeamSlot(officialGame.time2, teamSlotByName)
       : null;
-    const time1 = officialTime1 ?? derivedTime1 ?? (officialGame ? null : base.time1);
-    const time2 = officialTime2 ?? derivedTime2 ?? (officialGame ? null : base.time2);
-    const winnerSide = getWinnerSide(officialGame);
+    const time1 = expectedTime1 ?? officialTime1 ?? (officialGame ? null : base.time1);
+    const time2 = expectedTime2 ?? officialTime2 ?? (officialGame ? null : base.time2);
+    const officialWinnerName = getWinnerName(officialGame);
+    const winnerSide =
+      officialWinnerName && time1?.time === officialWinnerName
+        ? ("time1" as const)
+        : officialWinnerName && time2?.time === officialWinnerName
+          ? ("time2" as const)
+          : null;
     const winner = winnerSide === "time1" ? time1 : winnerSide === "time2" ? time2 : null;
     const loser = winnerSide === "time1" ? time2 : winnerSide === "time2" ? time1 : null;
     const resolved = {
       ...base,
       time1,
       time2,
-      label1: officialGame ? officialLabel(officialGame.time1, base.label1) : base.label1,
-      label2: officialGame ? officialLabel(officialGame.time2, base.label2) : base.label2,
+      label1:
+        time1?.time ??
+        (officialGame ? officialLabel(officialGame.time1, base.label1) : base.label1),
+      label2:
+        time2?.time ??
+        (officialGame ? officialLabel(officialGame.time2, base.label2) : base.label2),
       jogoId: officialGame?.id ?? null,
       data: officialGame?.data ?? null,
-      gols1: officialGame?.gols1 ?? null,
-      gols2: officialGame?.gols2 ?? null,
-      penaltis1: officialGame?.penaltis1 ?? null,
-      penaltis2: officialGame?.penaltis2 ?? null,
+      gols1: scoreForTeam(officialGame, time1?.time, "gols") ?? null,
+      gols2: scoreForTeam(officialGame, time2?.time, "gols") ?? null,
+      penaltis1: scoreForTeam(officialGame, time1?.time, "penaltis") ?? null,
+      penaltis2: scoreForTeam(officialGame, time2?.time, "penaltis") ?? null,
       encerrado: officialGame?.encerrado ?? false,
       placar_status: officialGame?.placar_status ?? null,
       winnerSide,
@@ -947,6 +976,44 @@ function buildOfficialGamesByCode(jogos: JogoGrupo[]) {
   );
 }
 
+function buildOfficialGamesByPhasePair(jogos: JogoGrupo[]) {
+  const gamesByPair = new Map<string, JogoGrupo>();
+
+  jogos.forEach((jogo) => {
+    if (jogo.fase_id <= 1) return;
+
+    const key = officialGamePairKey(jogo.fase_id, jogo.time1, jogo.time2);
+    if (key && !gamesByPair.has(key)) gamesByPair.set(key, jogo);
+  });
+
+  return gamesByPair;
+}
+
+function findOfficialGameByPhasePair(
+  gamesByPair: Map<string, JogoGrupo>,
+  phase: KnockoutMatch["fase"],
+  time1: TeamSlot | null,
+  time2: TeamSlot | null,
+) {
+  const phaseId = PHASE_ID_BY_NAME.get(phase);
+  if (!phaseId) return null;
+
+  const key = officialGamePairKey(phaseId, time1?.time, time2?.time);
+  return key ? (gamesByPair.get(key) ?? null) : null;
+}
+
+function officialGamePairKey(
+  phaseId: number,
+  time1: string | null | undefined,
+  time2: string | null | undefined,
+) {
+  const first = cleanTeamName(time1);
+  const second = cleanTeamName(time2);
+  if (!first || !second) return null;
+
+  return [phaseId, ...[first, second].sort((a, b) => a.localeCompare(b, "pt-BR"))].join("::");
+}
+
 function normalizeKnockoutCode(value: string | null | undefined) {
   const code = value?.trim().toUpperCase();
   return code && /^M\d+$/.test(code) ? code : null;
@@ -996,7 +1063,33 @@ function officialLabel(value: string | null | undefined, fallback: string) {
   return cleanTeamName(value) ?? fallback;
 }
 
-function getWinnerSide(jogo: JogoGrupo | undefined) {
+function scoreForTeam(
+  jogo: JogoGrupo | null | undefined,
+  team: string | null | undefined,
+  field: "gols" | "penaltis",
+) {
+  const name = cleanTeamName(team);
+  if (!jogo || !name) return null;
+
+  if (name === cleanTeamName(jogo.time1)) {
+    return field === "gols" ? jogo.gols1 : (jogo.penaltis1 ?? null);
+  }
+
+  if (name === cleanTeamName(jogo.time2)) {
+    return field === "gols" ? jogo.gols2 : (jogo.penaltis2 ?? null);
+  }
+
+  return null;
+}
+
+function getWinnerName(jogo: JogoGrupo | null | undefined) {
+  const side = getWinnerSide(jogo);
+  if (side === "time1") return cleanTeamName(jogo?.time1);
+  if (side === "time2") return cleanTeamName(jogo?.time2);
+  return null;
+}
+
+function getWinnerSide(jogo: JogoGrupo | null | undefined) {
   if (!jogo || !isFinishedGame(jogo) || jogo.gols1 == null || jogo.gols2 == null) return null;
   if (jogo.gols1 !== jogo.gols2) return jogo.gols1 > jogo.gols2 ? "time1" : "time2";
 
