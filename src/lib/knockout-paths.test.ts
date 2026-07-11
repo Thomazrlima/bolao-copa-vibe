@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { describe, test } from "node:test";
 
 import {
   KNOCKOUT_PATHS,
@@ -28,25 +29,25 @@ function derivedPair(code: string, winnersByCode: Record<string, string>) {
 
 describe("knockout paths", () => {
   test("defines every future match from explicit source matches", () => {
-    expect(sourcePair("M89")).toEqual(["M73", "M75"]);
-    expect(sourcePair("M90")).toEqual(["M74", "M77"]);
-    expect(sourcePair("M91")).toEqual(["M76", "M78"]);
-    expect(sourcePair("M92")).toEqual(["M79", "M80"]);
-    expect(sourcePair("M93")).toEqual(["M83", "M84"]);
-    expect(sourcePair("M94")).toEqual(["M81", "M82"]);
-    expect(sourcePair("M95")).toEqual(["M86", "M88"]);
-    expect(sourcePair("M96")).toEqual(["M85", "M87"]);
-    expect(sourcePair("M97")).toEqual(["M89", "M90"]);
-    expect(sourcePair("M98")).toEqual(["M93", "M94"]);
-    expect(sourcePair("M99")).toEqual(["M91", "M92"]);
-    expect(sourcePair("M100")).toEqual(["M95", "M96"]);
-    expect(sourcePair("M101")).toEqual(["M97", "M98"]);
-    expect(sourcePair("M102")).toEqual(["M99", "M100"]);
-    expect(sourcePair("M104")).toEqual(["M101", "M102"]);
+    assert.deepEqual(sourcePair("M89"), ["M73", "M75"]);
+    assert.deepEqual(sourcePair("M90"), ["M74", "M77"]);
+    assert.deepEqual(sourcePair("M91"), ["M76", "M78"]);
+    assert.deepEqual(sourcePair("M92"), ["M79", "M80"]);
+    assert.deepEqual(sourcePair("M93"), ["M83", "M84"]);
+    assert.deepEqual(sourcePair("M94"), ["M81", "M82"]);
+    assert.deepEqual(sourcePair("M95"), ["M86", "M88"]);
+    assert.deepEqual(sourcePair("M96"), ["M85", "M87"]);
+    assert.deepEqual(sourcePair("M97"), ["M89", "M90"]);
+    assert.deepEqual(sourcePair("M98"), ["M93", "M94"]);
+    assert.deepEqual(sourcePair("M99"), ["M91", "M92"]);
+    assert.deepEqual(sourcePair("M100"), ["M95", "M96"]);
+    assert.deepEqual(sourcePair("M101"), ["M97", "M98"]);
+    assert.deepEqual(sourcePair("M102"), ["M99", "M100"]);
+    assert.deepEqual(sourcePair("M104"), ["M101", "M102"]);
   });
 
   test("keeps visual order separate from source dependency", () => {
-    expect(getKnockoutCodesByPhase(3)).toEqual([
+    assert.deepEqual(getKnockoutCodesByPhase(3), [
       "M89",
       "M90",
       "M93",
@@ -56,8 +57,8 @@ describe("knockout paths", () => {
       "M95",
       "M96",
     ]);
-    expect(sourcePair("M98")).toEqual(["M93", "M94"]);
-    expect(sourcePair("M99")).toEqual(["M91", "M92"]);
+    assert.deepEqual(sourcePair("M98"), ["M93", "M94"]);
+    assert.deepEqual(sourcePair("M99"), ["M91", "M92"]);
   });
 
   test("does not depend on returned array order to derive participants", () => {
@@ -72,32 +73,34 @@ describe("knockout paths", () => {
       M96: "Switzerland",
     };
     const shuffledQuarterCodes = [...getKnockoutCodesByPhase(4)].reverse();
-    const pairs = new Map(shuffledQuarterCodes.map((code) => [code, derivedPair(code, winnersByCode)]));
+    const pairs = new Map(
+      shuffledQuarterCodes.map((code) => [code, derivedPair(code, winnersByCode)]),
+    );
 
-    expect(pairs.get("M97")).toEqual(["Canada", "France"]);
-    expect(pairs.get("M98")).toEqual(["Spain", "Belgium"]);
-    expect(pairs.get("M99")).toEqual(["Norway", "England"]);
-    expect(pairs.get("M100")).toEqual(["Argentina", "Switzerland"]);
-    expect(pairs.get("M97")).not.toEqual(["Canada", "Germany"]);
+    assert.deepEqual(pairs.get("M97"), ["Canada", "France"]);
+    assert.deepEqual(pairs.get("M98"), ["Spain", "Belgium"]);
+    assert.deepEqual(pairs.get("M99"), ["Norway", "England"]);
+    assert.deepEqual(pairs.get("M100"), ["Argentina", "Switzerland"]);
+    assert.notDeepEqual(pairs.get("M97"), ["Canada", "Germany"]);
   });
 
   test("keeps opposite sides apart until the final", () => {
-    expect(commonDescendants("M97", "M99")).toEqual(["M104"]);
-    expect(commonDescendants("M98", "M100")).toEqual(["M104"]);
+    assert.deepEqual(commonDescendants("M97", "M99"), ["M104"]);
+    assert.deepEqual(commonDescendants("M98", "M100"), ["M104"]);
   });
 
   test("has one unique path per match code and phase slot", () => {
     const codes = KNOCKOUT_PATHS.map((path) => path.code);
     const phaseSlots = KNOCKOUT_PATHS.map((path) => `${path.phaseId}:${path.slot}`);
 
-    expect(new Set(codes).size).toBe(codes.length);
-    expect(new Set(phaseSlots).size).toBe(phaseSlots.length);
+    assert.equal(new Set(codes).size, codes.length);
+    assert.equal(new Set(phaseSlots).size, phaseSlots.length);
   });
 
   test("chaveamento save path does not delete existing guesses", () => {
     const serviceSource = readFileSync("src/lib/server/chaveamento-service.ts", "utf8");
 
-    expect(serviceSource).toContain(".upsert(");
-    expect(serviceSource).not.toContain(".delete()");
+    assert.match(serviceSource, /\.upsert\(/);
+    assert.doesNotMatch(serviceSource, /\.delete\(\)/);
   });
 });

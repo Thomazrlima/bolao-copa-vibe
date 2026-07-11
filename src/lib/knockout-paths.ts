@@ -28,7 +28,7 @@ const loserOf = (code: string): KnockoutResultSource => ({ code, result: "loser"
 
 export const KNOCKOUT_PHASE_ORDER = [2, 3, 4, 5, 7] as const;
 
-export const KNOCKOUT_PATHS = [
+export const KNOCKOUT_PATHS: readonly KnockoutPath[] = [
   { code: "M73", phaseId: 2, phase: "16-avos", slot: 0, side: "left", label1: "2º Grupo A", label2: "2º Grupo B" },
   { code: "M75", phaseId: 2, phase: "16-avos", slot: 1, side: "left", label1: "1º Grupo F", label2: "2º Grupo C" },
   { code: "M74", phaseId: 2, phase: "16-avos", slot: 2, side: "left", label1: "1º Grupo E", label2: "Melhor 3º" },
@@ -64,7 +64,7 @@ export const KNOCKOUT_PATHS = [
   { code: "M102", phaseId: 5, phase: "Semifinal", slot: 1, side: "right", label1: "Vencedor M99", label2: "Vencedor M100", source1: winnerOf("M99"), source2: winnerOf("M100") },
   { code: "M103", phaseId: 6, phase: "Disputa de 3º", slot: 0, side: "center", label1: "Perdedor M101", label2: "Perdedor M102", source1: loserOf("M101"), source2: loserOf("M102") },
   { code: "M104", phaseId: 7, phase: "Final", slot: 0, side: "center", label1: "Vencedor M101", label2: "Vencedor M102", source1: winnerOf("M101"), source2: winnerOf("M102") },
-] as const satisfies readonly KnockoutPath[];
+] as const;
 
 export const KNOCKOUT_CODES_BY_PHASE = new Map<KnockoutPhaseId, string[]>(
   KNOCKOUT_PATHS.reduce<Array<[KnockoutPhaseId, string[]]>>((entries, path) => {
