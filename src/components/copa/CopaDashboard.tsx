@@ -20,6 +20,7 @@ import {
   type Standing,
   type TeamSlot,
 } from "@/lib/knockout";
+import { getKnockoutPath } from "@/lib/knockout-paths";
 import { cn } from "@/lib/utils";
 
 type View = "grupos" | "mata-mata";
@@ -494,10 +495,18 @@ function BracketView({ bracket }: { bracket: KnockoutBracket }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
   const rounds = [
-    { title: "16-avos", subtitle: "32 seleções", matches: bracket.r32 },
-    { title: "Oitavas", subtitle: "16 seleções", matches: bracket.r16 },
-    { title: "Quartas", subtitle: "8 seleções", matches: bracket.quartas },
-    { title: "Semifinais", subtitle: "4 seleções", matches: bracket.semifinais },
+    { title: "16-avos", subtitle: "32 seleções", matches: orderMatchesForBracketView(bracket.r32) },
+    { title: "Oitavas", subtitle: "16 seleções", matches: orderMatchesForBracketView(bracket.r16) },
+    {
+      title: "Quartas",
+      subtitle: "8 seleções",
+      matches: orderMatchesForBracketView(bracket.quartas),
+    },
+    {
+      title: "Semifinais",
+      subtitle: "4 seleções",
+      matches: orderMatchesForBracketView(bracket.semifinais),
+    },
     { title: "Final", subtitle: "A taça", matches: [bracket.final] },
   ];
 
@@ -594,6 +603,23 @@ function BracketView({ bracket }: { bracket: KnockoutBracket }) {
       </section>
     </div>
   );
+}
+
+function orderMatchesForBracketView(matches: KnockoutMatch[]) {
+  return [...matches].sort((first, second) => {
+    const firstPath = getKnockoutPath(first.id);
+    const secondPath = getKnockoutPath(second.id);
+
+    if (firstPath && secondPath && firstPath.phaseId === secondPath.phaseId) {
+      return firstPath.slot - secondPath.slot;
+    }
+
+    if (firstPath && secondPath) return firstPath.phaseId - secondPath.phaseId;
+    if (firstPath) return -1;
+    if (secondPath) return 1;
+
+    return first.id.localeCompare(second.id, "pt-BR", { numeric: true });
+  });
 }
 
 function Round({

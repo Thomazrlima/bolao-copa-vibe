@@ -7,6 +7,7 @@ import { Flag } from "@/components/common/Flag";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { teamCodeFromName } from "@/data/iso2";
+import { getKnockoutDescendantCodes, getKnockoutPath } from "@/lib/knockout-paths";
 import type { ChaveamentoConfronto, PalpiteChaveamentoResponse } from "@/lib/queries";
 import { formatLocalGameDateTime } from "@/lib/local-datetime";
 import { cn } from "@/lib/utils";
@@ -88,12 +89,13 @@ function winnersSignature(bracket: PalpiteChaveamentoResponse) {
 }
 
 function derivePhases(bracket: PalpiteChaveamentoResponse, winners: DraftWinners): DerivedPhase[] {
-  let previousWinners: Array<string | null> = [];
+  const winnersByCode = new Map<string, string | null>();
 
-  return bracket.fases.map((phase, phaseIndex) => {
+  return bracket.fases.map((phase) => {
     const confrontos = phase.confrontos.map((match) => {
-      const generatedTime1 = phaseIndex > 0 ? (previousWinners[match.slot * 2] ?? null) : null;
-      const generatedTime2 = phaseIndex > 0 ? (previousWinners[match.slot * 2 + 1] ?? null) : null;
+      const path = getKnockoutPath(match.codigo_mata_mata);
+      const generatedTime1 = path?.source1 ? (winnersByCode.get(path.source1.code) ?? null) : null;
+      const generatedTime2 = path?.source2 ? (winnersByCode.get(path.source2.code) ?? null) : null;
       const time1 = generatedTime1 ?? match.time1;
       const time2 = generatedTime2 ?? match.time2;
       const key = matchKey(match.fase_id, match.slot);
@@ -110,7 +112,9 @@ function derivePhases(bracket: PalpiteChaveamentoResponse, winners: DraftWinners
       };
     });
 
-    previousWinners = confrontos.map((match) => match.vencedor);
+    confrontos.forEach((match) => {
+      if (match.codigo_mata_mata) winnersByCode.set(match.codigo_mata_mata, match.vencedor);
+    });
     return { ...phase, confrontos };
   });
 }
@@ -249,14 +253,26 @@ export function ChaveamentoSection({
 
       const boardRect = boardElement.getBoundingClientRect();
       const nextSegments: ConnectorSegment[] = [];
+      const matchByCode = new Map(
+        phases.flatMap((phase) =>
+          phase.confrontos.flatMap((match) =>
+            match.codigo_mata_mata ? [[match.codigo_mata_mata, match] as const] : [],
+          ),
+        ),
+      );
 
-      phases.slice(0, -1).forEach((phase, phaseIndex) => {
+      phases.slice(0, -1).forEach((_, phaseIndex) => {
         const nextPhase = phases[phaseIndex + 1];
         if (!nextPhase) return;
 
         nextPhase.confrontos.forEach((parentMatch) => {
-          const topMatch = phase.confrontos[parentMatch.slot * 2];
-          const bottomMatch = phase.confrontos[parentMatch.slot * 2 + 1];
+          const parentPath = getKnockoutPath(parentMatch.codigo_mata_mata);
+          const topMatch = parentPath?.source1
+            ? matchByCode.get(parentPath.source1.code)
+            : undefined;
+          const bottomMatch = parentPath?.source2
+            ? matchByCode.get(parentPath.source2.code)
+            : undefined;
           if (!topMatch || !bottomMatch) return;
 
           const topElement = cardRefs.current.get(matchKey(topMatch.fase_id, topMatch.slot));
@@ -285,7 +301,7 @@ export function ChaveamentoSection({
           const topY = topRect.top + topRect.height / 2 - boardRect.top;
           const bottomY = bottomRect.top + bottomRect.height / 2 - boardRect.top;
           const parentY = parentRect.top + parentRect.height / 2 - boardRect.top;
-          const id = `${phase.fase_id}:${parentMatch.slot}`;
+          const id = `${parentMatch.fase_id}:${parentMatch.slot}`;
           const connectorActive = Boolean(topMatch.vencedor && bottomMatch.vencedor);
 
           if (topStartsLeft !== bottomStartsLeft) {
@@ -363,8 +379,25 @@ export function ChaveamentoSection({
     if (!bracket.aberto || !match.time1 || !match.time2) return;
     setWinners((current) => {
       const key = matchKey(match.fase_id, match.slot);
+      const keyByCode = new Map(
+        phases.flatMap((phase) =>
+          phase.confrontos.flatMap((item) =>
+            item.codigo_mata_mata
+              ? [[item.codigo_mata_mata, matchKey(item.fase_id, item.slot)] as const]
+              : [],
+          ),
+        ),
+      );
+      const descendantKeys = new Set(
+        getKnockoutDescendantCodes(match.codigo_mata_mata).flatMap((code) => {
+          const descendantKey = keyByCode.get(code);
+          return descendantKey ? [descendantKey] : [];
+        }),
+      );
       const next = Object.fromEntries(
         Object.entries(current).filter(([entryKey]) => {
+          if (descendantKeys.size > 0) return !descendantKeys.has(entryKey);
+
           const [faseId] = entryKey.split(":");
           return Number(faseId) <= match.fase_id;
         }),

@@ -1,3 +1,5 @@
+import { getKnockoutPath, type KnockoutResultSource } from "@/lib/knockout-paths";
+
 export type GrupoRow = {
   grupo: string;
   time: string;
@@ -843,94 +845,25 @@ export function buildKnockoutBracket(grupos: GrupoRow[], jogos: JogoGrupo[]): Kn
   ];
 
   const r32 = projectedR32.map((base) => resolveMatch(base));
-  const r16 = [
-    resolveMatch(
-      match("M89", "Oitavas", null, null, "Vencedor M73", "Vencedor M75"),
-      winnerOf("M73"),
-      winnerOf("M75"),
-    ),
-    resolveMatch(
-      match("M90", "Oitavas", null, null, "Vencedor M74", "Vencedor M77"),
-      winnerOf("M74"),
-      winnerOf("M77"),
-    ),
-    resolveMatch(
-      match("M91", "Oitavas", null, null, "Vencedor M76", "Vencedor M78"),
-      winnerOf("M76"),
-      winnerOf("M78"),
-    ),
-    resolveMatch(
-      match("M92", "Oitavas", null, null, "Vencedor M79", "Vencedor M80"),
-      winnerOf("M79"),
-      winnerOf("M80"),
-    ),
-    resolveMatch(
-      match("M93", "Oitavas", null, null, "Vencedor M83", "Vencedor M84"),
-      winnerOf("M83"),
-      winnerOf("M84"),
-    ),
-    resolveMatch(
-      match("M94", "Oitavas", null, null, "Vencedor M81", "Vencedor M82"),
-      winnerOf("M81"),
-      winnerOf("M82"),
-    ),
-    resolveMatch(
-      match("M95", "Oitavas", null, null, "Vencedor M86", "Vencedor M88"),
-      winnerOf("M86"),
-      winnerOf("M88"),
-    ),
-    resolveMatch(
-      match("M96", "Oitavas", null, null, "Vencedor M85", "Vencedor M87"),
-      winnerOf("M85"),
-      winnerOf("M87"),
-    ),
-  ];
+  const resolvePathMatch = (code: string, phase: KnockoutMatch["fase"]) => {
+    const path = getKnockoutPath(code);
 
-  const quartas = [
-    resolveMatch(
-      match("M97", "Quartas", null, null, "Vencedor M89", "Vencedor M90"),
-      winnerOf("M89"),
-      winnerOf("M90"),
-    ),
-    resolveMatch(
-      match("M98", "Quartas", null, null, "Vencedor M93", "Vencedor M94"),
-      winnerOf("M93"),
-      winnerOf("M94"),
-    ),
-    resolveMatch(
-      match("M99", "Quartas", null, null, "Vencedor M91", "Vencedor M92"),
-      winnerOf("M91"),
-      winnerOf("M92"),
-    ),
-    resolveMatch(
-      match("M100", "Quartas", null, null, "Vencedor M95", "Vencedor M96"),
-      winnerOf("M95"),
-      winnerOf("M96"),
-    ),
-  ];
+    return resolveMatch(
+      match(code, phase, null, null, path?.label1 ?? "", path?.label2 ?? ""),
+      toMatchSource(path?.source1),
+      toMatchSource(path?.source2),
+    );
+  };
 
-  const semifinais = [
-    resolveMatch(
-      match("M101", "Semifinal", null, null, "Vencedor M97", "Vencedor M98"),
-      winnerOf("M97"),
-      winnerOf("M98"),
-    ),
-    resolveMatch(
-      match("M102", "Semifinal", null, null, "Vencedor M99", "Vencedor M100"),
-      winnerOf("M99"),
-      winnerOf("M100"),
-    ),
-  ];
-  const terceiro = resolveMatch(
-    match("M103", "Disputa de 3º", null, null, "Perdedor M101", "Perdedor M102"),
-    loserOf("M101"),
-    loserOf("M102"),
+  const r16 = ["M89", "M90", "M91", "M92", "M93", "M94", "M95", "M96"].map((code) =>
+    resolvePathMatch(code, "Oitavas"),
   );
-  const final = resolveMatch(
-    match("M104", "Final", null, null, "Vencedor M101", "Vencedor M102"),
-    winnerOf("M101"),
-    winnerOf("M102"),
+  const quartas = ["M97", "M98", "M99", "M100"].map((code) =>
+    resolvePathMatch(code, "Quartas"),
   );
+  const semifinais = ["M101", "M102"].map((code) => resolvePathMatch(code, "Semifinal"));
+  const terceiro = resolvePathMatch("M103", "Disputa de 3º");
+  const final = resolvePathMatch("M104", "Final");
 
   return {
     terceirosClassificados: thirds,
@@ -949,12 +882,8 @@ type MatchSource = {
   result: "winner" | "loser";
 };
 
-function winnerOf(code: string): MatchSource {
-  return { code, result: "winner" };
-}
-
-function loserOf(code: string): MatchSource {
-  return { code, result: "loser" };
+function toMatchSource(source: KnockoutResultSource | undefined): MatchSource | undefined {
+  return source ? { code: source.code, result: source.result } : undefined;
 }
 
 function buildTeamSlotByName(groups: { group: string; standings: Standing[] }[]) {
