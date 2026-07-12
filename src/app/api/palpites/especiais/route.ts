@@ -24,7 +24,11 @@ export async function GET() {
       .from("palpites_especiais")
       .select("pergunta_id,resposta,atualizado_em")
       .eq("user_id", auth.user.id),
-    supabase.from(CORRECT_ANSWERS_TABLE).select("pergunta_id,resposta,atualizado_em"),
+    supabase
+      .from(CORRECT_ANSWERS_TABLE)
+      .select("pergunta_id,resposta,atualizado_em")
+      .order("pergunta_id")
+      .order("resposta"),
   ]);
 
   const error = answersResult.error ?? correctAnswersResult.error;

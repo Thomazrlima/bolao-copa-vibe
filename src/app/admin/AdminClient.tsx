@@ -24,6 +24,7 @@ import { SpinningBallLoader } from "@/components/common/SpinningBallLoader";
 import { BrazilThemedName } from "@/components/common/BrazilThemedName";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,7 +37,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { canManageUsers } from "@/lib/admin-users";
-import { CAMPEAO_BOLAO_QUESTION_ID, ESPECIAIS } from "@/lib/especiais";
+import { CAMPEAO_BOLAO_QUESTION_ID, ESPECIAIS, allowsMultipleCorrectAnswers } from "@/lib/especiais";
 import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 import { formatLocalDateTime, formatLocalGameDateTime } from "@/lib/local-datetime";
 import {
@@ -177,7 +178,7 @@ export function AdminClient() {
   const [highlights, setHighlights] = useState<Highlight[]>(defaultHighlights);
   const [highlightsSaving, setHighlightsSaving] = useState(false);
   const [highlightsMessage, setHighlightsMessage] = useState<string | null>(null);
-  const [specialAnswers, setSpecialAnswers] = useState<Record<string, string>>({});
+  const [specialAnswers, setSpecialAnswers] = useState<Record<string, string[]>>({});
   const [specialParticipants, setSpecialParticipants] = useState<SpecialParticipant[]>([]);
   const [specialsLoading, setSpecialsLoading] = useState(false);
   const [specialsSaving, setSpecialsSaving] = useState(false);
@@ -275,11 +276,7 @@ export function AdminClient() {
       }
 
       setSpecialParticipants(body.participantes ?? []);
-      setSpecialAnswers(
-        Object.fromEntries(
-          (body.respostas ?? []).map((answer) => [answer.pergunta_id, answer.resposta]),
-        ),
-      );
+      setSpecialAnswers(groupSpecialCorrectAnswers(body.respostas ?? []));
     } catch (error) {
       setSpecialsMessage(
         error instanceof Error ? error.message : "Não foi possível carregar os especiais.",
@@ -520,10 +517,15 @@ export function AdminClient() {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          respostas: ESPECIAIS.map((question) => ({
-            pergunta_id: question.id,
-            resposta: specialAnswers[question.id] || null,
-          })),
+          respostas: ESPECIAIS.map((question) => {
+            const answers = specialAnswers[question.id] ?? [];
+            return {
+              pergunta_id: question.id,
+              resposta: allowsMultipleCorrectAnswers(question.id)
+                ? answers
+                : (answers[0] ?? null),
+            };
+          }),
         }),
       });
       const body = (await response.json().catch(() => ({}))) as {
@@ -539,11 +541,7 @@ export function AdminClient() {
         throw new Error(body.error ?? "Não foi possível salvar as respostas corretas.");
       }
 
-      setSpecialAnswers(
-        Object.fromEntries(
-          (body.respostas ?? []).map((answer) => [answer.pergunta_id, answer.resposta]),
-        ),
-      );
+      setSpecialAnswers(groupSpecialCorrectAnswers(body.respostas ?? []));
       setSpecialsMessage(
         `Respostas corretas atualizadas. Ranking recalculado para ${
           body.ranking?.usuarios_atualizados ?? 0
@@ -686,7 +684,18 @@ export function AdminClient() {
   }
 
   function updateSpecialAnswer(questionId: string, answer: string) {
-    setSpecialAnswers((current) => ({ ...current, [questionId]: answer }));
+    setSpecialAnswers((current) => ({ ...current, [questionId]: [answer] }));
+    setSpecialsMessage(null);
+  }
+
+  function toggleSpecialAnswer(questionId: string, answer: string, checked: boolean) {
+    setSpecialAnswers((current) => {
+      const answers = new Set(current[questionId] ?? []);
+      if (checked) answers.add(answer);
+      else answers.delete(answer);
+
+      return { ...current, [questionId]: [...answers] };
+    });
     setSpecialsMessage(null);
   }
 
@@ -919,6 +928,7 @@ export function AdminClient() {
             onRefresh={() => void loadSpecialAnswers()}
             onSave={handleSaveSpecialAnswers}
             onChange={updateSpecialAnswer}
+            onToggle={toggleSpecialAnswer}
             onClear={clearSpecialAnswer}
           />
         </TabsContent>
@@ -1560,9 +1570,10 @@ function SpecialAnswersSection({
   onRefresh,
   onSave,
   onChange,
+  onToggle,
   onClear,
 }: {
-  answers: Record<string, string>;
+  answers: Record<string, string[]>;
   participants: SpecialParticipant[];
   loading: boolean;
   saving: boolean;
@@ -1570,9 +1581,10 @@ function SpecialAnswersSection({
   onRefresh: () => void;
   onSave: (event: FormEvent<HTMLFormElement>) => void;
   onChange: (questionId: string, answer: string) => void;
+  onToggle: (questionId: string, answer: string, checked: boolean) => void;
   onClear: (questionId: string) => void;
 }) {
-  const answeredCount = ESPECIAIS.filter((question) => answers[question.id]).length;
+  const answeredCount = ESPECIAIS.filter((question) => (answers[question.id] ?? []).length).length;
 
   return (
     <form onSubmit={onSave} className="rounded-xl border border-primary/30 bg-card p-4 sm:p-6">
@@ -1607,7 +1619,9 @@ function SpecialAnswersSection({
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         {ESPECIAIS.map((question, index) => {
-          const answer = answers[question.id] ?? "";
+          const selectedAnswers = answers[question.id] ?? [];
+          const answer = selectedAnswers[0] ?? "";
+          const multiple = allowsMultipleCorrectAnswers(question.id);
           const isBolaoChampion = question.id === CAMPEAO_BOLAO_QUESTION_ID;
           const options = isBolaoChampion
             ? participants.map((participant) => ({
@@ -1629,39 +1643,65 @@ function SpecialAnswersSection({
                   <h4 className="font-display text-sm font-black leading-snug">
                     {question.question}
                   </h4>
-                  {answer ? (
+                  {selectedAnswers.length ? (
                     <p className="mt-1 truncate text-xs text-muted-foreground">
-                      Atual: {formatSpecialAnswer(answer, participants)}
+                      Atual: {formatSpecialAnswers(selectedAnswers, participants)}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground">Sem resposta correta ainda</p>
                   )}
                 </div>
-                {answer ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : null}
+                {selectedAnswers.length ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                ) : null}
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Select
-                  value={answer}
-                  onValueChange={(value) => onChange(question.id, value)}
-                  disabled={loading || saving || options.length === 0}
-                >
-                  <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold">
-                    <SelectValue placeholder="Selecione a resposta correta" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-col gap-2">
+                {multiple ? (
+                  <div className="grid gap-2 rounded-xl border border-border bg-card p-3">
+                    {options.map((option) => {
+                      const checked = selectedAnswers.includes(option.value);
+
+                      return (
+                        <label
+                          key={option.value}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-bold hover:bg-primary/10"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            disabled={loading || saving}
+                            onCheckedChange={(value) =>
+                              onToggle(question.id, option.value, value === true)
+                            }
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <Select
+                    value={answer}
+                    onValueChange={(value) => onChange(question.id, value)}
+                    disabled={loading || saving || options.length === 0}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold">
+                      <SelectValue placeholder="Selecione a resposta correta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={() => onClear(question.id)}
-                  disabled={loading || saving || !answer}
+                  disabled={loading || saving || selectedAnswers.length === 0}
                   className="sm:w-24"
                 >
                   Limpar
@@ -1983,6 +2023,17 @@ function formatGameDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function groupSpecialCorrectAnswers(answers: SpecialCorrectAnswer[]) {
+  return answers.reduce<Record<string, string[]>>((grouped, answer) => {
+    grouped[answer.pergunta_id] = [...(grouped[answer.pergunta_id] ?? []), answer.resposta];
+    return grouped;
+  }, {});
+}
+
+function formatSpecialAnswers(answers: string[], participants: SpecialParticipant[]) {
+  return answers.map((answer) => formatSpecialAnswer(answer, participants)).join(", ");
 }
 
 function formatSpecialAnswer(answer: string, participants: SpecialParticipant[]) {

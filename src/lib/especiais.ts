@@ -6,6 +6,10 @@ export type EspecialQuestion = {
 
 export const ESPECIAIS_DEADLINE_ISO = "2026-06-13T19:00:00.000Z";
 export const CAMPEAO_BOLAO_QUESTION_ID = "campeao-bolao";
+export const MULTI_CORRECT_ESPECIAL_QUESTION_IDS = [
+  "artilheiro-copa",
+  "selecao-surpresa",
+] as const;
 
 export function especiaisAreOpen(now = Date.now()) {
   return now < new Date(ESPECIAIS_DEADLINE_ISO).getTime();
@@ -113,4 +117,10 @@ export const ESPECIAIS: readonly EspecialQuestion[] = [
 
 export function getEspecialQuestion(id: string) {
   return ESPECIAIS.find((question) => question.id === id);
+}
+
+export function allowsMultipleCorrectAnswers(id: string) {
+  return MULTI_CORRECT_ESPECIAL_QUESTION_IDS.includes(
+    id as (typeof MULTI_CORRECT_ESPECIAL_QUESTION_IDS)[number],
+  );
 }

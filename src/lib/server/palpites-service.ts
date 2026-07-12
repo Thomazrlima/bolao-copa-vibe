@@ -322,7 +322,7 @@ function buildRoundAccuracy(
 }
 
 function isAccuracyEligible(outcome: GuessOutcome) {
-  return outcome !== "goals";
+  return Boolean(outcome);
 }
 
 function isAccuracyHit(outcome: GuessOutcome) {
