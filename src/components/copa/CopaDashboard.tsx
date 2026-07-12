@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 type View = "grupos" | "mata-mata";
 type GrupoApiRow = GrupoRow & { updated_at?: string };
+type HeroStats = { groups: number; qualified: number; finished: number; total: number };
 
 export function CopaDashboard({
   initialGrupos = [],
@@ -95,17 +96,37 @@ export function CopaDashboard({
   );
   const bracket = useMemo(() => buildKnockoutBracket(grupos, jogos), [grupos, jogos]);
   const heroStats = useMemo(
-    () => ({
-      groups: new Set(grupos.map((grupo) => grupo.grupo)).size,
-      qualified: countBracketTeams(bracket.r32),
-      finished: jogos.filter((jogo) => jogo.encerrado || jogo.placar_status === "finished").length,
-      total: jogos.length,
-    }),
-    [bracket.r32, grupos, jogos],
+    () => {
+      if (view === "mata-mata") {
+        const bracketMatches = getAllBracketMatches(bracket);
+
+        return {
+          groups: 6,
+          qualified: countBracketTeams(bracket.r32),
+          finished: bracketMatches.filter(
+            (match) => match.encerrado || match.placar_status === "finished",
+          ).length,
+          total: bracketMatches.length,
+        };
+      }
+
+      return {
+        groups: new Set(grupos.map((grupo) => grupo.grupo)).size,
+        qualified: countBracketTeams(bracket.r32),
+        finished:
+          groupGames.filter((jogo) => jogo.encerrado || jogo.placar_status === "finished")
+            .length +
+          getAllBracketMatches(bracket).filter(
+            (match) => match.encerrado || match.placar_status === "finished",
+          ).length,
+        total: groupGames.length + getAllBracketMatches(bracket).length,
+      };
+    },
+    [bracket, groupGames, grupos, view],
   );
   return (
     <>
-      <CopaHero stats={heroStats} />
+      <CopaHero view={view} stats={heroStats} />
       <ViewSwitcher view={view} />
 
       {error && (
@@ -137,11 +158,9 @@ export function CopaDashboard({
   );
 }
 
-function CopaHero({
-  stats,
-}: {
-  stats: { groups: number; qualified: number; finished: number; total: number };
-}) {
+function CopaHero({ view, stats }: { view: View; stats: HeroStats }) {
+  const isKnockout = view === "mata-mata";
+
   return (
     <header className="relative mb-4 overflow-hidden rounded-2xl border border-primary/30 bg-card">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_88%_12%,color-mix(in_oklab,var(--primary)_24%,transparent),transparent_34%)]" />
@@ -152,17 +171,21 @@ function CopaHero({
             Caminho até a taça
           </div>
           <h2 className="max-w-2xl font-display text-3xl font-black leading-none tracking-tight sm:text-4xl">
-            Da fase de grupos à final.
+            {isKnockout ? "Mata-mata da Copa." : "Da fase de grupos à final."}
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Acompanhe quem avança e veja a chave se montar automaticamente com a classificação
-            atual.
+            {isKnockout
+              ? "Acompanhe os confrontos eliminatórios, incluindo a final e a disputa pelo bronze."
+              : "Acompanhe quem avança e veja a chave se montar automaticamente com a classificação atual."}
           </p>
         </div>
 
         <div className="grid grid-cols-3 gap-2 sm:min-w-[390px]">
-          <HeroStat value={String(stats.groups)} label="grupos" />
-          <HeroStat value={String(stats.qualified)} label="avançam" />
+          <HeroStat value={String(stats.groups)} label={isKnockout ? "fases" : "grupos"} />
+          <HeroStat
+            value={String(isKnockout ? stats.total : stats.qualified)}
+            label={isKnockout ? "jogos" : "avançam"}
+          />
           <HeroStat value={`${stats.finished}/${stats.total}`} label="resultados" />
         </div>
       </div>
@@ -592,14 +615,19 @@ function BracketView({ bracket }: { bracket: KnockoutBracket }) {
         </div>
       </div>
 
-      <section className="mt-6 max-w-md">
-        <div className="mb-3 flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-primary" />
-          <h3 className="font-display text-sm font-black uppercase tracking-wider">
-            Disputa de 3º lugar
-          </h3>
+      <section className="mt-6 max-w-md rounded-2xl border border-[#cd7f32]/45 bg-[#cd7f32]/10 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-[#cd7f32]" />
+            <h3 className="font-display text-sm font-black uppercase tracking-wider text-[#cd7f32]">
+              Disputa de 3º lugar
+            </h3>
+          </div>
+          <span className="rounded-full border border-[#cd7f32]/45 bg-background/55 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#cd7f32]">
+            Bronze
+          </span>
         </div>
-        <MatchCard match={bracket.terceiro} />
+        <MatchCard match={bracket.terceiro} tone="bronze" />
       </section>
     </div>
   );
@@ -688,12 +716,28 @@ function Round({
   );
 }
 
-function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => void }) {
+function MatchCard({
+  match,
+  onClick,
+  tone = "default",
+}: {
+  match: KnockoutMatch;
+  onClick?: () => void;
+  tone?: "default" | "bronze";
+}) {
   const isFinal = match.fase === "Final";
+  const isBronze = tone === "bronze";
   const hasScore = match.gols1 != null && match.gols2 != null;
   const content = (
     <>
-      <div className="flex items-center justify-between border-b border-border/70 bg-background/35 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+      <div
+        className={cn(
+          "flex items-center justify-between border-b px-3 py-1.5 text-[9px] font-black uppercase tracking-wider",
+          isBronze
+            ? "border-[#cd7f32]/30 bg-[#cd7f32]/10 text-[#cd7f32]"
+            : "border-border/70 bg-background/35 text-muted-foreground",
+        )}
+      >
         {match.jogoId ? (
           <Link
             href={`/jogos/${match.jogoId}`}
@@ -733,7 +777,7 @@ function MatchCard({ match, onClick }: { match: KnockoutMatch; onClick?: () => v
   );
   const className = cn(
     "w-full overflow-hidden rounded-xl border bg-card text-left shadow-[0_14px_30px_-28px_rgba(0,0,0,0.95)]",
-    isFinal ? "border-primary ring-yellow" : "border-border",
+    isBronze ? "border-[#cd7f32]/55" : isFinal ? "border-primary ring-yellow" : "border-border",
     onClick &&
       "cursor-pointer transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-[0_18px_34px_-24px_rgba(0,0,0,0.95)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
   );
@@ -869,6 +913,17 @@ function formatScoreWithPenalty(
 ) {
   if (score == null) return "-";
   return penaltyScore == null ? String(score) : `${score} (${penaltyScore})`;
+}
+
+function getAllBracketMatches(bracket: KnockoutBracket) {
+  return [
+    ...bracket.r32,
+    ...bracket.r16,
+    ...bracket.quartas,
+    ...bracket.semifinais,
+    bracket.terceiro,
+    bracket.final,
+  ];
 }
 
 function countBracketTeams(matches: KnockoutMatch[]) {
