@@ -145,8 +145,8 @@ const OUTCOME_META: Record<
   chinelada: {
     name: "Chinelada",
     points: 10,
-    color: "var(--primary)",
-    tone: "border-primary/45 bg-primary/10 text-primary",
+    color: "#facc15",
+    tone: "border-[#facc15]/55 bg-[#facc15]/15 text-[#facc15]",
   },
   strong: {
     name: "Na trave",
@@ -164,7 +164,7 @@ const OUTCOME_META: Record<
     name: "Deu sorte",
     points: 2,
     color: "var(--muted-foreground)",
-    tone: "border-border bg-secondary text-secondary-foreground",
+    tone: "border-muted-foreground/30 bg-muted/40 text-muted-foreground",
   },
   miss: {
     name: "Sabe nada",
@@ -213,7 +213,7 @@ export default function PalpitesPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [recentlySaved, setRecentlySaved] = useState<string | null>(null);
   const [specialAnswers, setSpecialAnswers] = useState<Record<string, string>>({});
-  const [correctSpecialAnswers, setCorrectSpecialAnswers] = useState<Record<string, string>>({});
+  const [correctSpecialAnswers, setCorrectSpecialAnswers] = useState<Record<string, string[]>>({});
   const [savedSpecialIds, setSavedSpecialIds] = useState<Set<string>>(new Set());
   const [savingSpecialId, setSavingSpecialId] = useState<string | null>(null);
   const [recentlySavedSpecialId, setRecentlySavedSpecialId] = useState<string | null>(null);
@@ -278,12 +278,7 @@ export default function PalpitesPage() {
             new Set(specialResponses.respostas.map((response) => response.pergunta_id)),
           );
           setCorrectSpecialAnswers(
-            Object.fromEntries(
-              specialResponses.corretas.map((response) => [
-                response.pergunta_id,
-                response.resposta,
-              ]),
-            ),
+            groupSpecialCorrectAnswers(specialResponses.corretas),
           );
         }
         setUnauthenticated(false);
@@ -802,7 +797,7 @@ function SpecialsSection({
   onSave,
 }: {
   answers: Record<string, string>;
-  correctAnswers: Record<string, string>;
+  correctAnswers: Record<string, string[]>;
   participants: RankingUsuario[];
   savedIds: Set<string>;
   savingId: string | null;
@@ -901,7 +896,7 @@ function SpecialsSection({
             <SpecialResultSummary
               questionId={championQuestion.id}
               answer={championAnswer}
-              correctAnswer={correctAnswers[championQuestion.id]}
+              correctAnswers={correctAnswers[championQuestion.id]}
               participants={participants}
               className={cn("mt-3", championResult === null && "border-primary/20 bg-primary/10")}
             />
@@ -1018,7 +1013,7 @@ function SpecialsSection({
                 <SpecialResultSummary
                   questionId={question.id}
                   answer={answer}
-                  correctAnswer={correctAnswers[question.id]}
+                  correctAnswers={correctAnswers[question.id]}
                   participants={participants}
                   className="mt-3"
                 />
@@ -1106,20 +1101,22 @@ function SpecialQuestionShell({
 function SpecialResultSummary({
   questionId,
   answer,
-  correctAnswer,
+  correctAnswers,
   participants,
   className,
 }: {
   questionId: string;
   answer?: string;
-  correctAnswer?: string;
+  correctAnswers?: string[];
   participants: RankingUsuario[];
   className?: string;
 }) {
-  if (!correctAnswer) return null;
+  if (!correctAnswers?.length) return null;
 
-  const correct = answer ? answer === correctAnswer : null;
-  const resultLabel = formatSpecialResultAnswer(questionId, correctAnswer, participants);
+  const correct = answer ? correctAnswers.includes(answer) : null;
+  const resultLabel = correctAnswers
+    .map((correctAnswer) => formatSpecialResultAnswer(questionId, correctAnswer, participants))
+    .join(", ");
 
   return (
     <div
@@ -1184,9 +1181,16 @@ function SpecialResultSummary({
   );
 }
 
-function getSpecialResult(answer?: string, correctAnswer?: string) {
-  if (!correctAnswer || !answer) return null;
-  return answer === correctAnswer;
+function getSpecialResult(answer?: string, correctAnswers?: string[]) {
+  if (!correctAnswers?.length || !answer) return null;
+  return correctAnswers.includes(answer);
+}
+
+function groupSpecialCorrectAnswers(answers: Array<{ pergunta_id: string; resposta: string }>) {
+  return answers.reduce<Record<string, string[]>>((grouped, answer) => {
+    grouped[answer.pergunta_id] = [...(grouped[answer.pergunta_id] ?? []), answer.resposta];
+    return grouped;
+  }, {});
 }
 
 function formatSpecialResultAnswer(
@@ -1587,6 +1591,7 @@ function HistoryMatchCard({ game }: { game: DashboardGame }) {
 
 function outcomePointsTextClass(outcome: GuessOutcome) {
   if (outcome === "miss") return "text-destructive";
+  if (outcome === "chinelada") return "text-[#facc15]";
   if (outcome === "strong") return "text-warning";
   if (outcome === "result") return "text-success";
   return "text-muted-foreground";
