@@ -96,6 +96,7 @@ const KNOCKOUT_MULTIPLIERS = [
   { phase: "Oitavas", multiplier: "1.4x" },
   { phase: "Quartas", multiplier: "2x" },
   { phase: "Semifinal", multiplier: "3x" },
+  { phase: "3º lugar", multiplier: "3x" },
   { phase: "Final", multiplier: "4x" },
 ] as const;
 

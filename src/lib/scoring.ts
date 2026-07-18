@@ -38,6 +38,7 @@ const PHASE_POINT_MULTIPLIERS: Record<number, number> = {
   3: 1.4,
   4: 2,
   5: 3,
+  6: 3,
   7: 4,
 };
 
