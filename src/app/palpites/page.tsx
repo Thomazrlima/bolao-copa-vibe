@@ -812,6 +812,10 @@ function SpecialsSection({
   );
   const answered = ESPECIAIS.filter((question) => savedIds.has(question.id)).length;
   const completion = Math.round((answered / ESPECIAIS.length) * 100);
+  const gradedQuestions = ESPECIAIS.filter((question) => correctAnswers[question.id]?.length);
+  const correctCount = gradedQuestions.filter((question) =>
+    getSpecialResult(answers[question.id], correctAnswers[question.id]),
+  ).length;
   const open = especiaisAreOpen(now);
   const championAnswer = championQuestion ? answers[championQuestion.id] : undefined;
   const championResult = championQuestion
@@ -850,6 +854,17 @@ function SpecialsSection({
               <span className="num text-primary">{completion}%</span>
             </div>
             <Progress value={completion} className="h-3" />
+            <div className="mt-3 rounded-xl border border-border/70 bg-background/45 px-3 py-2 text-xs font-bold">
+              <span className="text-muted-foreground">Acertos especiais: </span>
+              <span className="num text-primary">
+                {correctCount}/{gradedQuestions.length}
+              </span>
+              {gradedQuestions.length < ESPECIAIS.length && (
+                <span className="ml-1 text-muted-foreground">
+                  ({ESPECIAIS.length - gradedQuestions.length} sem gabarito)
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1111,7 +1126,25 @@ function SpecialResultSummary({
   participants: RankingUsuario[];
   className?: string;
 }) {
-  if (!correctAnswers?.length) return null;
+  if (!correctAnswers?.length) {
+    return (
+      <div
+        className={cn(
+          "rounded-xl border border-border bg-background/45 px-3 py-2.5 text-xs",
+          className,
+        )}
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0 text-muted-foreground">
+            Resultado: <strong className="text-foreground">sem gabarito definido</strong>
+          </span>
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+            Sem gabarito
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const correct = answer ? correctAnswers.includes(answer) : null;
   const resultLabel = correctAnswers

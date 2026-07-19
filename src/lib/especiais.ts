@@ -81,6 +81,7 @@ export const ESPECIAIS: readonly EspecialQuestion[] = [
       "Doue",
       "Cherki",
       "João Neves",
+      "N/A",
     ],
   },
   {
